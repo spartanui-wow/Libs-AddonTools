@@ -1,0 +1,10 @@
+## Interface: 110200
+## Title: Lib's - Addon Tools
+## IconTexture: Interface/Addons/Libs-AddonTools/Logo-Icon
+## Version: 1.0.0
+## Author: wutname1
+## SavedVariables: LibsAddonToolsDB
+
+# Required Ace3 libraries
+libs\Ace3\Ace3.xml
+0000
