@@ -3,8 +3,27 @@
 ## IconTexture: Interface/Addons/Libs-AddonTools/Logo-Icon
 ## Version: 1.0.0
 ## Author: wutname1
-## SavedVariables: LibsAddonToolsDB
+## SavedVariables: LibsAddonToolsDB, LibATErrorDisplayDB
 
-# Required Ace3 libraries
+#Load bug system FIRST
+libs\bug-grabber\load.xml
+
+# Error Display System - Load IMMEDIATELY after BugGrabber for maximum safety
+libs\LibDataBroker\LibDataBroker-1.1.lua
+libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+Systems\ErrorDisplay\Main.lua
+Systems\ErrorDisplay\ErrorHandler.lua
+Systems\ErrorDisplay\BugWindow.lua
+Systems\ErrorDisplay\Config.lua
+
+#Libraries
 libs\Ace3\Ace3.xml
-0000
+
+# Core Framework
+Core\Framework.lua
+
+# Localization
+Locales\enUS.lua
+
+# Systems\ProfileManager\Profiles.lua
+# Systems\Logger\Logger.lua

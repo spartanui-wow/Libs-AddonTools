@@ -7,6 +7,9 @@ Analyze the SpartanUI codebase to create a comprehensive project plan for extrac
 ## Systems to Extract
 
 1. **Error Display/Handler System** - Extract error handling and display components
+   - **Critical Loading Requirement**: Must load before all other systems (except shared UI components) to catch initialization errors within LibAT itself
+   - **Database Independence**: Requires its own AceDB database object and saved variables, separate from other systems
+   - **BugGrabber Integration**: Uses BugGrabber library to capture game API errors with custom processing and storage
 2. **Profile Import/Export Process** - Extract and redesign for multi-addon support
 3. **Extensible Logging System** - Extract current system AND use its UI as foundation for shared components
 
@@ -33,6 +36,9 @@ Analyze the SpartanUI codebase to create a comprehensive project plan for extrac
 - Identify Error Display specific UI patterns and behaviors
 - Document session management logic and data structures
 - Plan component integration without losing functionality
+- **CRITICAL**: Design independent database structure for error storage and settings
+- **CRITICAL**: Ensure BugGrabber integration works with standalone error system
+- **CRITICAL**: Plan loading order to initialize error capture before other LibAT systems
 
 ### For Phase 4 (Profile System)
 
@@ -54,9 +60,12 @@ Analyze the SpartanUI codebase to create a comprehensive project plan for extrac
 **Goal**: Establish LibAT addon structure with existing systems copied over
 
 - Copy existing error display/handler system code to LibAT
+- **CRITICAL**: Set up error display system with independent AceDB database and saved variables
+- **CRITICAL**: Ensure BugGrabber dependency is properly declared and error capture initializes first
 - Copy existing profile import/export process to LibAT
 - Copy existing logging system to LibAT (this will serve as UI foundation)
-- Establish basic addon structure and loading
+- Establish basic addon structure and loading with proper initialization order
+- **Loading Order**: Shared UI Components → Error Display → Profile System → Logger System
 - Ensure all three systems function independently in new addon
 
 ### Phase 2: Shared Component Development
@@ -76,10 +85,13 @@ Analyze the SpartanUI codebase to create a comprehensive project plan for extrac
 
 ### Phase 3: Error Display System Integration
 
-**Goal**: Migrate Error Display to use shared components
+**Goal**: Migrate Error Display to use shared components while maintaining critical functionality
 
 - Replace existing UI elements with shared button and tab components
 - Implement single pane window base for Error Display
+- **CRITICAL**: Maintain independent database and saved variables structure
+- **CRITICAL**: Preserve BugGrabber integration and error capture functionality
+- **CRITICAL**: Ensure error system continues to load first and catch LibAT internal errors
 - Ensure feature parity with original Error Display functionality
 - Test session management (current/previous) with new tab system
 

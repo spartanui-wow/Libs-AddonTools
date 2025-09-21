@@ -2,7 +2,20 @@
 
 ## Executive Summary
 
-After thorough analysis of the SpartanUI codebase, I've identified the three target systems and their key characteristics for extraction into the LibAT (Libs-AddonTools) project. Each system demonstrates distinct UI patterns and architectural approaches that can be unified under a shared component library.
+After thorough analysis of the SpartanUI codebase, I've identified the three target systems and their key characteristics for extraction into the LibAT (Libs-AddonTools) project. Each system demonstrates distinct UI patterns#### Phase 4: Profile System Redesign
+
+- Implement dual-pane layout using LibAT window base
+- Design left navigation tree for addon/namespace hierarchy
+- Create multi-addon profile format with namespace awareness
+- Implement "All" option for bulk namespace operations
+- Research and integrate Ace3 database auto-detection
+
+#### Phase 5: Logger Integration and Final Testing
+
+- Migrate Logger to use shared UI components while preserving AuctionHouse styling
+- Ensure external addon API compatibility is maintained
+- Integration testing across all three systems
+- Performance optimization and cleanupural approaches that can be unified under a shared component library.
 
 ## System Analysis Results
 
@@ -19,8 +32,9 @@ After thorough analysis of the SpartanUI codebase, I've identified the three tar
 
 **Architecture**:
 
-- **Integration Pattern**: Uses BugGrabber for error capture with custom processing
-- **Storage**: Memory-based with session tracking (current/previous sessions)
+- **Integration Pattern**: Uses BugGrabber library for game API error capture with custom processing and storage
+- **Storage**: **CRITICAL** - Requires independent AceDB database object and saved variables, separate from other LibAT systems
+- **Loading Priority**: **CRITICAL** - Must load immediately after shared UI components but before all other systems to catch LibAT internal initialization errors
 - **UI Pattern**: Single-pane window with tab-based navigation
 - **Tab Implementation**: Uses `auctionhouse-nav-button` atlas with texture coordinate manipulation (lines 55-62 in BugWindow.lua)
 
@@ -38,7 +52,8 @@ local LDB = LibStub('LibDataBroker-1.1')
 local icon = LibStub('LibDBIcon-1.0')
 -- From ErrorHandler.lua
 local L = LibStub('AceLocale-3.0'):GetLocale('SpartanUI', true)
--- Integration with BugGrabber for error capture
+-- CRITICAL: BugGrabber library integration for error capture
+-- CRITICAL: Independent AceDB database for error storage and settings
 ```
 
 **Code References**:
@@ -235,11 +250,13 @@ LibAT.Window:CreateDualPane(title, leftWidth, totalWidth, height)
 
 **Error Display System**:
 
-- **BugGrabber**: Third-party error capture integration
+- **BugGrabber**: **CRITICAL** - Third-party library for capturing game API errors, must be declared as dependency
+- **AceDB-3.0**: **CRITICAL** - Independent database object for error storage and configuration (separate from other LibAT systems)
 - **LibDBIcon-1.0**: Minimap button functionality
 - **LibDataBroker-1.1**: Data broker integration
 - **AceLocale-3.0**: Localization support
 - **Native Blizzard UI**: CreateFrame, atlas textures, fonts
+- **Loading Priority**: Must initialize immediately after shared UI components to catch internal LibAT errors
 
 **Profile System**:
 
@@ -273,14 +290,16 @@ scrollFrame = StdUi:FauxScrollFrame(...)       -- → CreateFrame('ScrollFrame',
 
 ### Migration Strategy
 
-**Phase 1: Foundation (Code Migration)**
+#### Phase 1: Foundation (Code Migration)
 
 - Extract all three systems to LibAT preserving current functionality
-- Maintain existing dependencies temporarily
-- Establish basic addon structure with proper loading order
-- Create LibAT.toc with proper dependency declarations
+- **CRITICAL**: Set up Error Display with independent AceDB database and saved variables
+- **CRITICAL**: Configure BugGrabber dependency and ensure error capture initializes first
+- Maintain existing dependencies temporarily for other systems
+- Establish basic addon structure with proper loading order (Error Display loads first)
+- Create LibAT.toc with proper dependency declarations and loading sequence
 
-**Phase 2: Shared Component Development**
+#### Phase 2: Shared Component Development
 
 - Extract tab system from Error Display as reusable component
 - Create button factory from shared patterns across all systems
@@ -288,9 +307,11 @@ scrollFrame = StdUi:FauxScrollFrame(...)       -- → CreateFrame('ScrollFrame',
 - **CRITICAL**: Migrate Profile system from StdUi to native Blizzard UI components
 - Implement AuctionHouse design language consistently
 
-**Phase 3: Error Display Integration**
+#### Phase 3: Error Display Integration
 
 - Implement Error Display using shared tab and button components
+- **CRITICAL**: Maintain independent database structure and BugGrabber integration
+- **CRITICAL**: Preserve early loading order to continue catching LibAT internal errors
 - Migrate from custom UI to LibAT component library
 - Ensure session management functionality is preserved
 - Test error capture and display functionality
@@ -312,16 +333,31 @@ scrollFrame = StdUi:FauxScrollFrame(...)       -- → CreateFrame('ScrollFrame',
 
 ## Technical Architecture Recommendations
 
+### Critical Loading Order Requirements
+
+**LibAT.toc Loading Sequence**:
+
+1. **Libs/** - Third-party library dependencies (AceAddon, AceDB, BugGrabber, etc.)
+2. **Core/Constants.lua** - Shared constants and enums
+3. **Components/** - All shared UI components (must load before any system that uses them)
+4. **Core/Framework.lua** - Core addon initialization
+5. **Systems/ErrorDisplay/** - **CRITICAL FIRST** - Must load immediately to catch errors from subsequent systems
+6. **Systems/ProfileManager/** - Loads after error capture is ready
+7. **Systems/Logger/** - Loads last (has external API dependencies)
+8. **Core/API.lua** - Public API for other addons (loads after all systems)
+
+**Rationale**: The Error Display system must initialize before other LibAT systems so that it can capture any errors that occur during ProfileManager or Logger initialization. This ensures comprehensive error tracking within LibAT itself.
+
 ### LibAT Directory Structure
 
-```
+```text
 Libs-AddonTools/
-├── LibAT.toc                     # Addon manifest
+├── LibAT.toc                     # Addon manifest with critical loading order
 ├── Core/
 │   ├── Framework.lua             # Core addon initialization
 │   ├── API.lua                   # Public API for other addons
 │   └── Constants.lua             # Shared constants and enums
-├── Components/                   # Shared UI component library
+├── Components/                   # Shared UI component library (loads first)
 │   ├── Button.lua               # Unified button factory with AH styling
 │   ├── TabSystem.lua            # Extracted tab implementation with texture stretching
 │   ├── Window/
@@ -335,30 +371,94 @@ Libs-AddonTools/
 │       ├── Dropdown.lua
 │       └── ScrollFrame.lua
 ├── Systems/
-│   ├── ErrorDisplay/            # Migrated error handling system
-│   │   ├── ErrorDisplay.lua
-│   │   ├── ErrorHandler.lua
-│   │   └── Config.lua
-│   ├── ProfileManager/          # Enhanced profile import/export
+│   ├── ErrorDisplay/            # CRITICAL: Loads immediately after Components/
+│   │   ├── ErrorDisplay.lua     # Independent AceDB database initialization
+│   │   ├── ErrorHandler.lua     # BugGrabber integration and error processing
+│   │   ├── BugWindow.lua        # UI implementation using shared components
+│   │   └── Config.lua           # Configuration with independent saved variables
+│   ├── ProfileManager/          # Loads after ErrorDisplay
 │   │   ├── ProfileManager.lua
 │   │   ├── NamespaceTree.lua
 │   │   └── Serialization.lua
-│   └── Logger/                  # Migrated logging system
+│   └── Logger/                  # Loads last
 │       ├── Logger.lua
 │       ├── LogWindow.lua
 │       └── ExternalAPI.lua
 ├── Libs/                        # Required third-party libraries
 │   ├── AceAddon-3.0/
 │   ├── AceConfig-3.0/
-│   ├── AceDB-3.0/
+│   ├── AceDB-3.0/               # Required for Error Display independence
 │   ├── LibCompress/
 │   ├── LibBase64-1.0/
-│   └── LibDBIcon-1.0/
+│   ├── LibDBIcon-1.0/
+│   └── BugGrabber/              # CRITICAL: Required for error capture
 └── Locales/                     # Localization files
     ├── enUS.lua
     ├── deDE.lua
     └── [other locales]
 ```
+
+### Error Display Database Independence
+
+**Database Structure Requirements**:
+
+```lua
+-- Error Display must have its own AceDB database object
+local ErrorDisplayDB = LibStub("AceDB-3.0"):New("LibATErrorDisplayDB", {
+    profile = {
+        enabled = true,
+        maxErrors = 500,
+        autoCapture = true,
+        sessionTracking = true,
+        minimapButton = {
+            hide = false,
+            lock = false,
+            minimapPos = 45
+        }
+    }
+}, true)
+
+-- Independent from other LibAT systems
+local ProfileManagerDB = LibStub("AceDB-3.0"):New("LibATProfileManagerDB", defaults)
+local LoggerDB = LibStub("AceDB-3.0"):New("LibATLoggerDB", defaults)
+```
+
+**Saved Variables Declaration**:
+
+```lua
+-- In LibAT.toc file:
+## SavedVariables: LibATErrorDisplayDB, LibATProfileManagerDB, LibATLoggerDB
+```
+
+**Critical Independence**: Each system maintains its own database to ensure that if one system fails or has data corruption, it doesn't affect the others. This is especially important for the Error Display system, which needs to remain functional even if other LibAT systems encounter problems.
+
+### BugGrabber Integration Requirements
+
+**BugGrabber Library Integration**:
+
+```lua
+-- Error Display system must initialize BugGrabber integration first
+local BugGrabber = LibStub("BugGrabber")
+if BugGrabber then
+    -- Register for error capture events
+    BugGrabber.RegisterCallback(ErrorDisplay, "BugGrabber_BugGrabbed", "OnErrorCaptured")
+
+    -- Ensure we capture errors from LibAT systems during initialization
+    BugGrabber:SetScript("OnEvent", function(self, event, ...)
+        -- Process errors immediately to catch LibAT internal errors
+        ErrorDisplay:ProcessError(...)
+    end)
+end
+```
+
+**Dependency Declaration in LibAT.toc**:
+
+```lua
+## Dependencies: BugGrabber
+## OptionalDeps: LibDBIcon-1.0, LibDataBroker-1.1
+```
+
+**Error Capture Priority**: The Error Display system must register with BugGrabber before any other LibAT system loads, ensuring that errors occurring during ProfileManager or Logger initialization are captured and stored properly.
 
 ### Component API Design
 
@@ -413,7 +513,6 @@ function LibAT.Window:CreateDualPane(title, leftWidth, totalWidth, height)
 
 - Create native Blizzard UI equivalents for all StdUi components used
 - Map StdUi styling to AuctionHouse design language
-- Implement gradual migration with compatibility layer
 - Maintain visual consistency and functionality
 
 **StdUi Migration Map**:
@@ -439,31 +538,6 @@ StdUi:FauxScrollFrame() → CreateFrame('ScrollFrame', nil, parent, 'UIPanelScro
 - Create hierarchical tree navigation for addon/namespace selection
 - Design "All" option behavior for bulk operations across namespaces
 
-**Multi-Addon Profile Format**:
-
-```lua
--- New LibAT profile structure
-local profileData = {
-    metadata = {
-        version = "1.0",
-        created = timestamp,
-        addons = {"SpartanUI", "LibsDataBar", "WeakAuras"}
-    },
-    addons = {
-        ["SpartanUI"] = {
-            core = {...},
-            namespaces = {
-                ["UnitFrames"] = {...},
-                ["Minimap"] = {...}
-            }
-        },
-        ["LibsDataBar"] = {
-            core = {...}
-        }
-    }
-}
-```
-
 ### Challenge 3: Component Reusability Across Different UI Patterns
 
 **Issue**: Each system uses different UI implementation approaches
@@ -473,16 +547,6 @@ local profileData = {
 - Design component interfaces that work across single-pane and dual-pane layouts
 - Ensure backward compatibility during transition phase
 - Create comprehensive component documentation
-
-### Challenge 4: External API Compatibility (Logger System)
-
-**Issue**: Logger system provides external API for third-party addons that must remain stable
-**Solution**:
-
-- Maintain complete API compatibility during migration
-- Preserve all registration functions and calling conventions
-- Ensure existing addon integrations continue to work
-- Document any changes in migration guide
 
 ## Code Analysis: Key Implementation Details
 
@@ -603,22 +667,23 @@ end
 
 **Week 1:**
 
-- Set up LibAT addon structure and TOC file
-- Copy Error Display system files (Main.lua, ErrorHandler.lua, BugWindow.lua, Config.lua)
+- Set up LibAT addon structure and TOC file with proper loading order
+- **CRITICAL**: Copy Error Display system files with independent AceDB database setup
+- **CRITICAL**: Configure BugGrabber dependency and ensure error capture loads immediately after shared components
 - Copy Profile system (Profiles.lua) with StdUi dependencies intact
 - Copy Logger system (Logger.lua) preserving external API
 
 **Week 2:**
 
-- Establish basic addon loading and initialization
-- Ensure all three systems load and function independently
-- Set up required library dependencies (Ace3, LibCompress, etc.)
+- **CRITICAL**: Establish Error Display loading priority to catch internal LibAT errors during initialization
+- Ensure all three systems load and function independently with proper load order
+- Set up required library dependencies (Ace3, LibCompress, BugGrabber, etc.)
 - Create initial localization structure
 
 **Week 3:**
 
-- Test individual system functionality
-- Resolve any dependency conflicts
+- Test individual system functionality with emphasis on error capture working during LibAT startup
+- Resolve any dependency conflicts, particularly between Error Display's independent database and other systems
 - Document current state and prepare for component extraction
 
 ### Phase 2: Shared Component Development (3-4 weeks)
