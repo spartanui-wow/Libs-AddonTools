@@ -14,14 +14,11 @@ local L = {
 ErrorDisplay.Config = {}
 
 -- Minimal defaults - only store overrides, use fallbacks for defaults
+-- Note: We no longer store errors ourselves - BugGrabber handles that
 local defaults = {
     profile = {
     },
     global = {
-        currentSession = 1,
-        sessionHistory = {},
-        lastGameTime = 0,
-        errorDatabase = {}
     }
 }
 
@@ -128,18 +125,23 @@ function ErrorDisplay.Config:CreatePanel()
     local minimapIconCheckbox = CreateFrame('CheckButton', nil, panel, 'InterfaceOptionsCheckButtonTemplate')
     minimapIconCheckbox:SetPoint('TOPLEFT', defaultsButton, 'BOTTOMLEFT', 0, -16)
     minimapIconCheckbox.Text:SetText(L['Show Minimap Icon'])
-    minimapIconCheckbox:SetChecked(not (ErrorDisplay.db.minimapIconHide or false)) -- Default to show
+
+    -- Check LibDBIcon state
+    local isShown = true
+    if ErrorDisplay.icon and ErrorDisplay.db.minimapIcon then
+        isShown = not ErrorDisplay.db.minimapIcon.hide
+    end
+    minimapIconCheckbox:SetChecked(isShown)
+
     minimapIconCheckbox:SetScript(
         'OnClick',
         function(self)
-            ErrorDisplay.db.minimapIconHide = not self:GetChecked() or nil -- Store nil for show, true for hide
-            if ErrorDisplay.db.minimapIconHide then
-                if ErrorDisplay.icon then
-                    ErrorDisplay.icon:Hide("Libs-AddonToolsErrorDisplay")
-                end
-            else
-                if ErrorDisplay.icon then
-                    ErrorDisplay.icon:Show("Libs-AddonToolsErrorDisplay")
+            local shouldShow = self:GetChecked()
+            if ErrorDisplay.icon then
+                if shouldShow then
+                    ErrorDisplay.icon:Show('Libs-AddonToolsErrorDisplay')
+                else
+                    ErrorDisplay.icon:Hide('Libs-AddonToolsErrorDisplay')
                 end
             end
         end
@@ -159,6 +161,13 @@ function ErrorDisplay.Config:CreatePanel()
         autoPopup:SetChecked(ErrorDisplay.db.autoPopup or false)
         chatFrame:SetChecked(ErrorDisplay.db.chatframe ~= false)
         fontSizeSlider:SetValue(ErrorDisplay.db.fontSize or 12)
+
+        -- Update minimap icon checkbox state
+        local isShown = true
+        if ErrorDisplay.icon and ErrorDisplay.db.minimapIcon then
+            isShown = not ErrorDisplay.db.minimapIcon.hide
+        end
+        minimapIconCheckbox:SetChecked(isShown)
     end
 
     if InterfaceOptions_AddCategory then
@@ -182,78 +191,6 @@ function ErrorDisplay.Config:ResetToDefaults()
     if ErrorDisplay.BugWindow.UpdateFontSize then
         ErrorDisplay.BugWindow:UpdateFontSize()
     end
-end
-
-
--- Session management functions (use global scope)
-function ErrorDisplay.Config:GetCurrentSession()
-    return ErrorDisplay.gdb.currentSession or 1
-end
-
-function ErrorDisplay.Config:IncrementSession()
-    ErrorDisplay.gdb.currentSession = (ErrorDisplay.gdb.currentSession or 1) + 1
-    self:RecordSessionStart()
-    return ErrorDisplay.gdb.currentSession
-end
-
-function ErrorDisplay.Config:RecordSessionStart()
-    local sessionId = ErrorDisplay.gdb.currentSession
-    local sessionData = {
-        id = sessionId,
-        startTime = time(),
-        gameTime = GetTime(),
-        playerName = UnitName('player'),
-        realmName = GetRealmName(),
-        buildInfo = select(1, GetBuildInfo())
-    }
-
-    -- Ensure sessionHistory exists
-    if not ErrorDisplay.gdb.sessionHistory then
-        ErrorDisplay.gdb.sessionHistory = {}
-    end
-
-    -- Add to session history
-    table.insert(ErrorDisplay.gdb.sessionHistory, sessionData)
-
-    -- Keep only last 50 sessions
-    if #ErrorDisplay.gdb.sessionHistory > 50 then
-        table.remove(ErrorDisplay.gdb.sessionHistory, 1)
-    end
-end
-
-function ErrorDisplay.Config:GetSessionHistory()
-    return ErrorDisplay.gdb.sessionHistory or {}
-end
-
-function ErrorDisplay.Config:ShouldIncrementSession()
-    local currentGameTime = GetTime()
-    local lastGameTime = ErrorDisplay.gdb.lastGameTime or 0
-
-    -- If this is the first run, or if game time reset (new session)
-    -- GetTime() resets to 0 on new game sessions
-    if lastGameTime == 0 or currentGameTime < lastGameTime then
-        ErrorDisplay.gdb.lastGameTime = currentGameTime
-        return true
-    end
-
-    ErrorDisplay.gdb.lastGameTime = currentGameTime
-    return false
-end
-
--- Error database management (use global scope)
-function ErrorDisplay.Config:GetErrorDatabase()
-    if not ErrorDisplay.gdb.errorDatabase then
-        ErrorDisplay.gdb.errorDatabase = {}
-    end
-    return ErrorDisplay.gdb.errorDatabase
-end
-
-function ErrorDisplay.Config:SaveErrorDatabase(errorDB)
-    ErrorDisplay.gdb.errorDatabase = errorDB
-end
-
-function ErrorDisplay.Config:ClearErrorDatabase()
-    ErrorDisplay.gdb.errorDatabase = {}
 end
 
 return ErrorDisplay.Config

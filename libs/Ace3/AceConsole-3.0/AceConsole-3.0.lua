@@ -86,7 +86,12 @@ function AceConsole:RegisterChatCommand( command, func, persist )
 	local name = "ACECONSOLE_"..command:upper()
 
 	if type( func ) == "string" then
-		SlashCmdList[name] = function(input, editBox)
+        SlashCmdList[name] = function(input, editBox)
+			print("")
+			print(self)
+            print("input", input)
+            print(editBox)
+			print("fund", func)
 			self[func](self, input, editBox)
 		end
 	else

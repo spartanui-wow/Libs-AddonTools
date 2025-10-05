@@ -23,16 +23,34 @@ local ActiveButton = nil
 local categoryButtons = {}
 ErrorDisplay.BugWindow.window = window
 
+-- Initialize currentErrorList as empty table
+currentErrorList = {}
+
 local function updateDisplay(forceRefresh)
 	if not window then
 		ErrorDisplay.BugWindow.Create()
+	end
+
+	-- Ensure currentErrorList is a table
+	if not currentErrorList then
+		currentErrorList = {}
 	end
 
 	if forceRefresh or not currentErrorIndex then
 		currentErrorIndex = #currentErrorList
 	end
 
-	local err = currentErrorList[currentErrorIndex]
+	-- Make sure currentErrorIndex doesn't exceed the list length
+	if currentErrorIndex > #currentErrorList then
+		currentErrorIndex = #currentErrorList
+	end
+
+	-- Get the current error to display
+	local err = nil
+	if #currentErrorList > 0 and currentErrorIndex > 0 then
+		err = currentErrorList[currentErrorIndex]
+	end
+
 	if err then
 		countLabel:SetText(string.format('%d/%d', currentErrorIndex, #currentErrorList))
 		sessionLabel:SetText(string.format(L['Session: %d'], err.session))
@@ -42,6 +60,7 @@ local function updateDisplay(forceRefresh)
 		window.Buttons.Prev:SetEnabled(currentErrorIndex > 1)
 		window.Buttons.CopyAll:SetEnabled(#currentErrorList > 1)
 	else
+		-- No errors to display - clear everything
 		countLabel:SetText('0/0')
 		sessionLabel:SetText(L['No errors'])
 		textArea:SetText(L['You have no errors, yay!'])
@@ -105,14 +124,24 @@ local function setActiveCategory(button)
 	button:SetNormalAtlas('auctionhouse-nav-button-secondary-select')
 	button.Text:SetTextColor(1, 1, 1)
 
+	-- Always get a fresh error list for the selected category
 	if button:GetID() == 1 then
-		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors()
+		-- All Errors
+		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors() or {}
 	elseif button:GetID() == 2 then
-		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
+		-- Current Session
+		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession()) or {}
 	elseif button:GetID() == 3 then
+		-- Previous Session
 		local sessionList = ErrorDisplay.ErrorHandler:GetSessionList()
 		local prevSession = sessionList[#sessionList - 1]
-		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors(prevSession)
+		-- Only get errors if previous session exists
+		if prevSession then
+			currentErrorList = ErrorDisplay.ErrorHandler:GetErrors(prevSession) or {}
+		else
+			-- No previous session, use empty list
+			currentErrorList = {}
+		end
 	end
 
 	updateDisplay(true)
@@ -152,10 +181,11 @@ end
 
 function ErrorDisplay.BugWindow.Create()
 	window = CreateFrame('Frame', 'LibATErrorWindow', UIParent, 'ButtonFrameTemplate')
+	local sessionNum = ErrorDisplay.ErrorHandler:GetCurrentSession()
 	if SUI then
-		window:SetTitle('|cffffffffSpartan|cffe21f1fUI|r Error Display')
+		window:SetTitle(string.format('|cffffffffSpartan|cffe21f1fUI|r Error Display - Session #%d', sessionNum))
 	else
-		window:SetTitle("|cffffffffLib's|r Error Display")
+		window:SetTitle(string.format("|cffffffffLib's|r Error Display - Session #%d", sessionNum))
 	end
 	window.Inset:Hide()
 	ButtonFrameTemplate_HidePortrait(window)
@@ -297,13 +327,14 @@ function ErrorDisplay.BugWindow:OpenErrorWindow()
 	end
 
 	if not window:IsShown() then
-		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors()
-		currentSession = ErrorDisplay.ErrorHandler:GetCurrentSession()
-		currentErrorIndex = #currentErrorList
-		updateDisplay(true)
+		-- Start with current session errors by default (button ID 2)
+		setActiveCategory(categoryButtons[2])
 		window:Show()
 	else
-		updateDisplay()
+		-- Refresh the current tab's error list
+		if ActiveButton then
+			setActiveCategory(ActiveButton)
+		end
 	end
 end
 

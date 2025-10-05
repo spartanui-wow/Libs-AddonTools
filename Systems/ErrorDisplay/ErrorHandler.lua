@@ -11,9 +11,8 @@ local L = {
 
 ErrorDisplay.ErrorHandler = {}
 
-local errorDB = {}
-local sessionList = {}
-local MAX_ERRORS = 1000
+-- We no longer maintain our own error database
+-- BugGrabber manages all errors, we just query it
 local currentSession = nil
 
 local function colorStack(ret)
@@ -146,43 +145,17 @@ function ErrorDisplay.ErrorHandler:Initialize()
         return
     end
 
-    -- Load persistent error database
-    errorDB = ErrorDisplay.Config:GetErrorDatabase()
+    -- Use BugGrabber's session ID directly
+    currentSession = BugGrabber:GetSessionId()
+    print('LibAT Error Display: Using BugGrabber session #' .. currentSession)
 
-    -- Initialize our own session tracking
-    if ErrorDisplay.Config:ShouldIncrementSession() then
-        currentSession = ErrorDisplay.Config:IncrementSession()
-        print('LibAT Error Display: Starting new session #' .. currentSession)
-    else
-        currentSession = ErrorDisplay.Config:GetCurrentSession()
-    end
-
-    -- Update session list
-    if not tContains(sessionList, currentSession) then
-        table.insert(sessionList, currentSession)
-    end
-
-    -- Register with BugGrabber
+    -- Register with BugGrabber to get notified of new errors
     BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
 
-    -- Grab any errors that occurred before we loaded
-    local existingErrors = BugGrabber:GetDB()
-    for _, err in ipairs(existingErrors) do
-        -- Check if we've already processed this error by looking for it in our errorDB
-        local alreadyProcessed = false
-        for _, existingErr in ipairs(errorDB) do
-            if existingErr.message == err.message and
-               existingErr.stack == err.stack and
-               existingErr.time == err.time then
-                alreadyProcessed = true
-                break
-            end
-        end
-
-        -- Only process new errors from BugGrabber
-        if not alreadyProcessed then
-            self:ProcessError(err)
-        end
+    -- Trigger display update if there are existing errors in current session
+    local currentErrors = self:GetErrors(currentSession)
+    if #currentErrors > 0 then
+        ErrorDisplay:UpdateMinimapIcon()
     end
 end
 
@@ -193,101 +166,40 @@ function ErrorDisplay.ErrorHandler:ColorText(text)
 end
 
 function ErrorDisplay.ErrorHandler:OnBugGrabbed(callback, errorObject)
-    -- Debug: Show that we're capturing a new error in current session
+    -- Update current session in case it changed
+    currentSession = BugGrabber:GetSessionId()
+
+    -- Debug: Show that we're capturing a new error
     if ErrorDisplay.db.chatframe ~= false then
-        print('LibAT: New error captured in session #' .. currentSession)
+        print('LibAT: New error captured in session #' .. errorObject.session)
     end
 
-    self:ProcessError(errorObject)
-    -- Check if the error window is shown and update the display
+    -- Trigger updates (BugGrabber already stored the error)
+    if ErrorDisplay.OnError then
+        ErrorDisplay.OnError()
+    end
+
+    -- Update the window if shown
     if ErrorDisplay.BugWindow.window and ErrorDisplay.BugWindow.window:IsShown() then
         ErrorDisplay.BugWindow:updateDisplay(true)
     end
 end
 
-function ErrorDisplay.ErrorHandler:ProcessError(errorObject)
-    local err = {
-        message = errorObject.message,
-        stack = errorObject.stack,
-        locals = errorObject.locals,
-        time = errorObject.time,
-        session = currentSession, -- Always assign to current session
-        counter = 1
-    }
-
-    -- Check for duplicate errors
-    for i = #errorDB, 1, -1 do
-        local oldErr = errorDB[i]
-        if oldErr.message == err.message and oldErr.stack == err.stack then
-            oldErr.counter = (oldErr.counter or 1) + 1
-            return
-        end
-    end
-
-    -- Add new error
-    table.insert(errorDB, err)
-
-    -- Trim old errors if necessary
-    if #errorDB > MAX_ERRORS then
-        table.remove(errorDB, 1)
-    end
-
-    -- Save to persistent storage
-    ErrorDisplay.Config:SaveErrorDatabase(errorDB)
-
-    -- Trigger the onError function from the main addon file
-    if ErrorDisplay.OnError then
-        ErrorDisplay.OnError()
-    end
-end
-
-function ErrorDisplay.ErrorHandler:CaptureError(errorObject)
-    local err = {
-        message = errorObject.message,
-        stack = errorObject.stack,
-        locals = errorObject.locals,
-        time = errorObject.time,
-        session = currentSession, -- Always assign to current session
-        counter = 1
-    }
-
-    -- Check for duplicate errors
-    for i = #errorDB, 1, -1 do
-        local oldErr = errorDB[i]
-        if oldErr.message == err.message and oldErr.stack == err.stack then
-            oldErr.counter = (oldErr.counter or 1) + 1
-            return
-        end
-    end
-
-    -- Add new error
-    table.insert(errorDB, err)
-
-    -- Trim old errors if necessary
-    if #errorDB > MAX_ERRORS then
-        table.remove(errorDB, 1)
-    end
-
-    -- Save to persistent storage
-    ErrorDisplay.Config:SaveErrorDatabase(errorDB)
-
-    -- Auto popup if enabled
-    if ErrorDisplay.db.autoPopup then
-        ErrorDisplay.BugWindow:OpenErrorWindow()
-    end
-
-    -- Print to chat if enabled
-    if ErrorDisplay.db.chatframe ~= false then
-        print('|cffff4411' .. L['LibAT Error'] .. ':|r ' .. L['New error captured. Type /libat errors to view.'])
-    end
-end
-
+-- Query BugGrabber's database directly (like BugSack does)
 function ErrorDisplay.ErrorHandler:GetErrors(sessionId)
-    if not sessionId then
-        return errorDB
+    if not BugGrabber then
+        return {}
     end
+
+    local db = BugGrabber:GetDB()
+    if not sessionId then
+        -- Return all errors
+        return db
+    end
+
+    -- Filter by session ID
     local sessionErrors = {}
-    for _, err in ipairs(errorDB) do
+    for _, err in ipairs(db) do
         if err.session == sessionId then
             table.insert(sessionErrors, err)
         end
@@ -296,21 +208,32 @@ function ErrorDisplay.ErrorHandler:GetErrors(sessionId)
 end
 
 function ErrorDisplay.ErrorHandler:GetCurrentSession()
+    -- Always get the latest session from BugGrabber
+    if BugGrabber then
+        currentSession = BugGrabber:GetSessionId()
+    end
     return currentSession
 end
 
 function ErrorDisplay.ErrorHandler:GetSessionList()
-    -- Return list of sessions that have errors, plus current session
+    if not BugGrabber then
+        return {currentSession or 1}
+    end
+
+    -- Get all unique session IDs from BugGrabber's database
     local sessionsWithErrors = {}
-    for _, err in ipairs(errorDB) do
+    local db = BugGrabber:GetDB()
+
+    for _, err in ipairs(db) do
         if err.session and not tContains(sessionsWithErrors, err.session) then
             table.insert(sessionsWithErrors, err.session)
         end
     end
 
     -- Ensure current session is included
-    if not tContains(sessionsWithErrors, currentSession) then
-        table.insert(sessionsWithErrors, currentSession)
+    local current = self:GetCurrentSession()
+    if current and not tContains(sessionsWithErrors, current) then
+        table.insert(sessionsWithErrors, current)
     end
 
     -- Sort sessions
@@ -319,14 +242,8 @@ function ErrorDisplay.ErrorHandler:GetSessionList()
 end
 
 function ErrorDisplay.ErrorHandler:GetSessionInfo(sessionId)
-    local sessionHistory = ErrorDisplay.Config:GetSessionHistory()
-    for _, session in ipairs(sessionHistory) do
-        if session.id == sessionId then
-            return session
-        end
-    end
-
-    -- If not found in history, return basic info
+    -- Return basic session info
+    -- We no longer track detailed session history, just session IDs from BugGrabber
     if sessionId == currentSession then
         return {
             id = sessionId,
@@ -343,9 +260,9 @@ function ErrorDisplay.ErrorHandler:GetSessionInfo(sessionId)
         id = sessionId,
         startTime = nil,
         gameTime = nil,
-        playerName = 'Unknown',
-        realmName = 'Unknown',
-        buildInfo = 'Unknown'
+        playerName = UnitName('player') or 'Unknown',
+        realmName = GetRealmName() or 'Unknown',
+        buildInfo = select(1, GetBuildInfo()) or 'Unknown'
     }
 end
 
@@ -375,10 +292,16 @@ function ErrorDisplay.ErrorHandler:FormatError(err)
 end
 
 function ErrorDisplay.ErrorHandler:Reset()
-    wipe(errorDB)
-    wipe(sessionList)
-    ErrorDisplay.Config:ClearErrorDatabase()
-    self:Initialize()
+    -- Reset BugGrabber's database (this is the source of truth)
+    if BugGrabber then
+        BugGrabber:Reset()
+    end
+
+    -- Update current session
+    if BugGrabber then
+        currentSession = BugGrabber:GetSessionId()
+    end
+
     print(L['|cffffffffLibAT|r: All stored errors have been wiped.'])
 end
 

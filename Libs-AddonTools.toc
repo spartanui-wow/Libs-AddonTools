@@ -25,5 +25,7 @@ Core\Framework.lua
 # Localization
 Locales\enUS.lua
 
+# Systems
+Systems\Logger\Logger.lua
+
 # Systems\ProfileManager\Profiles.lua
-# Systems\Logger\Logger.lua

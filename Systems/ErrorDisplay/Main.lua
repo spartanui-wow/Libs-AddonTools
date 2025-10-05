@@ -25,57 +25,50 @@ local LDB = LibStub('LibDataBroker-1.1')
 local icon = LibStub('LibDBIcon-1.0')
 ErrorDisplay.icon = icon
 
-local function InitializeMinimapButton()
-	-- Create a Icon via standard wow frame
-	local button = CreateFrame('Button', MinimapIconName, MinimapCluster)
-	button:SetSize(25, 25)
-	button:SetPoint('BOTTOM', Minimap, 'BOTTOM', 0, 2)
-	button:SetFrameLevel(500)
-	button:SetFrameStrata('MEDIUM')
-	button:SetNormalTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png')
-	button:SetHighlightTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png')
-	button:SetPushedTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png')
-	button:SetScript(
-		'OnEnter',
-		function(self)
-			GameTooltip:SetOwner(self, 'TOP')
-			local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
-			local errorsTotal = #ErrorDisplay.ErrorHandler:GetErrors()
-			if #errorsCurrent == 0 then
-				if errorsTotal ~= 0 then
-					GameTooltip:AddLine('You no new bugs, but you have ' .. errorsTotal .. ' saved bugs.')
-				else
-					GameTooltip:AddLine('You have no bugs, yay!')
-				end
-			else
-				GameTooltip:AddLine('|cffffffffLibAT|r error handler')
-				local line = '%d. %s (x%d)'
-				for i, err in next, errorsCurrent do
-					GameTooltip:AddLine(line:format(i, ErrorDisplay.ErrorHandler:ColorText(err.message), err.counter), 0.5, 0.5, 0.5)
-					if i > 8 then
-						break
-					end
-				end
+-- Create LibDataBroker data object
+local ldbObject = LDB:NewDataObject(MinimapIconName, {
+	type = 'data source',
+	text = '0',
+	icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png',
+	OnClick = function(self, button)
+		if button == 'RightButton' then
+			-- Open settings
+			if ErrorDisplay.settingsCategory then
+				Settings.OpenToCategory(ErrorDisplay.settingsCategory.ID)
 			end
-			GameTooltip:AddLine(' ')
-			GameTooltip:AddLine('|cffeda55fClick|r to open bug window.\n|cffeda55fAlt-Click|r to clear all saved errors.', 0.2, 1, 0.2, 1)
-			GameTooltip:Show()
-		end
-	)
-	button:RegisterForClicks('AnyUp')
-	button:SetScript(
-		'OnClick',
-		function(self, button)
+		else
 			if IsAltKeyDown() then
 				ErrorDisplay.Reset()
 			else
 				ErrorDisplay.BugWindow:OpenErrorWindow()
 			end
 		end
-	)
-	button:Hide()
-	ErrorDisplay.MinimapButton = button
-end
+	end,
+	OnTooltipShow = function(tt)
+		local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
+		local errorsTotal = #ErrorDisplay.ErrorHandler:GetErrors()
+		if #errorsCurrent == 0 then
+			if errorsTotal ~= 0 then
+				tt:AddLine('You have no new bugs, but you have ' .. errorsTotal .. ' saved bugs.')
+			else
+				tt:AddLine('You have no bugs, yay!')
+			end
+		else
+			tt:AddLine('|cffffffffLibAT|r error handler')
+			local line = '%d. %s (x%d)'
+			for i, err in next, errorsCurrent do
+				tt:AddLine(line:format(i, ErrorDisplay.ErrorHandler:ColorText(err.message), err.counter), 0.5, 0.5, 0.5)
+				if i > 8 then
+					break
+				end
+			end
+		end
+		tt:AddLine(' ')
+		tt:AddLine('|cffeda55fClick|r to open bug window.\n|cffeda55fAlt-Click|r to clear all saved errors.\n|cffeda55fRight-Click|r for options.', 0.2, 1, 0.2, 1)
+	end
+})
+
+ErrorDisplay.ldbObject = ldbObject
 
 ErrorDisplay.Reset = function()
 	if BugGrabber then
@@ -105,11 +98,11 @@ function ErrorDisplay:Initialize()
 	end
 
 	-- Check if BugSack or other display addon is present
-	local name, _, _, enabled = C_AddOns.GetAddOnInfo('BugSack')
-	if name and enabled then
-		print('LibAT Error Display: BugSack detected, disabling to avoid conflicts.')
-		return
-	end
+	-- local name, _, _, enabled = C_AddOns.GetAddOnInfo('BugSack')
+	-- if name and enabled then
+	-- 	print('LibAT Error Display: BugSack detected, disabling to avoid conflicts.')
+	-- 	return
+	-- end
 
 	-- Check for other common error display addons
 	local conflictingAddons = {'!ImprovedErrorFrame', '!Swatter'}
@@ -150,11 +143,15 @@ function ErrorDisplay:Initialize()
 		return
 	end
 
-	-- Initialize the minimap button
-	InitializeMinimapButton()
-
 	-- Initialize saved variables and options
 	ErrorDisplay.Config:Initialize()
+
+	-- Register with LibDBIcon for minimap button
+	-- Ensure minimapIcon table exists in db
+	if not ErrorDisplay.db.minimapIcon then
+		ErrorDisplay.db.minimapIcon = {hide = false}
+	end
+	icon:Register(MinimapIconName, ldbObject, ErrorDisplay.db.minimapIcon)
 
 	-- Create the options panel
 	ErrorDisplay.Config:CreatePanel()
@@ -201,21 +198,19 @@ end
 function ErrorDisplay:UpdateMinimapIcon()
 	local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
 	local errorsTotal = #ErrorDisplay.ErrorHandler:GetErrors()
-	if not ErrorDisplay.MinimapButton then
-		InitializeMinimapButton()
-	end
-	if errorsTotal ~= 0 and ErrorDisplay.MinimapButton then
-		ErrorDisplay.MinimapButton:Show()
-		-- Update Texture
+
+	-- Update LDB text with current session error count
+	if ldbObject then
+		ldbObject.text = tostring(#errorsCurrent)
+
+		-- Update icon based on error state
 		if errorsCurrent and #errorsCurrent > 0 then
-			ErrorDisplay.MinimapButton:SetNormalTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\error.png')
-			ErrorDisplay.MinimapButton:SetHighlightTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\error.png')
+			-- New errors in current session - use red icon
+			ldbObject.icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\error.png'
 		else
-			ErrorDisplay.MinimapButton:SetNormalTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png')
-			ErrorDisplay.MinimapButton:SetHighlightTexture('Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png')
+			-- No new errors - use gray icon
+			ldbObject.icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png'
 		end
-	else
-		ErrorDisplay.MinimapButton:Hide()
 	end
 end
 
