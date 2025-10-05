@@ -6,13 +6,17 @@ local L = {
 	['Session: %d'] = 'Session: %d',
 	['No errors'] = 'No errors',
 	['You have no errors, yay!'] = 'You have no errors, yay!',
-	['All Errors'] = 'All Errors',
+	['All Sessions'] = 'All Sessions',
 	['Current Session'] = 'Current Session',
 	['Previous Session'] = 'Previous Session',
+	['Ignored Errors'] = 'Ignored Errors',
 	['< Previous'] = '< Previous',
 	['Next >'] = 'Next >',
 	['Easy Copy All'] = 'Easy Copy All',
-	['Clear all errors'] = 'Clear all errors'
+	['Clear all errors'] = 'Clear all errors',
+	['Clear Ignored'] = 'Clear Ignored',
+	['Ignore'] = 'Ignore',
+	['Unignore'] = 'Unignore'
 }
 
 ErrorDisplay.BugWindow = {}
@@ -21,6 +25,7 @@ local window, currentErrorIndex, currentErrorList, currentSession
 local countLabel, sessionLabel, textArea
 local ActiveButton = nil
 local categoryButtons = {}
+local setActiveCategory  -- Forward declaration
 ErrorDisplay.BugWindow.window = window
 
 -- Initialize currentErrorList as empty table
@@ -45,6 +50,21 @@ local function updateDisplay(forceRefresh)
 		currentErrorIndex = #currentErrorList
 	end
 
+	-- Update Ignored Errors tab visibility
+	local ignoredErrors = ErrorDisplay.ErrorHandler:GetIgnoredErrors()
+	if categoryButtons[4] then
+		if #ignoredErrors > 0 then
+			categoryButtons[4]:Show()
+		else
+			categoryButtons[4]:Hide()
+			-- If we're on the ignored errors tab and there are none, switch to current session
+			if ActiveButton and ActiveButton:GetID() == 4 then
+				setActiveCategory(categoryButtons[2])
+				return
+			end
+		end
+	end
+
 	-- Get the current error to display
 	local err = nil
 	if #currentErrorList > 0 and currentErrorIndex > 0 then
@@ -59,6 +79,7 @@ local function updateDisplay(forceRefresh)
 		window.Buttons.Next:SetEnabled(currentErrorIndex < #currentErrorList)
 		window.Buttons.Prev:SetEnabled(currentErrorIndex > 1)
 		window.Buttons.CopyAll:SetEnabled(#currentErrorList > 1)
+		window.Buttons.Ignore:SetEnabled(true)
 	else
 		-- No errors to display - clear everything
 		countLabel:SetText('0/0')
@@ -68,6 +89,7 @@ local function updateDisplay(forceRefresh)
 		window.Buttons.Next:SetEnabled(false)
 		window.Buttons.Prev:SetEnabled(false)
 		window.Buttons.CopyAll:SetEnabled(false)
+		window.Buttons.Ignore:SetEnabled(false)
 	end
 end
 
@@ -115,7 +137,7 @@ local function createButton(parent, text, id)
 	return button
 end
 
-local function setActiveCategory(button)
+setActiveCategory = function(button)
 	for _, btn in ipairs(categoryButtons) do
 		btn:SetNormalAtlas('auctionhouse-nav-button')
 		btn.Text:SetTextColor(0.6, 0.6, 0.6)
@@ -126,8 +148,8 @@ local function setActiveCategory(button)
 
 	-- Always get a fresh error list for the selected category
 	if button:GetID() == 1 then
-		-- All Errors
-		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors() or {}
+		-- All Sessions - get all errors from all sessions
+		currentErrorList = ErrorDisplay.ErrorHandler:GetAllErrorsFromAllSessions() or {}
 	elseif button:GetID() == 2 then
 		-- Current Session
 		currentErrorList = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession()) or {}
@@ -142,6 +164,20 @@ local function setActiveCategory(button)
 			-- No previous session, use empty list
 			currentErrorList = {}
 		end
+	elseif button:GetID() == 4 then
+		-- Ignored Errors
+		currentErrorList = ErrorDisplay.ErrorHandler:GetIgnoredErrors() or {}
+	end
+
+	-- Update button text based on active tab
+	if button:GetID() == 4 then
+		-- On Ignored Errors tab
+		window.Buttons.Ignore.Text:SetText(L['Unignore'])
+		window.Buttons.ClearAll.Text:SetText(L['Clear Ignored'])
+	else
+		-- On other tabs
+		window.Buttons.Ignore.Text:SetText(L['Ignore'])
+		window.Buttons.ClearAll.Text:SetText(L['Clear all errors'])
 	end
 
 	updateDisplay(true)
@@ -228,12 +264,17 @@ function ErrorDisplay.BugWindow.Create()
 	innerFrame:SetPoint('BOTTOMRIGHT', -25, 45)
 
 	-- Create category buttons using the tab technique
-	local buttonNames = {L['All Errors'], L['Current Session'], L['Previous Session']}
+	local buttonNames = {L['All Sessions'], L['Current Session'], L['Previous Session']}
 	for i, name in ipairs(buttonNames) do
 		local point = {'BOTTOMLEFT', innerFrame, 'TOPLEFT', 0 + (i - 1) * 120, 0}
 		local button = createCategoryButton(window, i, name, point)
 		table.insert(categoryButtons, button)
 	end
+
+	-- Create Ignored Errors tab (ID 4) - will be shown/hidden dynamically
+	local ignoredButton = createCategoryButton(window, 4, L['Ignored Errors'], {'BOTTOMLEFT', innerFrame, 'TOPLEFT', 360, 0})
+	table.insert(categoryButtons, ignoredButton)
+	ignoredButton:Hide() -- Hidden by default
 
 	-- Create ScrollFrame and ScrollChild
 	local scrollFrame = CreateFrame('ScrollFrame', nil, innerFrame)
@@ -309,16 +350,77 @@ function ErrorDisplay.BugWindow.Create()
 	clearAllBtn:SetScript(
 		'OnClick',
 		function()
-			ErrorDisplay.Reset()
+			if ActiveButton and ActiveButton:GetID() == 4 then
+				-- On Ignored Errors tab - clear ignored list
+				ErrorDisplay.ErrorHandler:ClearIgnoredErrors()
+				print('|cffffffffLibAT|r: All ignored errors have been cleared.')
+				-- Refresh display
+				setActiveCategory(ActiveButton)
+			else
+				-- On other tabs - clear all errors
+				ErrorDisplay.Reset()
+			end
 		end
 	)
 	window.Buttons.ClearAll = clearAllBtn
 
+	-- Ignore button
+	local ignoreBtn = createButton(window, L['Ignore'])
+	ignoreBtn:SetSize(120, 22)
+	ignoreBtn:SetPoint('BOTTOMRIGHT', clearAllBtn, 'BOTTOMLEFT', -5, 0)
+	ignoreBtn:SetScript(
+		'OnClick',
+		function()
+			-- Get the current error being displayed
+			if currentErrorList and currentErrorIndex and currentErrorIndex > 0 and currentErrorIndex <= #currentErrorList then
+				local err = currentErrorList[currentErrorIndex]
+				if err then
+					if ActiveButton and ActiveButton:GetID() == 4 then
+						-- On Ignored Errors tab - unignore this error
+						if ErrorDisplay.ErrorHandler:UnignoreError(err) then
+							-- Remove from current list
+							table.remove(currentErrorList, currentErrorIndex)
+
+							-- Adjust index if needed
+							if currentErrorIndex > #currentErrorList then
+								currentErrorIndex = #currentErrorList
+							end
+
+							-- Refresh display
+							updateDisplay(true)
+
+							-- Show confirmation message
+							print('|cffffffffLibAT|r: Error unignored. This error will now be shown.')
+						end
+					else
+						-- On other tabs - ignore this error
+						if ErrorDisplay.ErrorHandler:IgnoreError(err) then
+							-- Remove from current list
+							table.remove(currentErrorList, currentErrorIndex)
+
+							-- Adjust index if needed
+							if currentErrorIndex > #currentErrorList then
+								currentErrorIndex = #currentErrorList
+							end
+
+							-- Refresh display
+							updateDisplay(true)
+
+							-- Show confirmation message
+							print('|cffffffffLibAT|r: Error ignored. This error will no longer be shown.')
+						end
+					end
+				end
+			end
+		end
+	)
+	window.Buttons.Ignore = ignoreBtn
+
 	window.currentErrorList = currentErrorList
 	window:Hide()
 
-	-- Set the first button as active
-	setActiveCategory(categoryButtons[1])
+	-- Set Current Session (button 2) as the default active tab
+	setActiveCategory(categoryButtons[2])
 end
 
 function ErrorDisplay.BugWindow:OpenErrorWindow()

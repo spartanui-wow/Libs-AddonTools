@@ -68,8 +68,8 @@ function LibAT.Logger.RegisterAddon(addonName)
 	AddonLoggers[addonName] = loggerFunc
 
 	-- Initialize in database if logger is ready
-	if LibAT.DB and LibAT.DB.logger then
-		LibAT.DB.logger.modules[addonName] = true
+	if Logger.DB then
+		Logger.DB.modules[addonName] = true
 	end
 
 	return loggerFunc
@@ -123,8 +123,8 @@ function LibAT.Logger.RegisterAddonCategory(addonName, subcategories)
 		end
 
 		-- Initialize in database if logger is ready
-		if LibAT.DB and LibAT.DB.logger then
-			LibAT.DB.logger.modules[moduleName] = true
+		if Logger.DB then
+			Logger.DB.modules[moduleName] = true
 		end
 	end
 
@@ -156,8 +156,8 @@ function Logger.Log(debugText, module, level)
 	-- Initialize module if it doesn't exist
 	if not LogMessages[module] then
 		LogMessages[module] = {}
-		if LibAT.DB and LibAT.DB.logger then
-			LibAT.DB.logger.modules[module] = true
+		if Logger.DB then
+			Logger.DB.modules[module] = true
 		end
 	end
 
@@ -184,7 +184,7 @@ function Logger.Log(debugText, module, level)
 	table.insert(LogMessages[module], logEntry)
 
 	-- Maintain maximum log history
-	local maxHistory = (LibAT.DB and LibAT.DB.logger and LibAT.DB.logger.maxLogHistory) or 1000
+	local maxHistory = (Logger.DB and Logger.DB.maxLogHistory) or 1000
 	if #LogMessages[module] > maxHistory then
 		table.remove(LogMessages[module], 1)
 	end
@@ -317,8 +317,8 @@ function Logger:OnInitialize()
 	Logger.Database = LibAT.Database:RegisterNamespace('Logger', {profile = DbDefaults})
 	Logger.DB = Logger.Database.profile
 
-	GlobalLogLevel = LibAT.DB.logger.globalLogLevel or 2
-	ModuleLogLevels = LibAT.DB.logger.moduleLogLevels or {}
+	GlobalLogLevel = Logger.DB.globalLogLevel or 2
+	ModuleLogLevels = Logger.DB.moduleLogLevels or {}
 end
 
 SLASH_LOGS1 = '/logs'

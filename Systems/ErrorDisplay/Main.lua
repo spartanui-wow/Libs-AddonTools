@@ -26,47 +26,66 @@ local icon = LibStub('LibDBIcon-1.0')
 ErrorDisplay.icon = icon
 
 -- Create LibDataBroker data object
-local ldbObject = LDB:NewDataObject(MinimapIconName, {
-	type = 'data source',
-	text = '0',
-	icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png',
-	OnClick = function(self, button)
-		if button == 'RightButton' then
-			-- Open settings
-			if ErrorDisplay.settingsCategory then
-				Settings.OpenToCategory(ErrorDisplay.settingsCategory.ID)
-			end
-		else
-			if IsAltKeyDown() then
-				ErrorDisplay.Reset()
+local ldbObject =
+	LDB:NewDataObject(
+	MinimapIconName,
+	{
+		type = 'data source',
+		text = '0',
+		icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png',
+		OnClick = function(self, button)
+			if button == 'RightButton' then
+				-- Open settings
+				if ErrorDisplay.settingsCategory then
+					Settings.OpenToCategory(ErrorDisplay.settingsCategory.ID)
+				end
 			else
-				ErrorDisplay.BugWindow:OpenErrorWindow()
-			end
-		end
-	end,
-	OnTooltipShow = function(tt)
-		local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
-		local errorsTotal = #ErrorDisplay.ErrorHandler:GetErrors()
-		if #errorsCurrent == 0 then
-			if errorsTotal ~= 0 then
-				tt:AddLine('You have no new bugs, but you have ' .. errorsTotal .. ' saved bugs.')
-			else
-				tt:AddLine('You have no bugs, yay!')
-			end
-		else
-			tt:AddLine('|cffffffffLibAT|r error handler')
-			local line = '%d. %s (x%d)'
-			for i, err in next, errorsCurrent do
-				tt:AddLine(line:format(i, ErrorDisplay.ErrorHandler:ColorText(err.message), err.counter), 0.5, 0.5, 0.5)
-				if i > 8 then
-					break
+				if IsAltKeyDown() then
+					ErrorDisplay.Reset()
+				else
+					ErrorDisplay.BugWindow:OpenErrorWindow()
 				end
 			end
+		end,
+		OnTooltipShow = function(tt)
+			local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
+			local errorsTotal = #ErrorDisplay.ErrorHandler:GetErrors()
+			local totalCount, ignoredCount = ErrorDisplay.ErrorHandler:GetErrorCounts()
+			local currentTotalCount, currentIgnoredCount = ErrorDisplay.ErrorHandler:GetErrorCounts(ErrorDisplay.ErrorHandler:GetCurrentSession())
+
+			if #errorsCurrent == 0 then
+				if errorsTotal ~= 0 then
+					if ignoredCount > 0 then
+						tt:AddLine(string.format('You have no new bugs, but you have %d saved bugs (%d ignored).', totalCount, ignoredCount))
+					else
+						tt:AddLine('You have no new bugs, but you have ' .. errorsTotal .. ' saved bugs.')
+					end
+				else
+					if ignoredCount > 0 then
+						tt:AddLine(string.format('You have no bugs, but %d are ignored.', ignoredCount))
+					else
+						tt:AddLine('You have no bugs, yay!')
+					end
+				end
+			else
+				tt:AddLine('|cffffffffLibAT|r error handler')
+				local line = '%d. %s (x%d)'
+				for i, err in next, errorsCurrent do
+					tt:AddLine(line:format(i, ErrorDisplay.ErrorHandler:ColorText(err.message), err.counter), 0.5, 0.5, 0.5)
+					if i > 8 then
+						break
+					end
+				end
+				if currentIgnoredCount > 0 then
+					tt:AddLine(' ')
+					tt:AddLine(string.format('|cff888888%d error(s) ignored in current session|r', currentIgnoredCount), 0.7, 0.7, 0.7)
+				end
+			end
+			tt:AddLine(' ')
+			tt:AddLine('|cffeda55fClick|r to open bug window.\n|cffeda55fAlt-Click|r to clear all saved errors.\n|cffeda55fRight-Click|r for options.', 0.2, 1, 0.2, 1)
 		end
-		tt:AddLine(' ')
-		tt:AddLine('|cffeda55fClick|r to open bug window.\n|cffeda55fAlt-Click|r to clear all saved errors.\n|cffeda55fRight-Click|r for options.', 0.2, 1, 0.2, 1)
-	end
-})
+	}
+)
 
 ErrorDisplay.ldbObject = ldbObject
 
