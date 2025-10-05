@@ -39,7 +39,14 @@
     "NUM_CHAT_WINDOWS",
     "ChatEdit_GetActiveWindow",
     "ItemRefTooltip",
-    "ReloadUI"
+    "ReloadUI",
+    "TableAttributeDisplay",
+    "ScrollingEdit_OnTextChanged",
+    "ScrollingEdit_OnCursorChanged",
+    "TableInspectorMixin",
+    "TableAttributeDisplayValueButton_OnMouseDown",
+    "GameTooltip_SetTitle",
+    "GameTooltip_AddNormalLine"
   ],
   "Lua.diagnostics.disable": ["assign-type-mismatch"],
   "stylua.targetReleaseVersion": "latest"
