@@ -3,6 +3,9 @@ local LibAT = LibStub('AceAddon-3.0'):NewAddon('Libs-AddonTools', 'AceEvent-3.0'
 -- Global namespace
 _G.LibAT = LibAT
 
+-- Debug flag - set to true to enable debug messages during development/testing
+LibAT.DebugMode = false
+
 -- Version information
 LibAT.Version = C_AddOns.GetAddOnMetadata('Libs-AddonTools', 'Version') or 0
 LibAT.BuildNum = C_AddOns.GetAddOnMetadata('Libs-AddonTools', 'X-Build') or 0
@@ -22,6 +25,14 @@ LibAT.Version = ''
 LibAT.UI = {}
 LibAT.Components = {}
 LibAT.Systems = {}
+
+---Debug print function - only prints if DebugMode is enabled
+---@param ... any Messages to print
+function LibAT:Debug(...)
+	if self.DebugMode then
+		self:Print('[DEBUG]', ...)
+	end
+end
 
 ---Safely reload the UI with instance+combat check
 ---@param showMessage? boolean Whether to show error message (default: true)
@@ -141,6 +152,7 @@ function LibAT:RegisterSystem(name, system)
 		return
 	end
 	self.Systems[name] = system
+	self:Debug(string.format('Registered system: %s', name))
 end
 
 ---Initialize the LibAT framework
@@ -176,7 +188,10 @@ SlashCmdList['LIBAT'] = function(msg)
 	local args = {strsplit(' ', msg)}
 	local command = args[1] and args[1]:lower() or ''
 
-	if command == 'errors' or command == 'error' then
+	if command == 'debug' then
+		LibAT.DebugMode = not LibAT.DebugMode
+		LibAT:Print('Debug mode:', LibAT.DebugMode and '|cff00ff00Enabled|r' or '|cffff0000Disabled|r')
+	elseif command == 'errors' or command == 'error' then
 		if LibAT.ErrorDisplay then
 			LibAT.ErrorDisplay.BugWindow:OpenErrorWindow()
 		elseif _G.LibATErrorDisplay then
@@ -198,6 +213,7 @@ SlashCmdList['LIBAT'] = function(msg)
 		end
 	else
 		LibAT:Print('LibAT Commands:')
+		LibAT:Print('  /libat debug - Toggle debug mode (shows initialization messages)')
 		LibAT:Print('  /libat errors - Open error display window')
 		LibAT:Print('  /libat profiles - Open profile manager')
 		LibAT:Print('  /libat logs - Open logger window')

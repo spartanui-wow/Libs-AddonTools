@@ -128,7 +128,7 @@ function ErrorDisplay:Initialize()
 	for _, addonName in ipairs(conflictingAddons) do
 		local name, _, _, enabled = C_AddOns.GetAddOnInfo(addonName)
 		if name and enabled then
-			print('LibAT Error Display: ' .. addonName .. ' detected, disabling to avoid conflicts.')
+			LibAT:Debug('Error Display: ' .. addonName .. ' detected, disabling to avoid conflicts.')
 			return
 		end
 	end
@@ -200,6 +200,8 @@ function ErrorDisplay:Initialize()
 			end
 		)
 	end
+
+	LibAT:Debug('Error Display system initialized')
 end
 
 -- Expose global functions for external access

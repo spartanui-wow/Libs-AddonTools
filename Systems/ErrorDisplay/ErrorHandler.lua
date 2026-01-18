@@ -169,6 +169,7 @@ function ErrorDisplay.ErrorHandler:Initialize()
 
 	-- Use BugGrabber's session ID directly
 	currentSession = BugGrabber:GetSessionId()
+	LibAT:Debug('Error Display: Using BugGrabber session #' .. currentSession)
 
 	-- Register with BugGrabber to get notified of new errors
 	BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
@@ -191,9 +192,7 @@ function ErrorDisplay.ErrorHandler:OnBugGrabbed(callback, errorObject)
 	currentSession = BugGrabber:GetSessionId()
 
 	-- Debug: Show that we're capturing a new error
-	if ErrorDisplay.db.chatframe ~= false then
-		print('LibAT: New error captured in session #' .. errorObject.session)
-	end
+	LibAT:Debug('New error captured in session #' .. errorObject.session)
 
 	-- Trigger updates (BugGrabber already stored the error)
 	if ErrorDisplay.OnError then
