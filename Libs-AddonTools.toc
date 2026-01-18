@@ -16,10 +16,13 @@
 ## Category-zhCN: 函数库
 ## Category-zhTW: 函式庫
 
-#Load bug system FIRST
+#Load LibStub FIRST - required by LibDataBroker and LibDBIcon
+libs\Ace3\LibStub\LibStub.lua
+
+#Load bug system
 libs\bug-grabber\load.xml
 
-# Error Display System - Load IMMEDIATELY after BugGrabber for maximum safety
+# Error Display System - Load after BugGrabber (now safe because LibStub is loaded)
 libs\LibDataBroker\LibDataBroker-1.1.lua
 libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 Systems\ErrorDisplay\Main.lua
@@ -27,7 +30,7 @@ Systems\ErrorDisplay\ErrorHandler.lua
 Systems\ErrorDisplay\BugWindow.lua
 Systems\ErrorDisplay\Config.lua
 
-#Libraries
+#Libraries (rest of Ace3)
 libs\Ace3\Ace3.xml
 
 # Core Framework
