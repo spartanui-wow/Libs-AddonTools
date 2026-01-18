@@ -152,6 +152,11 @@ function CreateLogSourceCategories()
 		return
 	end
 
+	-- Don't try to build categories if DB isn't initialized yet
+	if not logger.DB or not logger.DB.modules then
+		return
+	end
+
 	-- Clear existing data
 	LogWindow.Categories = {}
 	ScrollListing = {}
@@ -1252,7 +1257,10 @@ function LibAT.Log(debugText, module, level)
 			CreateLogSourceCategories()
 		end
 
-		logger.DB.modules[module] = true -- Default to enabled for logging approach
+		-- Only update DB if it's initialized (might be called before OnInitialize)
+		if logger.DB and logger.DB.modules then
+			logger.DB.modules[module] = true -- Default to enabled for logging approach
+		end
 		if logger.options then
 			logger.options.args[module] = {
 				name = module,
