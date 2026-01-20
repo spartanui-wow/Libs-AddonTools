@@ -27,10 +27,60 @@ local countLabel, sessionLabel, textArea
 local ActiveButton = nil
 local categoryButtons = {}
 local setActiveCategory  -- Forward declaration
+local isShowingAll = false -- Track if we're in "Show All" mode
 ErrorDisplay.BugWindow.window = window
 
 -- Initialize currentErrorList as empty table
 currentErrorList = {}
+
+-- Expansion level to name mapping
+local EXPANSION_NAMES = {
+	[0] = 'Classic',
+	[1] = 'The Burning Crusade',
+	[2] = 'Wrath of the Lich King',
+	[3] = 'Cataclysm',
+	[4] = 'Mists of Pandaria',
+	[5] = 'Warlords of Draenor',
+	[6] = 'Legion',
+	[7] = 'Battle for Azeroth',
+	[8] = 'Shadowlands',
+	[9] = 'Dragonflight',
+	[10] = 'The War Within',
+	[11] = 'Midnight'
+}
+
+-- Client type detection based on WOW_PROJECT_ID
+local function GetClientType()
+	if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
+		return 'Retail'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+		return 'Classic Era'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC then
+		return 'TBC Classic'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
+		return 'Wrath Classic'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC then
+		return 'Cataclysm Classic'
+	else
+		return 'Unknown'
+	end
+end
+
+-- Generate debug header for Show All
+local function GenerateDebugHeader()
+	local buildVersion, _, _, interfaceVersion = GetBuildInfo()
+	local expansionLevel = GetServerExpansionLevel()
+	local expansionName = EXPANSION_NAMES[expansionLevel] or 'Unknown'
+	local clientType = GetClientType()
+
+	local faction = UnitFactionGroup('player') or 'Unknown'
+	local _, class = UnitClass('player')
+	class = class or 'Unknown'
+
+	local header = string.format('Game Version: %s - %s %s %d\nFaction: %s\nClass: %s\n\n', clientType, expansionName, buildVersion, interfaceVersion, faction, class)
+
+	return header
+end
 
 local function updateDisplay(forceRefresh)
 	if not window then
@@ -40,6 +90,35 @@ local function updateDisplay(forceRefresh)
 	-- Ensure currentErrorList is a table
 	if not currentErrorList then
 		currentErrorList = {}
+	end
+
+	-- If we're in "Show All" mode, regenerate the all errors display
+	if isShowingAll then
+		if #currentErrorList > 0 then
+			local showLocals = window.Buttons.ShowLocals:GetChecked()
+
+			-- Add debug header at the top
+			local allErrors = GenerateDebugHeader()
+			allErrors = allErrors .. '=================================\n\n'
+
+			for i, err in ipairs(currentErrorList) do
+				allErrors =
+					allErrors ..
+					string.format('---------------------------------\n                  Error #%d\n---------------------------------\n\n%s\n\n', i, ErrorDisplay.ErrorHandler:FormatError(err, showLocals))
+			end
+
+			textArea:SetText(allErrors)
+			window.scrollFrame:UpdateScrollChildRect()
+			window.Buttons.CopyAll:SetEnabled(true)
+			window.Buttons.Ignore:SetEnabled(false)
+			window.Buttons.ClearAll:SetEnabled(true)
+			window.Buttons.ShowLocals:Enable()
+			window.Buttons.Next:SetEnabled(false)
+			window.Buttons.Prev:SetEnabled(false)
+			countLabel:SetText(string.format('All (%d)', #currentErrorList))
+			sessionLabel:SetText('Multiple Errors')
+		end
+		return
 	end
 
 	if forceRefresh or not currentErrorIndex then
@@ -157,6 +236,9 @@ setActiveCategory = function(button)
 	ActiveButton = button
 	button:SetNormalAtlas('auctionhouse-nav-button-secondary-select')
 	button.Text:SetTextColor(1, 1, 1)
+
+	-- Exit "Show All" mode when switching categories
+	isShowingAll = false
 
 	-- Always get a fresh error list for the selected category
 	if button:GetID() == 1 then
@@ -323,6 +405,8 @@ function ErrorDisplay.BugWindow.Create()
 		'OnClick',
 		function()
 			if currentErrorIndex > 1 then
+				-- Exit "Show All" mode when navigating
+				isShowingAll = false
 				currentErrorIndex = currentErrorIndex - 1
 				updateDisplay()
 			end
@@ -335,6 +419,8 @@ function ErrorDisplay.BugWindow.Create()
 		'OnClick',
 		function()
 			if currentErrorIndex < #currentErrorList then
+				-- Exit "Show All" mode when navigating
+				isShowingAll = false
 				currentErrorIndex = currentErrorIndex + 1
 				updateDisplay()
 			end
@@ -346,12 +432,14 @@ function ErrorDisplay.BugWindow.Create()
 	window.Buttons.CopyAll:SetScript(
 		'OnClick',
 		function()
-			local allErrors = ''
-			for i, err in ipairs(currentErrorList) do
-				allErrors = allErrors .. string.format('---------------------------------\n                  Error #%d\n---------------------------------\n\n%s\n\n', i, ErrorDisplay.ErrorHandler:FormatError(err))
-			end
-			textArea:SetText(allErrors)
-			scrollFrame:UpdateScrollChildRect()
+			-- Enter "Show All" mode
+			isShowingAll = true
+			-- Uncheck Show Locals to reduce noise when viewing many errors
+			window.Buttons.ShowLocals:SetChecked(false)
+			updateDisplay()
+		end
+	)
+
 	-- Show Locals checkbox
 	local showLocalsCheckbox = CreateFrame('CheckButton', nil, window, 'UICheckButtonTemplate')
 	showLocalsCheckbox:SetSize(24, 24)

@@ -21,14 +21,19 @@ function LibAT.UI.CreateSlider(parent, width, height, min, max, step)
 	slider:SetObeyStepOnDrag(true)
 
 	-- Style the slider with modern aesthetic
-	slider:SetBackdrop({
-		bgFile = 'Interface\\Buttons\\UI-SliderBar-Background',
-		edgeFile = 'Interface\\Buttons\\UI-SliderBar-Border',
-		tile = true,
-		tileSize = 8,
-		edgeSize = 8,
-		insets = { left = 3, right = 3, top = 6, bottom = 6 },
-	})
+	-- SetBackdrop requires BackdropTemplate in 9.0+, use pcall for safety
+	if slider.SetBackdrop then
+		pcall(function()
+			slider:SetBackdrop({
+				bgFile = 'Interface\\Buttons\\UI-SliderBar-Background',
+				edgeFile = 'Interface\\Buttons\\UI-SliderBar-Border',
+				tile = true,
+				tileSize = 8,
+				edgeSize = 8,
+				insets = { left = 3, right = 3, top = 6, bottom = 6 },
+			})
+		end)
+	end
 
 	-- Hide default low/high text (we'll handle labels externally)
 	if slider.Low then
