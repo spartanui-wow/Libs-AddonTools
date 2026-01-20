@@ -358,10 +358,19 @@ function ErrorDisplay.ErrorHandler:GetSessionsWithInfo()
 	return sessionData
 end
 
-function ErrorDisplay.ErrorHandler:FormatError(err)
+function ErrorDisplay.ErrorHandler:FormatError(err, includeLocals)
+	if includeLocals == nil then
+		includeLocals = true -- Default to including locals
+	end
+
 	local s = ErrorDisplay.ErrorHandler:ColorText(tostring(err.message) .. (err.stack and '\n' .. tostring(err.stack) or ''))
-	local l = colorLocals(tostring(err.locals))
-	return string.format('%dx %s\n\nLocals:\n%s', err.counter or 1, s, l)
+
+	if includeLocals then
+		local l = colorLocals(tostring(err.locals))
+		return string.format('%dx %s\n\nLocals:\n%s', err.counter or 1, s, l)
+	else
+		return string.format('%dx %s', err.counter or 1, s)
+	end
 end
 
 function ErrorDisplay.ErrorHandler:Reset()

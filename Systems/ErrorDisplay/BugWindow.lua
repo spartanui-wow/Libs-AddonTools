@@ -16,7 +16,8 @@ local L = {
 	['Clear all errors'] = 'Clear all errors',
 	['Clear Ignored'] = 'Clear Ignored',
 	['Ignore'] = 'Ignore',
-	['Unignore'] = 'Unignore'
+	['Unignore'] = 'Unignore',
+	['Show Locals'] = 'Show Locals'
 }
 
 ErrorDisplay.BugWindow = {}
@@ -74,13 +75,17 @@ local function updateDisplay(forceRefresh)
 	if err then
 		countLabel:SetText(string.format('%d/%d', currentErrorIndex, #currentErrorList))
 		sessionLabel:SetText(string.format(L['Session: %d'], err.session))
-		textArea:SetText(ErrorDisplay.ErrorHandler:FormatError(err))
+
+		-- Determine if we should show locals
+		local showLocals = window.Buttons.ShowLocals:GetChecked()
+		textArea:SetText(ErrorDisplay.ErrorHandler:FormatError(err, showLocals))
 
 		window.Buttons.Next:SetEnabled(currentErrorIndex < #currentErrorList)
 		window.Buttons.Prev:SetEnabled(currentErrorIndex > 1)
 		window.Buttons.CopyAll:SetEnabled(#currentErrorList > 1)
 		window.Buttons.Ignore:SetEnabled(true)
 		window.Buttons.ClearAll:SetEnabled(true)
+		window.Buttons.ShowLocals:Enable()
 	else
 		-- No errors to display - clear everything
 		countLabel:SetText('0/0')
@@ -92,6 +97,7 @@ local function updateDisplay(forceRefresh)
 		window.Buttons.CopyAll:SetEnabled(false)
 		window.Buttons.Ignore:SetEnabled(false)
 		window.Buttons.ClearAll:SetEnabled(false)
+		window.Buttons.ShowLocals:Disable()
 	end
 end
 
@@ -346,8 +352,22 @@ function ErrorDisplay.BugWindow.Create()
 			end
 			textArea:SetText(allErrors)
 			scrollFrame:UpdateScrollChildRect()
+	-- Show Locals checkbox
+	local showLocalsCheckbox = CreateFrame('CheckButton', nil, window, 'UICheckButtonTemplate')
+	showLocalsCheckbox:SetSize(24, 24)
+	showLocalsCheckbox:SetPoint('LEFT', window.Buttons.CopyAll, 'RIGHT', 5, 0)
+	showLocalsCheckbox:SetChecked(true) -- Default to ON
+	showLocalsCheckbox.text = showLocalsCheckbox:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	showLocalsCheckbox.text:SetPoint('LEFT', showLocalsCheckbox, 'RIGHT', 0, 0)
+	showLocalsCheckbox.text:SetText(L['Show Locals'])
+	showLocalsCheckbox:SetScript(
+		'OnClick',
+		function()
+			-- Update the display when checkbox state changes
+			updateDisplay()
 		end
 	)
+	window.Buttons.ShowLocals = showLocalsCheckbox
 
 	-- Clear button
 	local clearAllBtn = createButton(window, L['Clear all errors'])
