@@ -50,5 +50,11 @@ Core\UI\Slider.lua
 Core\UI\NumericBox.lua
 
 # Systems
+# Logger System (split into 3 files for maintainability)
 Systems\Logger\Logger.lua
-Systems\ProfileManager\Profiles.lua
+Systems\Logger\LoggerUI.lua
+Systems\Logger\LoggerOptions.lua
+
+# Profile Manager System (split into 2 files for maintainability)
+Systems\ProfileManager\ProfileManagerUI.lua
+Systems\ProfileManager\ProfileManager.lua

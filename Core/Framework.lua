@@ -26,6 +26,10 @@ LibAT.UI = {}
 LibAT.Components = {}
 LibAT.Systems = {}
 
+-- UI ready flag - set to true after UI components are loaded
+-- Systems can check this flag to ensure UI is available before using it
+LibAT.UI.Ready = false
+
 ---Debug print function - only prints if DebugMode is enabled
 ---@param ... any Messages to print
 function LibAT:Debug(...)
@@ -174,7 +178,13 @@ function LibAT:OnInitialize()
 end
 
 ---Enable the LibAT framework
-function LibAT:OnEnable() end
+function LibAT:OnEnable()
+	-- Mark UI as ready - all UI components have been loaded
+	self.UI.Ready = true
+	if LibAT.Log then
+		LibAT.Log('UI components loaded and ready', 'Core.Framework', 'debug')
+	end
+end
 
 ---Handle slash commands
 SLASH_LIBAT1 = '/libat'

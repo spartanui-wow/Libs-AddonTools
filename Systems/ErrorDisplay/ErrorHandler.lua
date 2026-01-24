@@ -157,7 +157,9 @@ function ErrorDisplay.ErrorHandler:Initialize()
 
 	-- Use BugGrabber's session ID directly
 	currentSession = BugGrabber:GetSessionId()
-	LibAT:Debug('Error Display: Using BugGrabber session #' .. currentSession)
+	if LibAT.Log then
+		LibAT.Log('Using BugGrabber session #' .. currentSession, 'ErrorDisplay', 'debug')
+	end
 
 	-- Register with BugGrabber to get notified of new errors
 	BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
