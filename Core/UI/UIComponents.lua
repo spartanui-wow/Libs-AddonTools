@@ -173,32 +173,20 @@ function LibAT.UI.CreateIconButton(parent, normalAtlas, highlightAtlas, pushedAt
 	button.PushedTexture:SetAlpha(0)
 
 	-- Set up hover and click effects
-	button:SetScript(
-		'OnEnter',
-		function(self)
-			self.HighlightTexture:SetAlpha(1)
-		end
-	)
-	button:SetScript(
-		'OnLeave',
-		function(self)
-			self.HighlightTexture:SetAlpha(0)
-		end
-	)
-	button:SetScript(
-		'OnMouseDown',
-		function(self)
-			self.PushedTexture:SetAlpha(1)
-			self.NormalTexture:SetAlpha(0)
-		end
-	)
-	button:SetScript(
-		'OnMouseUp',
-		function(self)
-			self.PushedTexture:SetAlpha(0)
-			self.NormalTexture:SetAlpha(1)
-		end
-	)
+	button:SetScript('OnEnter', function(self)
+		self.HighlightTexture:SetAlpha(1)
+	end)
+	button:SetScript('OnLeave', function(self)
+		self.HighlightTexture:SetAlpha(0)
+	end)
+	button:SetScript('OnMouseDown', function(self)
+		self.PushedTexture:SetAlpha(1)
+		self.NormalTexture:SetAlpha(0)
+	end)
+	button:SetScript('OnMouseUp', function(self)
+		self.PushedTexture:SetAlpha(0)
+		self.NormalTexture:SetAlpha(1)
+	end)
 
 	return button
 end
@@ -326,18 +314,12 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	editBox:SetAutoFocus(false)
 	editBox:EnableMouse(true)
 	editBox:SetTextColor(1, 1, 1)
-	editBox:SetScript(
-		'OnTextChanged',
-		function(self)
-			ScrollingEdit_OnTextChanged(self, self:GetParent())
-		end
-	)
-	editBox:SetScript(
-		'OnCursorChanged',
-		function(self, x, y, w, h)
-			ScrollingEdit_OnCursorChanged(self, x, y - 10, w, h)
-		end
-	)
+	editBox:SetScript('OnTextChanged', function(self)
+		ScrollingEdit_OnTextChanged(self, self:GetParent())
+	end)
+	editBox:SetScript('OnCursorChanged', function(self, x, y, w, h)
+		ScrollingEdit_OnCursorChanged(self, x, y - 10, w, h)
+	end)
 
 	scrollFrame:SetScrollChild(editBox)
 

@@ -12,7 +12,7 @@ local UI = LibAT.UI
 
 -- Core functionality
 local window
-local namespaceblacklist = {'LibDualSpec-1.0'}
+local namespaceblacklist = { 'LibDualSpec-1.0' }
 
 ---@class RegisteredAddon
 ---@field id string Unique identifier for this addon
@@ -61,7 +61,7 @@ function ProfileManager:RegisterAddon(config)
 		db = config.db,
 		namespaces = config.namespaces,
 		icon = config.icon,
-		metadata = config.metadata or {}
+		metadata = config.metadata or {},
 	}
 
 	-- Rebuild navigation tree if window exists
@@ -174,12 +174,9 @@ local function BuildAddonCategories()
 	for id in pairs(registeredAddons) do
 		table.insert(sortedIds, id)
 	end
-	table.sort(
-		sortedIds,
-		function(a, b)
-			return registeredAddons[a].displayName < registeredAddons[b].displayName
-		end
-	)
+	table.sort(sortedIds, function(a, b)
+		return registeredAddons[a].displayName < registeredAddons[b].displayName
+	end)
 
 	-- Build category for each registered addon
 	for _, addonId in ipairs(sortedIds) do
@@ -201,7 +198,7 @@ local function BuildAddonCategories()
 				key = categoryKey .. '.Import',
 				expanded = false,
 				subCategories = {},
-				sortedKeys = {}
+				sortedKeys = {},
 			}
 
 			-- Add "ALL" option
@@ -213,7 +210,7 @@ local function BuildAddonCategories()
 					window.activeAddonId = addonId
 					window.activeNamespace = nil
 					UpdateWindowForMode()
-				end
+				end,
 			}
 			table.insert(subCategories['Import'].sortedKeys, 'ALL')
 
@@ -227,7 +224,7 @@ local function BuildAddonCategories()
 						window.activeAddonId = addonId
 						window.activeNamespace = ns
 						UpdateWindowForMode()
-					end
+					end,
 				}
 				table.insert(subCategories['Import'].sortedKeys, ns)
 			end
@@ -241,7 +238,7 @@ local function BuildAddonCategories()
 					window.activeAddonId = addonId
 					window.activeNamespace = nil
 					UpdateWindowForMode()
-				end
+				end,
 			}
 		end
 		table.insert(sortedKeys, 'Import')
@@ -253,7 +250,7 @@ local function BuildAddonCategories()
 				key = categoryKey .. '.Export',
 				expanded = false,
 				subCategories = {},
-				sortedKeys = {}
+				sortedKeys = {},
 			}
 
 			-- Add "ALL" option
@@ -265,7 +262,7 @@ local function BuildAddonCategories()
 					window.activeAddonId = addonId
 					window.activeNamespace = nil
 					UpdateWindowForMode()
-				end
+				end,
 			}
 			table.insert(subCategories['Export'].sortedKeys, 'ALL')
 
@@ -279,7 +276,7 @@ local function BuildAddonCategories()
 						window.activeAddonId = addonId
 						window.activeNamespace = ns
 						UpdateWindowForMode()
-					end
+					end,
 				}
 				table.insert(subCategories['Export'].sortedKeys, ns)
 			end
@@ -293,7 +290,7 @@ local function BuildAddonCategories()
 					window.activeAddonId = addonId
 					window.activeNamespace = nil
 					UpdateWindowForMode()
-				end
+				end,
 			}
 		end
 		table.insert(sortedKeys, 'Export')
@@ -305,7 +302,7 @@ local function BuildAddonCategories()
 			expanded = false,
 			icon = addon.icon,
 			subCategories = subCategories,
-			sortedKeys = sortedKeys
+			sortedKeys = sortedKeys,
 		}
 	end
 
@@ -335,17 +332,17 @@ local function BuildNavigationTree()
 				key = 'Settings.Options',
 				onSelect = function()
 					LibAT:Print('Profile options coming in Phase 2')
-				end
+				end,
 			},
 			['Namespaces'] = {
 				name = 'Namespace Filter',
 				key = 'Settings.Namespaces',
 				onSelect = function()
 					LibAT:Print('Namespace filtering coming in Phase 2')
-				end
-			}
+				end,
+			},
 		},
-		sortedKeys = {'Options', 'Namespaces'}
+		sortedKeys = { 'Options', 'Namespaces' },
 	}
 
 	-- Update navigation tree
@@ -403,16 +400,13 @@ end
 
 local function CreateWindow()
 	-- Create base window using LibAT.UI
-	window =
-		UI.CreateWindow(
-		{
-			name = 'LibAT_ProfileWindow',
-			title = '|cffffffffLib|cffe21f1fAT|r Profile Manager',
-			width = 800,
-			height = 538,
-			portrait = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon'
-		}
-	)
+	window = UI.CreateWindow({
+		name = 'LibAT_ProfileWindow',
+		title = '|cffffffffLib|cffe21f1fAT|r Profile Manager',
+		width = 800,
+		height = 538,
+		portrait = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon',
+	})
 	window.mode = 'import'
 	window.activeAddonId = nil -- Currently selected addon ID
 	window.activeNamespace = nil -- Currently selected namespace (nil = all)
@@ -427,13 +421,10 @@ local function CreateWindow()
 	-- Add switch mode button
 	window.SwitchModeButton = UI.CreateButton(window.ControlFrame, 100, 22, 'Switch Mode')
 	window.SwitchModeButton:SetPoint('RIGHT', window.ControlFrame, 'RIGHT', -10, 0)
-	window.SwitchModeButton:SetScript(
-		'OnClick',
-		function()
-			window.mode = window.mode == 'import' and 'export' or 'import'
-			UpdateWindowForMode()
-		end
-	)
+	window.SwitchModeButton:SetScript('OnClick', function()
+		window.mode = window.mode == 'import' and 'export' or 'import'
+		UpdateWindowForMode()
+	end)
 
 	-- Create main content area
 	window.MainContent = UI.CreateContentFrame(window, window.ControlFrame)
@@ -442,14 +433,11 @@ local function CreateWindow()
 	window.LeftPanel = UI.CreateLeftPanel(window.MainContent)
 
 	-- Initialize navigation tree with registered addons
-	window.NavTree =
-		UI.CreateNavigationTree(
-		{
-			parent = window.LeftPanel,
-			categories = {},
-			activeKey = nil
-		}
-	)
+	window.NavTree = UI.CreateNavigationTree({
+		parent = window.LeftPanel,
+		categories = {},
+		activeKey = nil,
+	})
 
 	-- Build initial navigation tree
 	BuildNavigationTree()
@@ -470,46 +458,36 @@ local function CreateWindow()
 	window.EditBox:SetWidth(window.TextPanel:GetWidth() - 20)
 
 	-- Create action buttons
-	local actionButtons =
-		UI.CreateActionButtons(
-		window,
+	local actionButtons = UI.CreateActionButtons(window, {
 		{
-			{
-				text = 'Clear',
-				width = 70,
-				onClick = function()
-					window.EditBox:SetText('')
-				end
-			},
-			{
-				text = 'Close',
-				width = 70,
-				onClick = function()
-					window:Hide()
-				end
-			}
-		}
-	)
+			text = 'Clear',
+			width = 70,
+			onClick = function()
+				window.EditBox:SetText('')
+			end,
+		},
+		{
+			text = 'Close',
+			width = 70,
+			onClick = function()
+				window:Hide()
+			end,
+		},
+	})
 
 	-- Import button (shown in import mode)
 	window.ImportButton = UI.CreateButton(window, 100, 22, 'Import')
 	window.ImportButton:SetPoint('RIGHT', actionButtons[1], 'LEFT', -5, 0)
-	window.ImportButton:SetScript(
-		'OnClick',
-		function()
-			ProfileManager:DoImport()
-		end
-	)
+	window.ImportButton:SetScript('OnClick', function()
+		ProfileManager:DoImport()
+	end)
 
 	-- Export button (shown in export mode)
 	window.ExportButton = UI.CreateButton(window, 100, 22, 'Export')
 	window.ExportButton:SetPoint('RIGHT', actionButtons[1], 'LEFT', -5, 0)
-	window.ExportButton:SetScript(
-		'OnClick',
-		function()
-			ProfileManager:DoExport()
-		end
-	)
+	window.ExportButton:SetScript('OnClick', function()
+		ProfileManager:DoExport()
+	end)
 
 	-- Hide window initially
 	window:Hide()
@@ -569,7 +547,7 @@ function ProfileManager:DoExport()
 		timestamp = date('%Y-%m-%d %H:%M:%S'),
 		addon = addon.displayName,
 		addonId = addon.id,
-		data = {}
+		data = {},
 	}
 
 	-- Export based on namespace selection
@@ -727,14 +705,12 @@ function ProfileManager:Initialize()
 
 	-- Auto-register LibAT itself if database is available
 	if LibAT.Database then
-		ProfileManager:RegisterAddon(
-			{
-				id = 'libat',
-				name = 'LibAT Core',
-				db = LibAT.Database,
-				icon = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon'
-			}
-		)
+		ProfileManager:RegisterAddon({
+			id = 'libat',
+			name = 'LibAT Core',
+			db = LibAT.Database,
+			icon = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon',
+		})
 	end
 
 	-- Create slash commands

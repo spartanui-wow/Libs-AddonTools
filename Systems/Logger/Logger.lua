@@ -45,11 +45,11 @@ local ActiveModule = nil
 
 -- Log levels with colors, priorities, and display names
 local LOG_LEVELS = {
-	['debug'] = {color = '|cff888888', priority = 1, display = 'Debug'},
-	['info'] = {color = '|cff00ff00', priority = 2, display = 'Info'},
-	['warning'] = {color = '|cffffff00', priority = 3, display = 'Warning'},
-	['error'] = {color = '|cffff0000', priority = 4, display = 'Error'},
-	['critical'] = {color = '|cffff00ff', priority = 5, display = 'Critical'}
+	['debug'] = { color = '|cff888888', priority = 1, display = 'Debug' },
+	['info'] = { color = '|cff00ff00', priority = 2, display = 'Info' },
+	['warning'] = { color = '|cffffff00', priority = 3, display = 'Warning' },
+	['error'] = { color = '|cffff0000', priority = 4, display = 'Error' },
+	['critical'] = { color = '|cffff00ff', priority = 5, display = 'Critical' },
 }
 
 -- Global and per-module log level settings
@@ -101,10 +101,10 @@ local function ParseLogSource(sourceName)
 
 	-- Fall back to LibAT internal categorization with hierarchy support
 	local internalCategories = {
-		['Core'] = {'Core', 'Framework', 'Events', 'Options', 'Database', 'Profiles'},
-		['UI Components'] = {'UnitFrames', 'Minimap', 'Artwork', 'ActionBars', 'ChatBox', 'Tooltips'},
-		['Handlers'] = {'Handler', 'Logger', 'ChatCommands', 'Compatibility'},
-		['Development'] = {'Debug', 'Test', 'Dev', 'Plugin'}
+		['Core'] = { 'Core', 'Framework', 'Events', 'Options', 'Database', 'Profiles' },
+		['UI Components'] = { 'UnitFrames', 'Minimap', 'Artwork', 'ActionBars', 'ChatBox', 'Tooltips' },
+		['Handlers'] = { 'Handler', 'Logger', 'ChatCommands', 'Compatibility' },
+		['Development'] = { 'Debug', 'Test', 'Dev', 'Plugin' },
 	}
 
 	-- Check for internal three-level hierarchy: "System.Component.SubComponent"
@@ -173,7 +173,7 @@ function CreateLogSourceCategories()
 				expanded = AddonCategories[category] and AddonCategories[category].expanded or false,
 				button = nil,
 				-- Mark as addon category if it's in AddonCategories OR RegisteredAddons
-				isAddonCategory = (AddonCategories[category] ~= nil) or (RegisteredAddons[category] ~= nil)
+				isAddonCategory = (AddonCategories[category] ~= nil) or (RegisteredAddons[category] ~= nil),
 			}
 		end
 
@@ -186,7 +186,7 @@ function CreateLogSourceCategories()
 					subSubCategories = {},
 					expanded = false,
 					button = nil,
-					type = 'subCategory'
+					type = 'subCategory',
 				}
 			end
 		elseif sourceType == 'subSubCategory' then
@@ -197,7 +197,7 @@ function CreateLogSourceCategories()
 					subSubCategories = {},
 					expanded = false,
 					button = nil,
-					type = 'subCategory'
+					type = 'subCategory',
 				}
 			end
 
@@ -205,21 +205,18 @@ function CreateLogSourceCategories()
 				name = subSubCategory,
 				sourceName = sourceName,
 				button = nil,
-				type = 'subSubCategory'
+				type = 'subSubCategory',
 			}
 		end
 
-		table.insert(
-			ScrollListing,
-			{
-				text = sourceName,
-				value = sourceName,
-				category = category,
-				subCategory = subCategory,
-				subSubCategory = subSubCategory,
-				sourceType = sourceType
-			}
-		)
+		table.insert(ScrollListing, {
+			text = sourceName,
+			value = sourceName,
+			category = category,
+			subCategory = subCategory,
+			subSubCategory = subSubCategory,
+			sourceType = sourceType,
+		})
 	end
 
 	-- Sort categories and their contents
@@ -302,43 +299,34 @@ function CreateCategoryTree(sortedCategories)
 				name = categoryName,
 				categoryIndex = categoryName,
 				isToken = categoryData.isAddonCategory,
-				selected = (ActiveModule == coreSubCategory.sourceName)
+				selected = (ActiveModule == coreSubCategory.sourceName),
 			}
 			UI.SetupFilterButton(categoryButton, categoryInfo)
 
 			-- No expand/collapse indicator for core-only categories
 
 			-- Make it selectable
-			categoryButton:SetScript(
-				'OnClick',
-				function(self)
-					-- Update button states (clear all selected states)
-					for _, btn in pairs(LogWindow.moduleButtons) do
-						btn.SelectedTexture:Hide()
-						btn:SetNormalFontObject(GameFontHighlightSmall)
-					end
-					-- Set this button as selected
-					self.SelectedTexture:Show()
-					self:SetNormalFontObject(GameFontNormalSmall)
-
-					ActiveModule = coreSubCategory.sourceName
-					UpdateLogDisplay()
+			categoryButton:SetScript('OnClick', function(self)
+				-- Update button states (clear all selected states)
+				for _, btn in pairs(LogWindow.moduleButtons) do
+					btn.SelectedTexture:Hide()
+					btn:SetNormalFontObject(GameFontHighlightSmall)
 				end
-			)
+				-- Set this button as selected
+				self.SelectedTexture:Show()
+				self:SetNormalFontObject(GameFontNormalSmall)
+
+				ActiveModule = coreSubCategory.sourceName
+				UpdateLogDisplay()
+			end)
 
 			-- Standard hover effects
-			categoryButton:SetScript(
-				'OnEnter',
-				function(self)
-					self.HighlightTexture:Show()
-				end
-			)
-			categoryButton:SetScript(
-				'OnLeave',
-				function(self)
-					self.HighlightTexture:Hide()
-				end
-			)
+			categoryButton:SetScript('OnEnter', function(self)
+				self.HighlightTexture:Show()
+			end)
+			categoryButton:SetScript('OnLeave', function(self)
+				self.HighlightTexture:Hide()
+			end)
 
 			table.insert(LogWindow.moduleButtons, categoryButton)
 			yOffset = yOffset - (buttonHeight + 1)
@@ -353,7 +341,7 @@ function CreateCategoryTree(sortedCategories)
 				name = categoryName .. ' (' .. subCategoryCount .. ')',
 				categoryIndex = categoryName,
 				isToken = categoryData.isAddonCategory, -- Use isToken for external addons (matches Blizzard's pattern)
-				selected = false
+				selected = false,
 			}
 			UI.SetupFilterButton(categoryButton, categoryInfo)
 
@@ -371,38 +359,29 @@ function CreateCategoryTree(sortedCategories)
 			categoryButton.Text:SetTextColor(1, 0.82, 0)
 
 			-- Category button functionality
-			categoryButton:SetScript(
-				'OnClick',
-				function(self)
-					categoryData.expanded = not categoryData.expanded
+			categoryButton:SetScript('OnClick', function(self)
+				categoryData.expanded = not categoryData.expanded
 
-					-- Persist expansion state for registered addon categories
-					if categoryData.isAddonCategory and AddonCategories[categoryName] then
-						AddonCategories[categoryName].expanded = categoryData.expanded
-					end
-
-					if categoryData.expanded then
-						self.indicator:SetAtlas('uitools-icon-minimize')
-					else
-						self.indicator:SetAtlas('uitools-icon-plus')
-					end
-					CreateCategoryTree(sortedCategories) -- Rebuild tree
+				-- Persist expansion state for registered addon categories
+				if categoryData.isAddonCategory and AddonCategories[categoryName] then
+					AddonCategories[categoryName].expanded = categoryData.expanded
 				end
-			)
+
+				if categoryData.expanded then
+					self.indicator:SetAtlas('uitools-icon-minimize')
+				else
+					self.indicator:SetAtlas('uitools-icon-plus')
+				end
+				CreateCategoryTree(sortedCategories) -- Rebuild tree
+			end)
 
 			-- Standard hover effects
-			categoryButton:SetScript(
-				'OnEnter',
-				function(self)
-					self.HighlightTexture:Show()
-				end
-			)
-			categoryButton:SetScript(
-				'OnLeave',
-				function(self)
-					self.HighlightTexture:Hide()
-				end
-			)
+			categoryButton:SetScript('OnEnter', function(self)
+				self.HighlightTexture:Show()
+			end)
+			categoryButton:SetScript('OnLeave', function(self)
+				self.HighlightTexture:Hide()
+			end)
 
 			categoryData.button = categoryButton
 			table.insert(LogWindow.categoryButtons, categoryButton)
@@ -423,7 +402,7 @@ function CreateCategoryTree(sortedCategories)
 					type = 'subCategory',
 					name = subCategoryName,
 					subCategoryIndex = subCategoryName,
-					selected = (ActiveModule == (subCategoryData.sourceName or subCategoryName))
+					selected = (ActiveModule == (subCategoryData.sourceName or subCategoryName)),
 				}
 				UI.SetupFilterButton(subCategoryButton, subCategoryInfo) -- If this subCategory has subSubCategories, add expand/collapse indicator
 				if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
@@ -438,50 +417,41 @@ function CreateCategoryTree(sortedCategories)
 				end
 
 				-- Standard hover effects
-				subCategoryButton:SetScript(
-					'OnEnter',
-					function(self)
-						self.HighlightTexture:Show()
-					end
-				)
-				subCategoryButton:SetScript(
-					'OnLeave',
-					function(self)
-						self.HighlightTexture:Hide()
-					end
-				)
+				subCategoryButton:SetScript('OnEnter', function(self)
+					self.HighlightTexture:Show()
+				end)
+				subCategoryButton:SetScript('OnLeave', function(self)
+					self.HighlightTexture:Hide()
+				end)
 
 				-- SubCategory functionality
-				subCategoryButton:SetScript(
-					'OnClick',
-					function(self)
-						-- If this has subSubCategories, toggle expansion
-						if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
-							subCategoryData.expanded = not subCategoryData.expanded
-							if self.indicator then
-								if subCategoryData.expanded then
-									self.indicator:SetAtlas('uitools-icon-minimize')
-								else
-									self.indicator:SetAtlas('uitools-icon-plus')
-								end
+				subCategoryButton:SetScript('OnClick', function(self)
+					-- If this has subSubCategories, toggle expansion
+					if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
+						subCategoryData.expanded = not subCategoryData.expanded
+						if self.indicator then
+							if subCategoryData.expanded then
+								self.indicator:SetAtlas('uitools-icon-minimize')
+							else
+								self.indicator:SetAtlas('uitools-icon-plus')
 							end
-							CreateCategoryTree(sortedCategories) -- Rebuild tree
-						else
-							-- This is a selectable log source
-							-- Update button states (clear all selected states)
-							for _, btn in pairs(LogWindow.moduleButtons) do
-								btn.SelectedTexture:Hide()
-								btn:SetNormalFontObject(GameFontHighlightSmall)
-							end
-							-- Set this button as selected
-							self.SelectedTexture:Show()
-							self:SetNormalFontObject(GameFontNormalSmall)
-
-							ActiveModule = subCategoryData.sourceName or subCategoryName
-							UpdateLogDisplay()
 						end
+						CreateCategoryTree(sortedCategories) -- Rebuild tree
+					else
+						-- This is a selectable log source
+						-- Update button states (clear all selected states)
+						for _, btn in pairs(LogWindow.moduleButtons) do
+							btn.SelectedTexture:Hide()
+							btn:SetNormalFontObject(GameFontHighlightSmall)
+						end
+						-- Set this button as selected
+						self.SelectedTexture:Show()
+						self:SetNormalFontObject(GameFontNormalSmall)
+
+						ActiveModule = subCategoryData.sourceName or subCategoryName
+						UpdateLogDisplay()
 					end
-				)
+				end)
 
 				table.insert(LogWindow.moduleButtons, subCategoryButton)
 				yOffset = yOffset - (buttonHeight + 1)
@@ -500,39 +470,30 @@ function CreateCategoryTree(sortedCategories)
 							type = 'subSubCategory',
 							name = subSubCategoryName,
 							subSubCategoryIndex = subSubCategoryName,
-							selected = (ActiveModule == subSubCategoryData.sourceName)
+							selected = (ActiveModule == subSubCategoryData.sourceName),
 						}
 						UI.SetupFilterButton(subSubCategoryButton, subSubCategoryInfo) -- Standard hover effects
-						subSubCategoryButton:SetScript(
-							'OnEnter',
-							function(self)
-								self.HighlightTexture:Show()
-							end
-						)
-						subSubCategoryButton:SetScript(
-							'OnLeave',
-							function(self)
-								self.HighlightTexture:Hide()
-							end
-						)
+						subSubCategoryButton:SetScript('OnEnter', function(self)
+							self.HighlightTexture:Show()
+						end)
+						subSubCategoryButton:SetScript('OnLeave', function(self)
+							self.HighlightTexture:Hide()
+						end)
 
 						-- SubSubCategory selection functionality
-						subSubCategoryButton:SetScript(
-							'OnClick',
-							function(self)
-								-- Update button states (clear all selected states)
-								for _, btn in pairs(LogWindow.moduleButtons) do
-									btn.SelectedTexture:Hide()
-									btn:SetNormalFontObject(GameFontHighlightSmall)
-								end
-								-- Set this button as selected
-								self.SelectedTexture:Show()
-								self:SetNormalFontObject(GameFontNormalSmall)
-
-								ActiveModule = subSubCategoryData.sourceName
-								UpdateLogDisplay()
+						subSubCategoryButton:SetScript('OnClick', function(self)
+							-- Update button states (clear all selected states)
+							for _, btn in pairs(LogWindow.moduleButtons) do
+								btn.SelectedTexture:Hide()
+								btn:SetNormalFontObject(GameFontHighlightSmall)
 							end
-						)
+							-- Set this button as selected
+							self.SelectedTexture:Show()
+							self:SetNormalFontObject(GameFontNormalSmall)
+
+							ActiveModule = subSubCategoryData.sourceName
+							UpdateLogDisplay()
+						end)
 
 						table.insert(LogWindow.moduleButtons, subSubCategoryButton)
 						yOffset = yOffset - (buttonHeight + 1)
@@ -553,16 +514,13 @@ local function CreateLogWindow()
 	end
 
 	-- Create base window using LibAT.UI
-	LogWindow =
-		UI.CreateWindow(
-		{
-			name = 'LibAT_LogWindow',
-			title = '|cffffffffSpartan|cffe21f1fUI|r Logging',
-			width = 800,
-			height = 538,
-			portrait = 'Interface\\AddOns\\SpartanUI\\images\\LogoSpartanUI'
-		}
-	)
+	LogWindow = UI.CreateWindow({
+		name = 'LibAT_LogWindow',
+		title = '|cffffffffSpartan|cffe21f1fUI|r Logging',
+		width = 800,
+		height = 538,
+		portrait = 'Interface\\AddOns\\SpartanUI\\images\\LogoSpartanUI',
+	})
 
 	-- Create control frame (top bar for search/filters)
 	LogWindow.ControlFrame = UI.CreateControlFrame(LogWindow)
@@ -576,44 +534,32 @@ local function CreateLogWindow()
 	-- Search all modules checkbox (leftmost)
 	LogWindow.SearchAllModules = UI.CreateCheckbox(LogWindow.HeaderAnchor, 'Search All Modules')
 	LogWindow.SearchAllModules:SetPoint('LEFT', LogWindow.HeaderAnchor, 'LEFT', 0, 0)
-	LogWindow.SearchAllModules:SetScript(
-		'OnClick',
-		function(self)
-			SearchAllModules = self:GetChecked()
-			UpdateLogDisplay()
-		end
-	)
+	LogWindow.SearchAllModules:SetScript('OnClick', function(self)
+		SearchAllModules = self:GetChecked()
+		UpdateLogDisplay()
+	end)
 	LogWindow.SearchAllModulesLabel = LogWindow.SearchAllModules.Label
 
 	-- Search box positioned after checkbox
 	LogWindow.SearchBox = UI.CreateSearchBox(LogWindow.HeaderAnchor, 241)
 	LogWindow.SearchBox:SetPoint('LEFT', LogWindow.SearchAllModulesLabel, 'RIGHT', 10, 0)
-	LogWindow.SearchBox:SetScript(
-		'OnTextChanged',
-		function(self)
-			CurrentSearchTerm = self:GetText()
-			UpdateLogDisplay()
-		end
-	)
-	LogWindow.SearchBox:SetScript(
-		'OnEscapePressed',
-		function(self)
-			self:SetText('')
-			self:ClearFocus()
-			CurrentSearchTerm = ''
-			UpdateLogDisplay()
-		end
-	)
+	LogWindow.SearchBox:SetScript('OnTextChanged', function(self)
+		CurrentSearchTerm = self:GetText()
+		UpdateLogDisplay()
+	end)
+	LogWindow.SearchBox:SetScript('OnEscapePressed', function(self)
+		self:SetText('')
+		self:ClearFocus()
+		CurrentSearchTerm = ''
+		UpdateLogDisplay()
+	end)
 
 	-- Settings button (workshop icon, positioned at right)
 	LogWindow.OpenSettings = UI.CreateIconButton(LogWindow.HeaderAnchor, 'Warfronts-BaseMapIcons-Empty-Workshop', 'Warfronts-BaseMapIcons-Alliance-Workshop', 'Warfronts-BaseMapIcons-Horde-Workshop')
 	LogWindow.OpenSettings:SetPoint('RIGHT', LogWindow.HeaderAnchor, 'RIGHT', 0, 0)
-	LogWindow.OpenSettings:SetScript(
-		'OnClick',
-		function()
-			LibAT.Options:ToggleOptions({'Help', 'Logging'})
-		end
-	)
+	LogWindow.OpenSettings:SetScript('OnClick', function()
+		LibAT.Options:ToggleOptions({ 'Help', 'Logging' })
+	end)
 
 	-- Logging Level dropdown positioned before settings button
 	LogWindow.LoggingLevelButton = UI.CreateDropdown(LogWindow.HeaderAnchor, 'Logging Level', 120, 22)
@@ -657,38 +603,31 @@ local function CreateLogWindow()
 	LogWindow.EditBox:SetText('No logs active - select a module from the left or enable "Search All Modules"')
 
 	-- Create action buttons at bottom
-	local actionButtons =
-		UI.CreateActionButtons(
-		LogWindow,
+	local actionButtons = UI.CreateActionButtons(LogWindow, {
 		{
-			{
-				text = 'Clear',
-				width = 70,
-				onClick = function()
-					ClearCurrentLogs()
-				end
-			},
-			{
-				text = 'Export',
-				width = 70,
-				onClick = function()
-					ExportCurrentLogs()
-				end
-			}
-		}
-	)
+			text = 'Clear',
+			width = 70,
+			onClick = function()
+				ClearCurrentLogs()
+			end,
+		},
+		{
+			text = 'Export',
+			width = 70,
+			onClick = function()
+				ExportCurrentLogs()
+			end,
+		},
+	})
 	LogWindow.ClearButton = actionButtons[1]
 	LogWindow.ExportButton = actionButtons[2]
 
 	-- Reload UI button positioned in bottom left
 	LogWindow.ReloadButton = UI.CreateButton(LogWindow, 80, 22, 'Reload UI')
 	LogWindow.ReloadButton:SetPoint('BOTTOMLEFT', LogWindow, 'BOTTOMLEFT', 3, 4)
-	LogWindow.ReloadButton:SetScript(
-		'OnClick',
-		function()
-			LibAT:SafeReloadUI()
-		end
-	)
+	LogWindow.ReloadButton:SetScript('OnClick', function()
+		LibAT:SafeReloadUI()
+	end)
 
 	-- Auto-scroll checkbox centered under right panel
 	LogWindow.AutoScroll = UI.CreateCheckbox(LogWindow, 'Auto-scroll')
@@ -932,18 +871,12 @@ function ExportCurrentLogs()
 		LogWindow.ExportFrame.EditBox:SetWidth(LogWindow.ExportFrame.ScrollFrame:GetWidth() - 20)
 		LogWindow.ExportFrame.EditBox:SetAutoFocus(false)
 		LogWindow.ExportFrame.EditBox:SetTextColor(1, 1, 1) -- White text
-		LogWindow.ExportFrame.EditBox:SetScript(
-			'OnTextChanged',
-			function(self)
-				ScrollingEdit_OnTextChanged(self, self:GetParent())
-			end
-		)
-		LogWindow.ExportFrame.EditBox:SetScript(
-			'OnCursorChanged',
-			function(self, x, y, w, h)
-				ScrollingEdit_OnCursorChanged(self, x, y - 10, w, h)
-			end
-		)
+		LogWindow.ExportFrame.EditBox:SetScript('OnTextChanged', function(self)
+			ScrollingEdit_OnTextChanged(self, self:GetParent())
+		end)
+		LogWindow.ExportFrame.EditBox:SetScript('OnCursorChanged', function(self, x, y, w, h)
+			ScrollingEdit_OnCursorChanged(self, x, y - 10, w, h)
+		end)
 		LogWindow.ExportFrame.ScrollFrame:SetScrollChild(LogWindow.ExportFrame.EditBox)
 
 		-- Instructions (styled like Blizzard help text)
@@ -1020,48 +953,37 @@ function SetupLogLevelDropdowns()
 	-- Create ordered list of log levels by priority
 	local orderedLevels = {}
 	for logLevel, data in pairs(LOG_LEVELS) do
-		table.insert(orderedLevels, {level = logLevel, data = data})
+		table.insert(orderedLevels, { level = logLevel, data = data })
 	end
-	table.sort(
-		orderedLevels,
-		function(a, b)
-			return a.data.priority < b.data.priority
-		end
-	)
+	table.sort(orderedLevels, function(a, b)
+		return a.data.priority < b.data.priority
+	end)
 
 	-- Setup logging level filter button (AH style)
-	LogWindow.LoggingLevelButton:SetupMenu(
-		function(dropdown, rootDescription)
-			-- Add log levels in priority order with colored text
-			for _, levelData in ipairs(orderedLevels) do
-				-- Create colored display text
-				local coloredText = levelData.data.color .. levelData.data.display .. '|r'
-				local button =
-					rootDescription:CreateButton(
-					coloredText,
-					function()
-						GlobalLogLevel = levelData.data.priority
-						logger.DB.globalLogLevel = GlobalLogLevel
-						-- Update button text with colored level name
-						local coloredButtonText = 'Level: ' .. levelData.data.color .. levelData.data.display .. '|r'
-						LogWindow.LoggingLevelButton:SetText(coloredButtonText)
-						UpdateLogDisplay() -- Refresh current view
-					end
-				)
-				-- Add tooltip
-				button:SetTooltip(
-					function(tooltip, elementDescription)
-						GameTooltip_SetTitle(tooltip, levelData.data.display .. ' Level')
-						GameTooltip_AddNormalLine(tooltip, 'Shows ' .. levelData.data.display:lower() .. ' messages and higher priority')
-					end
-				)
-				-- Check current selection
-				if GlobalLogLevel == levelData.data.priority then
-					button:SetRadio(true)
-				end
+	LogWindow.LoggingLevelButton:SetupMenu(function(dropdown, rootDescription)
+		-- Add log levels in priority order with colored text
+		for _, levelData in ipairs(orderedLevels) do
+			-- Create colored display text
+			local coloredText = levelData.data.color .. levelData.data.display .. '|r'
+			local button = rootDescription:CreateButton(coloredText, function()
+				GlobalLogLevel = levelData.data.priority
+				logger.DB.globalLogLevel = GlobalLogLevel
+				-- Update button text with colored level name
+				local coloredButtonText = 'Level: ' .. levelData.data.color .. levelData.data.display .. '|r'
+				LogWindow.LoggingLevelButton:SetText(coloredButtonText)
+				UpdateLogDisplay() -- Refresh current view
+			end)
+			-- Add tooltip
+			button:SetTooltip(function(tooltip, elementDescription)
+				GameTooltip_SetTitle(tooltip, levelData.data.display .. ' Level')
+				GameTooltip_AddNormalLine(tooltip, 'Shows ' .. levelData.data.display:lower() .. ' messages and higher priority')
+			end)
+			-- Check current selection
+			if GlobalLogLevel == levelData.data.priority then
+				button:SetRadio(true)
 			end
 		end
-	)
+	end)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1078,7 +1000,7 @@ LibAT.Logger = {} ---@class LibAT.Logger
 local function CreateLoggerObject(addonName, moduleName)
 	---@type LoggerObject
 	local loggerObj = {
-		Categories = {}
+		Categories = {},
 	}
 
 	-- Generic log function
@@ -1141,7 +1063,7 @@ local function CreateLoggerObject(addonName, moduleName)
 		if not AddonCategories[addonName] then
 			AddonCategories[addonName] = {
 				subcategories = {},
-				expanded = false
+				expanded = false,
 			}
 		end
 		table.insert(AddonCategories[addonName].subcategories, categoryName)
@@ -1198,7 +1120,7 @@ function LibAT.Logger.RegisterAddon(addonName, categories)
 		-- Store category registration
 		AddonCategories[addonName] = {
 			subcategories = categories,
-			expanded = false
+			expanded = false,
 		}
 
 		-- Create logger objects for each pre-defined category
@@ -1267,18 +1189,15 @@ function LibAT.Log(debugText, module, level)
 				desc = 'Set the minimum log level for the ' .. module .. ' module. Use "Global" to inherit the global log level setting.',
 				type = 'select',
 				values = function()
-					local values = {[0] = 'Global (inherit)'}
+					local values = { [0] = 'Global (inherit)' }
 					-- Create ordered list to ensure proper display order
 					local orderedLevels = {}
 					for level, data in pairs(LOG_LEVELS) do
-						table.insert(orderedLevels, {level = level, data = data})
+						table.insert(orderedLevels, { level = level, data = data })
 					end
-					table.sort(
-						orderedLevels,
-						function(a, b)
-							return a.data.priority < b.data.priority
-						end
-					)
+					table.sort(orderedLevels, function(a, b)
+						return a.data.priority < b.data.priority
+					end)
 
 					for _, levelData in ipairs(orderedLevels) do
 						values[levelData.data.priority] = levelData.data.display
@@ -1287,17 +1206,14 @@ function LibAT.Log(debugText, module, level)
 				end,
 				sorting = function()
 					-- Return sorted order for dropdown
-					local sorted = {0} -- Global first
+					local sorted = { 0 } -- Global first
 					local orderedLevels = {}
 					for level, data in pairs(LOG_LEVELS) do
-						table.insert(orderedLevels, {level = level, data = data})
+						table.insert(orderedLevels, { level = level, data = data })
 					end
-					table.sort(
-						orderedLevels,
-						function(a, b)
-							return a.data.priority < b.data.priority
-						end
-					)
+					table.sort(orderedLevels, function(a, b)
+						return a.data.priority < b.data.priority
+					end)
 
 					for _, levelData in ipairs(orderedLevels) do
 						table.insert(sorted, levelData.data.priority)
@@ -1314,7 +1230,7 @@ function LibAT.Log(debugText, module, level)
 						UpdateLogDisplay()
 					end
 				end,
-				order = (#logger.options.args + 1)
+				order = (#logger.options.args + 1),
 			}
 		end
 	end
@@ -1353,7 +1269,7 @@ function LibAT.Log(debugText, module, level)
 		timestamp = GetTime(),
 		level = level,
 		message = tostring(debugText),
-		formattedMessage = formattedMessage
+		formattedMessage = formattedMessage,
 	}
 
 	table.insert(LogMessages[module], logEntry)
@@ -1522,7 +1438,7 @@ local function AddOptions()
 			Description = {
 				name = 'SpartanUI uses a comprehensive logging system that captures all messages and filters by log level.\nAll modules are always enabled - use log level settings to control what messages are displayed.',
 				type = 'description',
-				order = 0
+				order = 0,
 			},
 			GlobalLogLevel = {
 				name = 'Global Log Level',
@@ -1533,14 +1449,11 @@ local function AddOptions()
 					-- Create ordered list to ensure proper display order
 					local orderedLevels = {}
 					for level, data in pairs(LOG_LEVELS) do
-						table.insert(orderedLevels, {level = level, data = data})
+						table.insert(orderedLevels, { level = level, data = data })
 					end
-					table.sort(
-						orderedLevels,
-						function(a, b)
-							return a.data.priority < b.data.priority
-						end
-					)
+					table.sort(orderedLevels, function(a, b)
+						return a.data.priority < b.data.priority
+					end)
 
 					for _, levelData in ipairs(orderedLevels) do
 						values[levelData.data.priority] = levelData.data.display
@@ -1552,14 +1465,11 @@ local function AddOptions()
 					local sorted = {}
 					local orderedLevels = {}
 					for level, data in pairs(LOG_LEVELS) do
-						table.insert(orderedLevels, {level = level, data = data})
+						table.insert(orderedLevels, { level = level, data = data })
 					end
-					table.sort(
-						orderedLevels,
-						function(a, b)
-							return a.data.priority < b.data.priority
-						end
-					)
+					table.sort(orderedLevels, function(a, b)
+						return a.data.priority < b.data.priority
+					end)
 
 					for _, levelData in ipairs(orderedLevels) do
 						table.insert(sorted, levelData.data.priority)
@@ -1576,7 +1486,7 @@ local function AddOptions()
 						UpdateLogDisplay()
 					end
 				end,
-				order = 1
+				order = 1,
 			},
 			CaptureWarningsErrors = {
 				name = 'Always Capture Warnings/Errors',
@@ -1588,7 +1498,7 @@ local function AddOptions()
 				set = function(info, val)
 					logger.DB.captureWarningsErrors = val
 				end,
-				order = 2
+				order = 2,
 			},
 			MaxLogHistory = {
 				name = 'Maximum Log History',
@@ -1603,12 +1513,12 @@ local function AddOptions()
 				set = function(info, val)
 					logger.DB.maxLogHistory = val
 				end,
-				order = 3
+				order = 3,
 			},
 			ModuleHeader = {
 				name = 'Module Logging Control',
 				type = 'header',
-				order = 10
+				order = 10,
 			},
 			ResetAllToGlobal = {
 				name = 'Reset All Modules to Global',
@@ -1624,9 +1534,9 @@ local function AddOptions()
 						UpdateLogDisplay()
 					end
 					LibAT:Print('All module log levels reset to global setting.')
-				end
-			}
-		}
+				end,
+			},
+		},
 	}
 
 	for k, _ in pairs(logger.DB.modules) do
@@ -1636,18 +1546,15 @@ local function AddOptions()
 				desc = 'Set the minimum log level for the ' .. k .. ' module. Use "Global" to inherit the global log level setting.',
 				type = 'select',
 				values = function()
-					local values = {[0] = 'Global (inherit)'}
+					local values = { [0] = 'Global (inherit)' }
 					-- Create ordered list to ensure proper display order
 					local orderedLevels = {}
 					for level, data in pairs(LOG_LEVELS) do
-						table.insert(orderedLevels, {level = level, data = data})
+						table.insert(orderedLevels, { level = level, data = data })
 					end
-					table.sort(
-						orderedLevels,
-						function(a, b)
-							return a.data.priority < b.data.priority
-						end
-					)
+					table.sort(orderedLevels, function(a, b)
+						return a.data.priority < b.data.priority
+					end)
 
 					for _, levelData in ipairs(orderedLevels) do
 						values[levelData.data.priority] = levelData.data.display
@@ -1656,17 +1563,14 @@ local function AddOptions()
 				end,
 				sorting = function()
 					-- Return sorted order for dropdown
-					local sorted = {0} -- Global first
+					local sorted = { 0 } -- Global first
 					local orderedLevels = {}
 					for level, data in pairs(LOG_LEVELS) do
-						table.insert(orderedLevels, {level = level, data = data})
+						table.insert(orderedLevels, { level = level, data = data })
 					end
-					table.sort(
-						orderedLevels,
-						function(a, b)
-							return a.data.priority < b.data.priority
-						end
-					)
+					table.sort(orderedLevels, function(a, b)
+						return a.data.priority < b.data.priority
+					end)
 
 					for _, levelData in ipairs(orderedLevels) do
 						table.insert(sorted, levelData.data.priority)
@@ -1683,7 +1587,7 @@ local function AddOptions()
 						UpdateLogDisplay()
 					end
 				end,
-				order = (#options.args + 1)
+				order = (#options.args + 1),
 			}
 		end
 	end
@@ -1703,16 +1607,16 @@ function logger:OnInitialize()
 			relativeTo = 'UIParent',
 			relativePoint = 'CENTER',
 			x = 0,
-			y = 0
+			y = 0,
 		},
 		modules = {
-			['*'] = true -- Default to enabled for logging approach
+			['*'] = true, -- Default to enabled for logging approach
 		},
 		moduleLogLevels = {
-			['*'] = 0 -- Use global level by default
-		}
+			['*'] = 0, -- Use global level by default
+		},
 	}
-	logger.Database = LibAT.Database:RegisterNamespace('Logger', {profile = defaults})
+	logger.Database = LibAT.Database:RegisterNamespace('Logger', { profile = defaults })
 	logger.DB = logger.Database.profile
 
 	-- Validate and purge any invalid entries from the database

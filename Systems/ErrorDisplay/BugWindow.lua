@@ -17,7 +17,7 @@ local L = {
 	['Clear Ignored'] = 'Clear Ignored',
 	['Ignore'] = 'Ignore',
 	['Unignore'] = 'Unignore',
-	['Show Locals'] = 'Show Locals'
+	['Show Locals'] = 'Show Locals',
 }
 
 ErrorDisplay.BugWindow = {}
@@ -26,7 +26,7 @@ local window, currentErrorIndex, currentErrorList, currentSession
 local countLabel, sessionLabel, textArea
 local ActiveButton = nil
 local categoryButtons = {}
-local setActiveCategory  -- Forward declaration
+local setActiveCategory -- Forward declaration
 local isShowingAll = false -- Track if we're in "Show All" mode
 ErrorDisplay.BugWindow.window = window
 
@@ -46,7 +46,7 @@ local EXPANSION_NAMES = {
 	[8] = 'Shadowlands',
 	[9] = 'Dragonflight',
 	[10] = 'The War Within',
-	[11] = 'Midnight'
+	[11] = 'Midnight',
 }
 
 -- Client type detection based on WOW_PROJECT_ID
@@ -102,9 +102,12 @@ local function updateDisplay(forceRefresh)
 			allErrors = allErrors .. '=================================\n\n'
 
 			for i, err in ipairs(currentErrorList) do
-				allErrors =
-					allErrors ..
-					string.format('---------------------------------\n                  Error #%d\n---------------------------------\n\n%s\n\n', i, ErrorDisplay.ErrorHandler:FormatError(err, showLocals))
+				allErrors = allErrors
+					.. string.format(
+						'---------------------------------\n                  Error #%d\n---------------------------------\n\n%s\n\n',
+						i,
+						ErrorDisplay.ErrorHandler:FormatError(err, showLocals)
+					)
 			end
 
 			textArea:SetText(allErrors)
@@ -211,19 +214,13 @@ local function createButton(parent, text, id)
 	button.Text:SetText(text)
 	button.Text:SetTextColor(1, 1, 1, 1)
 
-	button:HookScript(
-		'OnDisable',
-		function(self)
-			self.Text:SetTextColor(0.6, 0.6, 0.6, 0.6)
-		end
-	)
+	button:HookScript('OnDisable', function(self)
+		self.Text:SetTextColor(0.6, 0.6, 0.6, 0.6)
+	end)
 
-	button:HookScript(
-		'OnEnable',
-		function(self)
-			self.Text:SetTextColor(1, 1, 1, 1)
-		end
-	)
+	button:HookScript('OnEnable', function(self)
+		self.Text:SetTextColor(1, 1, 1, 1)
+	end)
 
 	return button
 end
@@ -282,29 +279,20 @@ local function createCategoryButton(parent, id, text, point)
 	button.Text:SetTextColor(0.6, 0.6, 0.6)
 	button:SetPoint(unpack(point))
 
-	button:SetScript(
-		'OnClick',
-		function(self)
-			setActiveCategory(self)
-		end
-	)
+	button:SetScript('OnClick', function(self)
+		setActiveCategory(self)
+	end)
 
-	button:SetScript(
-		'OnEnter',
-		function(self)
-			self.Text:SetTextColor(1, 1, 1)
-		end
-	)
+	button:SetScript('OnEnter', function(self)
+		self.Text:SetTextColor(1, 1, 1)
+	end)
 
-	button:SetScript(
-		'OnLeave',
-		function(self)
-			if button == ActiveButton then
-				return
-			end
-			self.Text:SetTextColor(0.6, 0.6, 0.6)
+	button:SetScript('OnLeave', function(self)
+		if button == ActiveButton then
+			return
 		end
-	)
+		self.Text:SetTextColor(0.6, 0.6, 0.6)
+	end)
 
 	return button
 end
@@ -331,20 +319,14 @@ function ErrorDisplay.BugWindow.Create()
 	window.Buttons = {}
 
 	-- Make window draggable
-	window:SetScript(
-		'OnMouseDown',
-		function(self, button)
-			if button == 'LeftButton' then
-				self:StartMoving()
-			end
+	window:SetScript('OnMouseDown', function(self, button)
+		if button == 'LeftButton' then
+			self:StartMoving()
 		end
-	)
-	window:SetScript(
-		'OnMouseUp',
-		function(self, button)
-			self:StopMovingOrSizing()
-		end
-	)
+	end)
+	window:SetScript('OnMouseUp', function(self, button)
+		self:StopMovingOrSizing()
+	end)
 
 	countLabel = window:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
 	countLabel:SetPoint('TOPRIGHT', -35, 0)
@@ -358,15 +340,15 @@ function ErrorDisplay.BugWindow.Create()
 	innerFrame:SetPoint('BOTTOMRIGHT', -25, 45)
 
 	-- Create category buttons using the tab technique
-	local buttonNames = {L['All Sessions'], L['Current Session'], L['Previous Session']}
+	local buttonNames = { L['All Sessions'], L['Current Session'], L['Previous Session'] }
 	for i, name in ipairs(buttonNames) do
-		local point = {'BOTTOMLEFT', innerFrame, 'TOPLEFT', 0 + (i - 1) * 120, 0}
+		local point = { 'BOTTOMLEFT', innerFrame, 'TOPLEFT', 0 + (i - 1) * 120, 0 }
 		local button = createCategoryButton(window, i, name, point)
 		table.insert(categoryButtons, button)
 	end
 
 	-- Create Ignored Errors tab (ID 4) - will be shown/hidden dynamically
-	local ignoredButton = createCategoryButton(window, 4, L['Ignored Errors'], {'BOTTOMLEFT', innerFrame, 'TOPLEFT', 360, 0})
+	local ignoredButton = createCategoryButton(window, 4, L['Ignored Errors'], { 'BOTTOMLEFT', innerFrame, 'TOPLEFT', 360, 0 })
 	table.insert(categoryButtons, ignoredButton)
 	ignoredButton:Hide() -- Hidden by default
 
@@ -401,44 +383,35 @@ function ErrorDisplay.BugWindow.Create()
 	-- Navigation buttons
 	window.Buttons.Prev = createButton(window, L['< Previous'])
 	window.Buttons.Prev:SetPoint('TOPLEFT', innerFrame, 'BOTTOMLEFT', 0, -7)
-	window.Buttons.Prev:SetScript(
-		'OnClick',
-		function()
-			if currentErrorIndex > 1 then
-				-- Exit "Show All" mode when navigating
-				isShowingAll = false
-				currentErrorIndex = currentErrorIndex - 1
-				updateDisplay()
-			end
+	window.Buttons.Prev:SetScript('OnClick', function()
+		if currentErrorIndex > 1 then
+			-- Exit "Show All" mode when navigating
+			isShowingAll = false
+			currentErrorIndex = currentErrorIndex - 1
+			updateDisplay()
 		end
-	)
+	end)
 
 	window.Buttons.Next = createButton(window, L['Next >'])
 	window.Buttons.Next:SetPoint('TOPRIGHT', innerFrame, 'BOTTOMRIGHT', 0, -7)
-	window.Buttons.Next:SetScript(
-		'OnClick',
-		function()
-			if currentErrorIndex < #currentErrorList then
-				-- Exit "Show All" mode when navigating
-				isShowingAll = false
-				currentErrorIndex = currentErrorIndex + 1
-				updateDisplay()
-			end
+	window.Buttons.Next:SetScript('OnClick', function()
+		if currentErrorIndex < #currentErrorList then
+			-- Exit "Show All" mode when navigating
+			isShowingAll = false
+			currentErrorIndex = currentErrorIndex + 1
+			updateDisplay()
 		end
-	)
+	end)
 
 	window.Buttons.CopyAll = createButton(window, L['Show All'])
 	window.Buttons.CopyAll:SetPoint('TOP', innerFrame, 'BOTTOM', 0, -7)
-	window.Buttons.CopyAll:SetScript(
-		'OnClick',
-		function()
-			-- Enter "Show All" mode
-			isShowingAll = true
-			-- Uncheck Show Locals to reduce noise when viewing many errors
-			window.Buttons.ShowLocals:SetChecked(false)
-			updateDisplay()
-		end
-	)
+	window.Buttons.CopyAll:SetScript('OnClick', function()
+		-- Enter "Show All" mode
+		isShowingAll = true
+		-- Uncheck Show Locals to reduce noise when viewing many errors
+		window.Buttons.ShowLocals:SetChecked(false)
+		updateDisplay()
+	end)
 
 	-- Show Locals checkbox
 	local showLocalsCheckbox = CreateFrame('CheckButton', nil, window, 'UICheckButtonTemplate')
@@ -448,86 +421,77 @@ function ErrorDisplay.BugWindow.Create()
 	showLocalsCheckbox.text = showLocalsCheckbox:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
 	showLocalsCheckbox.text:SetPoint('LEFT', showLocalsCheckbox, 'RIGHT', 0, 0)
 	showLocalsCheckbox.text:SetText(L['Show Locals'])
-	showLocalsCheckbox:SetScript(
-		'OnClick',
-		function()
-			-- Update the display when checkbox state changes
-			updateDisplay()
-		end
-	)
+	showLocalsCheckbox:SetScript('OnClick', function()
+		-- Update the display when checkbox state changes
+		updateDisplay()
+	end)
 	window.Buttons.ShowLocals = showLocalsCheckbox
 
 	-- Clear button
 	local clearAllBtn = createButton(window, L['Clear all errors'])
 	clearAllBtn:SetSize(120, 22)
 	clearAllBtn:SetPoint('BOTTOMRIGHT', innerFrame, 'TOPRIGHT', -2, 5)
-	clearAllBtn:SetScript(
-		'OnClick',
-		function()
-			if ActiveButton and ActiveButton:GetID() == 4 then
-				-- On Ignored Errors tab - clear ignored list
-				ErrorDisplay.ErrorHandler:ClearIgnoredErrors()
-				print('|cffffffffLibAT|r: All ignored errors have been cleared.')
-				-- Refresh display
-				setActiveCategory(ActiveButton)
-			else
-				-- On other tabs - clear all errors
-				ErrorDisplay.Reset()
-			end
+	clearAllBtn:SetScript('OnClick', function()
+		if ActiveButton and ActiveButton:GetID() == 4 then
+			-- On Ignored Errors tab - clear ignored list
+			ErrorDisplay.ErrorHandler:ClearIgnoredErrors()
+			print('|cffffffffLibAT|r: All ignored errors have been cleared.')
+			-- Refresh display
+			setActiveCategory(ActiveButton)
+		else
+			-- On other tabs - clear all errors
+			ErrorDisplay.Reset()
 		end
-	)
+	end)
 	window.Buttons.ClearAll = clearAllBtn
 
 	-- Ignore button
 	local ignoreBtn = createButton(window, L['Ignore'])
 	ignoreBtn:SetSize(120, 22)
 	ignoreBtn:SetPoint('BOTTOMRIGHT', clearAllBtn, 'BOTTOMLEFT', -5, 0)
-	ignoreBtn:SetScript(
-		'OnClick',
-		function()
-			-- Get the current error being displayed
-			if currentErrorList and currentErrorIndex and currentErrorIndex > 0 and currentErrorIndex <= #currentErrorList then
-				local err = currentErrorList[currentErrorIndex]
-				if err then
-					if ActiveButton and ActiveButton:GetID() == 4 then
-						-- On Ignored Errors tab - unignore this error
-						if ErrorDisplay.ErrorHandler:UnignoreError(err) then
-							-- Remove from current list
-							table.remove(currentErrorList, currentErrorIndex)
+	ignoreBtn:SetScript('OnClick', function()
+		-- Get the current error being displayed
+		if currentErrorList and currentErrorIndex and currentErrorIndex > 0 and currentErrorIndex <= #currentErrorList then
+			local err = currentErrorList[currentErrorIndex]
+			if err then
+				if ActiveButton and ActiveButton:GetID() == 4 then
+					-- On Ignored Errors tab - unignore this error
+					if ErrorDisplay.ErrorHandler:UnignoreError(err) then
+						-- Remove from current list
+						table.remove(currentErrorList, currentErrorIndex)
 
-							-- Adjust index if needed
-							if currentErrorIndex > #currentErrorList then
-								currentErrorIndex = #currentErrorList
-							end
-
-							-- Refresh display
-							updateDisplay(true)
-
-							-- Show confirmation message
-							print('|cffffffffLibAT|r: Error unignored. This error will now be shown.')
+						-- Adjust index if needed
+						if currentErrorIndex > #currentErrorList then
+							currentErrorIndex = #currentErrorList
 						end
-					else
-						-- On other tabs - ignore this error
-						if ErrorDisplay.ErrorHandler:IgnoreError(err) then
-							-- Remove from current list
-							table.remove(currentErrorList, currentErrorIndex)
 
-							-- Adjust index if needed
-							if currentErrorIndex > #currentErrorList then
-								currentErrorIndex = #currentErrorList
-							end
+						-- Refresh display
+						updateDisplay(true)
 
-							-- Refresh display
-							updateDisplay(true)
+						-- Show confirmation message
+						print('|cffffffffLibAT|r: Error unignored. This error will now be shown.')
+					end
+				else
+					-- On other tabs - ignore this error
+					if ErrorDisplay.ErrorHandler:IgnoreError(err) then
+						-- Remove from current list
+						table.remove(currentErrorList, currentErrorIndex)
 
-							-- Show confirmation message
-							print('|cffffffffLibAT|r: Error ignored. This error will no longer be shown.')
+						-- Adjust index if needed
+						if currentErrorIndex > #currentErrorList then
+							currentErrorIndex = #currentErrorList
 						end
+
+						-- Refresh display
+						updateDisplay(true)
+
+						-- Show confirmation message
+						print('|cffffffffLibAT|r: Error ignored. This error will no longer be shown.')
 					end
 				end
 			end
 		end
-	)
+	end)
 	window.Buttons.Ignore = ignoreBtn
 
 	window.currentErrorList = currentErrorList

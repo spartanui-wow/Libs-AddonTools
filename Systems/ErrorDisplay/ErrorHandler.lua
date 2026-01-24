@@ -6,7 +6,7 @@ local L = {
 	['BugGrabber is required for LibAT error handling.'] = 'BugGrabber is required for LibAT error handling.',
 	['LibAT Error'] = 'LibAT Error',
 	['New error captured. Type /libat errors to view.'] = 'New error captured. Type /libat errors to view.',
-	['|cffffffffLibAT|r: All stored errors have been wiped.'] = '|cffffffffLibAT|r: All stored errors have been wiped.'
+	['|cffffffffLibAT|r: All stored errors have been wiped.'] = '|cffffffffLibAT|r: All stored errors have been wiped.',
 }
 
 ErrorDisplay.ErrorHandler = {}
@@ -47,15 +47,11 @@ local function colorStack(ret)
 	ret = ret:gsub('/([^/]+%.lua)', '/|cff4EC9B0%1|r')
 
 	-- Color the full path, with non-important parts in light grey
-	ret =
-		ret:gsub(
-		'(%[)(@?)([^%]]+)(%])',
-		function(open, at, path, close)
-			-- Color 'string' purple when it's the first word in the path
-			local coloredPath = path:gsub('^(string%s)', '|cffC586C0%1|r')
-			return '|r' .. open .. at .. '|r|cffCE9178' .. coloredPath:gsub('"', '|r"|r') .. '|r' .. close .. '|r'
-		end
-	)
+	ret = ret:gsub('(%[)(@?)([^%]]+)(%])', function(open, at, path, close)
+		-- Color 'string' purple when it's the first word in the path
+		local coloredPath = path:gsub('^(string%s)', '|cffC586C0%1|r')
+		return '|r' .. open .. at .. '|r|cffCE9178' .. coloredPath:gsub('"', '|r"|r') .. '|r' .. close .. '|r'
+	end)
 
 	-- Color partial paths
 	ret = ret:gsub('(<%.%.%.%S+/)', '|cffCE9178%1|r')
@@ -64,17 +60,13 @@ local function colorStack(ret)
 	ret = ret:gsub(':(%d+)', ':|cffD7BA7D%1|r')
 
 	-- Color error messages (main error text)
-	ret =
-		ret:gsub(
-		'([^:\n]+):([^\n]*)',
-		function(prefix, message)
-			if not prefix:match('[/\\]') and not prefix:match('^%d+$') then
-				return '|cffFF5252' .. prefix .. ':' .. message .. '|r'
-			else
-				return '|cffCE9178' .. prefix .. ':|r|cffFF5252' .. message .. '|r'
-			end
+	ret = ret:gsub('([^:\n]+):([^\n]*)', function(prefix, message)
+		if not prefix:match('[/\\]') and not prefix:match('^%d+$') then
+			return '|cffFF5252' .. prefix .. ':' .. message .. '|r'
+		else
+			return '|cffCE9178' .. prefix .. ':|r|cffFF5252' .. message .. '|r'
 		end
-	)
+	end)
 
 	-- Color method names, function calls, and variables orange
 	ret = ret:gsub("'([^']+)'", "|cffFFA500'%1'|r|r")
@@ -106,20 +98,16 @@ local function colorStack(ret)
 		['until'] = true,
 		['while'] = true,
 		['boolean'] = true,
-		['string'] = true
+		['string'] = true,
 	}
-	ret =
-		ret:gsub(
-		'%f[%w](%a+)%f[%W]',
-		function(word)
-			if keywords[word] then
-				return '|cffC586C0' .. word .. '|r'
-			elseif word == 'in' then
-				return '|r' .. word .. '|r'
-			end
-			return word
+	ret = ret:gsub('%f[%w](%a+)%f[%W]', function(word)
+		if keywords[word] then
+			return '|cffC586C0' .. word .. '|r'
+		elseif word == 'in' then
+			return '|r' .. word .. '|r'
 		end
-	)
+		return word
+	end)
 
 	-- Color the error count at the start
 	ret = ret:gsub('^(%d+x)', '|cffa6fd79%1|r')
@@ -287,7 +275,7 @@ end
 
 function ErrorDisplay.ErrorHandler:GetSessionList()
 	if not BugGrabber then
-		return {currentSession or 1}
+		return { currentSession or 1 }
 	end
 
 	-- Get all unique session IDs from BugGrabber's database
@@ -322,7 +310,7 @@ function ErrorDisplay.ErrorHandler:GetSessionInfo(sessionId)
 			playerName = UnitName('player'),
 			realmName = GetRealmName(),
 			buildInfo = select(1, GetBuildInfo()),
-			isCurrent = true
+			isCurrent = true,
 		}
 	end
 
@@ -332,7 +320,7 @@ function ErrorDisplay.ErrorHandler:GetSessionInfo(sessionId)
 		gameTime = nil,
 		playerName = UnitName('player') or 'Unknown',
 		realmName = GetRealmName() or 'Unknown',
-		buildInfo = select(1, GetBuildInfo()) or 'Unknown'
+		buildInfo = select(1, GetBuildInfo()) or 'Unknown',
 	}
 end
 
@@ -344,15 +332,12 @@ function ErrorDisplay.ErrorHandler:GetSessionsWithInfo()
 		local info = self:GetSessionInfo(sessionId)
 		local errorCount = #self:GetErrors(sessionId)
 
-		table.insert(
-			sessionData,
-			{
-				id = sessionId,
-				info = info,
-				errorCount = errorCount,
-				isCurrent = sessionId == currentSession
-			}
-		)
+		table.insert(sessionData, {
+			id = sessionId,
+			info = info,
+			errorCount = errorCount,
+			isCurrent = sessionId == currentSession,
+		})
 	end
 
 	return sessionData

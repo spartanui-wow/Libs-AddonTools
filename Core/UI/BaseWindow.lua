@@ -52,12 +52,9 @@ function LibAT.UI.CreateWindow(config)
 	window:EnableMouse(true)
 	window:RegisterForDrag('LeftButton')
 	window:SetScript('OnDragStart', window.StartMoving)
-	window:SetScript(
-		'OnDragStop',
-		function(self)
-			self:StopMovingOrSizing()
-		end
-	)
+	window:SetScript('OnDragStop', function(self)
+		self:StopMovingOrSizing()
+	end)
 
 	-- Set the portrait if provided (with safety checks)
 	if config.portrait and window.portrait then

@@ -82,7 +82,7 @@ function LibAT.UI.CreateNavigationTree(config)
 	return scrollFrame, treeContainer, {
 		categoryButtons = {},
 		subCategoryButtons = {},
-		subSubCategoryButtons = {}
+		subSubCategoryButtons = {},
 	}
 end
 
@@ -158,7 +158,7 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 			name = categoryData.name .. ' (' .. subCategoryCount .. ')',
 			categoryIndex = categoryKey,
 			isToken = categoryData.isToken or false,
-			selected = (config.activeKey == categoryKey)
+			selected = (config.activeKey == categoryKey),
 		}
 		LibAT.UI.SetupFilterButton(categoryButton, categoryInfo)
 
@@ -176,43 +176,34 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 		categoryButton.Text:SetTextColor(1, 0.82, 0)
 
 		-- Category button click handler
-		categoryButton:SetScript(
-			'OnClick',
-			function(self)
-				categoryData.expanded = not categoryData.expanded
+		categoryButton:SetScript('OnClick', function(self)
+			categoryData.expanded = not categoryData.expanded
 
-				if categoryData.expanded then
-					self.indicator:SetAtlas('uitools-icon-minimize')
-				else
-					self.indicator:SetAtlas('uitools-icon-plus')
-				end
-
-				-- Call custom handler if provided
-				if categoryData.onSelect then
-					categoryData.onSelect(categoryKey, categoryData)
-				end
-				if config.onCategoryClick then
-					config.onCategoryClick(categoryKey, categoryData)
-				end
-
-				-- Rebuild tree
-				LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+			if categoryData.expanded then
+				self.indicator:SetAtlas('uitools-icon-minimize')
+			else
+				self.indicator:SetAtlas('uitools-icon-plus')
 			end
-		)
+
+			-- Call custom handler if provided
+			if categoryData.onSelect then
+				categoryData.onSelect(categoryKey, categoryData)
+			end
+			if config.onCategoryClick then
+				config.onCategoryClick(categoryKey, categoryData)
+			end
+
+			-- Rebuild tree
+			LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+		end)
 
 		-- Standard hover effects
-		categoryButton:SetScript(
-			'OnEnter',
-			function(self)
-				self.HighlightTexture:Show()
-			end
-		)
-		categoryButton:SetScript(
-			'OnLeave',
-			function(self)
-				self.HighlightTexture:Hide()
-			end
-		)
+		categoryButton:SetScript('OnEnter', function(self)
+			self.HighlightTexture:Show()
+		end)
+		categoryButton:SetScript('OnLeave', function(self)
+			self.HighlightTexture:Hide()
+		end)
 
 		categoryData.button = categoryButton
 		table.insert(scrollFrame.categoryButtons, categoryButton)
@@ -251,7 +242,7 @@ function LibAT.UI.BuildSubCategories(scrollFrame, treeContainer, categoryData, y
 			type = 'subCategory',
 			name = subCategoryData.name,
 			subCategoryIndex = subCategoryKey,
-			selected = (config.activeKey == subCategoryData.key)
+			selected = (config.activeKey == subCategoryData.key),
 		}
 		LibAT.UI.SetupFilterButton(subCategoryButton, subCategoryInfo)
 
@@ -268,50 +259,41 @@ function LibAT.UI.BuildSubCategories(scrollFrame, treeContainer, categoryData, y
 		end
 
 		-- Subcategory button click handler
-		subCategoryButton:SetScript(
-			'OnClick',
-			function(self)
-				-- Handle expansion if has children
-				if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
-					subCategoryData.expanded = not subCategoryData.expanded
-					if self.indicator then
-						if subCategoryData.expanded then
-							self.indicator:SetAtlas('uitools-icon-minimize')
-						else
-							self.indicator:SetAtlas('uitools-icon-plus')
-						end
+		subCategoryButton:SetScript('OnClick', function(self)
+			-- Handle expansion if has children
+			if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
+				subCategoryData.expanded = not subCategoryData.expanded
+				if self.indicator then
+					if subCategoryData.expanded then
+						self.indicator:SetAtlas('uitools-icon-minimize')
+					else
+						self.indicator:SetAtlas('uitools-icon-plus')
 					end
-				else
-					-- Select this subcategory
-					config.activeKey = subCategoryData.key
 				end
-
-				-- Call custom handler if provided
-				if subCategoryData.onSelect then
-					subCategoryData.onSelect(subCategoryKey, subCategoryData)
-				end
-				if config.onSubCategoryClick then
-					config.onSubCategoryClick(subCategoryKey, subCategoryData)
-				end
-
-				-- Rebuild tree
-				LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+			else
+				-- Select this subcategory
+				config.activeKey = subCategoryData.key
 			end
-		)
+
+			-- Call custom handler if provided
+			if subCategoryData.onSelect then
+				subCategoryData.onSelect(subCategoryKey, subCategoryData)
+			end
+			if config.onSubCategoryClick then
+				config.onSubCategoryClick(subCategoryKey, subCategoryData)
+			end
+
+			-- Rebuild tree
+			LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+		end)
 
 		-- Standard hover effects
-		subCategoryButton:SetScript(
-			'OnEnter',
-			function(self)
-				self.HighlightTexture:Show()
-			end
-		)
-		subCategoryButton:SetScript(
-			'OnLeave',
-			function(self)
-				self.HighlightTexture:Hide()
-			end
-		)
+		subCategoryButton:SetScript('OnEnter', function(self)
+			self.HighlightTexture:Show()
+		end)
+		subCategoryButton:SetScript('OnLeave', function(self)
+			self.HighlightTexture:Hide()
+		end)
 
 		table.insert(scrollFrame.subCategoryButtons, subCategoryButton)
 		yOffset = yOffset - (buttonHeight + 1)
@@ -347,42 +329,33 @@ function LibAT.UI.BuildSubSubCategories(scrollFrame, treeContainer, subCategoryD
 			type = 'subSubCategory',
 			name = subSubCategoryData.name,
 			subSubCategoryIndex = subSubCategoryKey,
-			selected = (config.activeKey == subSubCategoryData.key)
+			selected = (config.activeKey == subSubCategoryData.key),
 		}
 		LibAT.UI.SetupFilterButton(subSubCategoryButton, subSubCategoryInfo)
 
 		-- Sub-subcategory button click handler
-		subSubCategoryButton:SetScript(
-			'OnClick',
-			function(self)
-				config.activeKey = subSubCategoryData.key
+		subSubCategoryButton:SetScript('OnClick', function(self)
+			config.activeKey = subSubCategoryData.key
 
-				-- Call custom handler if provided
-				if subSubCategoryData.onSelect then
-					subSubCategoryData.onSelect(subSubCategoryKey, subSubCategoryData)
-				end
-				if config.onSubSubCategoryClick then
-					config.onSubSubCategoryClick(subSubCategoryKey, subSubCategoryData)
-				end
-
-				-- Rebuild tree
-				LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+			-- Call custom handler if provided
+			if subSubCategoryData.onSelect then
+				subSubCategoryData.onSelect(subSubCategoryKey, subSubCategoryData)
 			end
-		)
+			if config.onSubSubCategoryClick then
+				config.onSubSubCategoryClick(subSubCategoryKey, subSubCategoryData)
+			end
+
+			-- Rebuild tree
+			LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+		end)
 
 		-- Standard hover effects
-		subSubCategoryButton:SetScript(
-			'OnEnter',
-			function(self)
-				self.HighlightTexture:Show()
-			end
-		)
-		subSubCategoryButton:SetScript(
-			'OnLeave',
-			function(self)
-				self.HighlightTexture:Hide()
-			end
-		)
+		subSubCategoryButton:SetScript('OnEnter', function(self)
+			self.HighlightTexture:Show()
+		end)
+		subSubCategoryButton:SetScript('OnLeave', function(self)
+			self.HighlightTexture:Hide()
+		end)
 
 		table.insert(scrollFrame.subSubCategoryButtons, subSubCategoryButton)
 		yOffset = yOffset - (buttonHeight + 1)
