@@ -161,8 +161,7 @@ function CreateCategoryTree(sortedCategories)
 		end
 
 		-- Check if this category only has a single "Core" subcategory (make it directly selectable)
-		local isCoreOnly =
-			(subCategoryCount == 1 and categoryData.sortedSubCategories and #categoryData.sortedSubCategories == 1 and categoryData.sortedSubCategories[1] == 'Core')
+		local isCoreOnly = (subCategoryCount == 1 and categoryData.sortedSubCategories and #categoryData.sortedSubCategories == 1 and categoryData.sortedSubCategories[1] == 'Core')
 
 		if isCoreOnly then
 			-- Create a directly selectable button (top-level category style, but selectable)
@@ -431,12 +430,8 @@ local function CreateLogWindow()
 	end)
 
 	-- Settings button (workshop icon, positioned at right)
-	LoggerState.LogWindow.OpenSettings = LibAT.UI.CreateIconButton(
-		LoggerState.LogWindow.HeaderAnchor,
-		'Warfronts-BaseMapIcons-Empty-Workshop',
-		'Warfronts-BaseMapIcons-Alliance-Workshop',
-		'Warfronts-BaseMapIcons-Horde-Workshop'
-	)
+	LoggerState.LogWindow.OpenSettings =
+		LibAT.UI.CreateIconButton(LoggerState.LogWindow.HeaderAnchor, 'Warfronts-BaseMapIcons-Empty-Workshop', 'Warfronts-BaseMapIcons-Alliance-Workshop', 'Warfronts-BaseMapIcons-Horde-Workshop')
 	LoggerState.LogWindow.OpenSettings:SetPoint('RIGHT', LoggerState.LogWindow.HeaderAnchor, 'RIGHT', 0, 0)
 	LoggerState.LogWindow.OpenSettings:SetScript('OnClick', function()
 		LibAT.Options:ToggleOptions({ 'Help', 'Logging' })
@@ -812,11 +807,7 @@ local function ExportCurrentLogs()
 				local entryLogLevel = LoggerState.LOG_LEVELS[logEntry.level]
 				if entryLogLevel and entryLogLevel.priority >= effectiveLogLevel then
 					-- Apply search filtering if active
-					if
-						not LoggerState.CurrentSearchTerm
-						or LoggerState.CurrentSearchTerm == ''
-						or logEntry.message:lower():find(LoggerState.CurrentSearchTerm:lower(), 1, true)
-					then
+					if not LoggerState.CurrentSearchTerm or LoggerState.CurrentSearchTerm == '' or logEntry.message:lower():find(LoggerState.CurrentSearchTerm:lower(), 1, true) then
 						-- Remove color codes for export
 						local cleanMessage = logEntry.formattedMessage:gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', '')
 						exportText = exportText .. cleanMessage .. '\n'

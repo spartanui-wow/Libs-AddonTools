@@ -77,7 +77,7 @@ local function GenerateDebugHeader()
 	local _, class = UnitClass('player')
 	class = class or 'Unknown'
 
-	local header = string.format('Game Version: %s - %s %s %d\nFaction: %s\nClass: %s\n\n', clientType, expansionName, buildVersion, interfaceVersion, faction, class)
+	local header = string.format('**Game Version:** %s - %s %s %d  \n**Faction:** %s  \n**Class:** %s\n\n', clientType, expansionName, buildVersion, interfaceVersion, faction, class)
 
 	return header
 end
@@ -104,7 +104,7 @@ local function updateDisplay(forceRefresh)
 			for i, err in ipairs(currentErrorList) do
 				allErrors = allErrors
 					.. string.format(
-						'---------------------------------\n                  Error #%d\n---------------------------------\n\n%s\n\n',
+						'---------------------------------\n                  Error #%d\n---------------------------------\n\n```lua\n%s\n```\n\n',
 						i,
 						ErrorDisplay.ErrorHandler:FormatError(err, showLocals)
 					)
@@ -112,7 +112,7 @@ local function updateDisplay(forceRefresh)
 
 			textArea:SetText(allErrors)
 			window.scrollFrame:UpdateScrollChildRect()
-			window.Buttons.CopyAll:SetEnabled(true)
+			window.Buttons.ShowAll:SetEnabled(true)
 			window.Buttons.Ignore:SetEnabled(false)
 			window.Buttons.ClearAll:SetEnabled(true)
 			window.Buttons.ShowLocals:Enable()
@@ -164,7 +164,6 @@ local function updateDisplay(forceRefresh)
 
 		window.Buttons.Next:SetEnabled(currentErrorIndex < #currentErrorList)
 		window.Buttons.Prev:SetEnabled(currentErrorIndex > 1)
-		window.Buttons.CopyAll:SetEnabled(#currentErrorList > 1)
 		window.Buttons.Ignore:SetEnabled(true)
 		window.Buttons.ClearAll:SetEnabled(true)
 		window.Buttons.ShowLocals:Enable()
@@ -176,7 +175,6 @@ local function updateDisplay(forceRefresh)
 
 		window.Buttons.Next:SetEnabled(false)
 		window.Buttons.Prev:SetEnabled(false)
-		window.Buttons.CopyAll:SetEnabled(false)
 		window.Buttons.Ignore:SetEnabled(false)
 		window.Buttons.ClearAll:SetEnabled(false)
 		window.Buttons.ShowLocals:Disable()
@@ -403,9 +401,9 @@ function ErrorDisplay.BugWindow.Create()
 		end
 	end)
 
-	window.Buttons.CopyAll = createButton(window, L['Show All'])
-	window.Buttons.CopyAll:SetPoint('TOP', innerFrame, 'BOTTOM', 0, -7)
-	window.Buttons.CopyAll:SetScript('OnClick', function()
+	window.Buttons.ShowAll = createButton(window, L['Show All'])
+	window.Buttons.ShowAll:SetPoint('TOP', innerFrame, 'BOTTOM', 0, -7)
+	window.Buttons.ShowAll:SetScript('OnClick', function()
 		-- Enter "Show All" mode
 		isShowingAll = true
 		-- Uncheck Show Locals to reduce noise when viewing many errors
@@ -416,7 +414,7 @@ function ErrorDisplay.BugWindow.Create()
 	-- Show Locals checkbox
 	local showLocalsCheckbox = CreateFrame('CheckButton', nil, window, 'UICheckButtonTemplate')
 	showLocalsCheckbox:SetSize(24, 24)
-	showLocalsCheckbox:SetPoint('LEFT', window.Buttons.CopyAll, 'RIGHT', 5, 0)
+	showLocalsCheckbox:SetPoint('LEFT', window.Buttons.ShowAll, 'RIGHT', 5, 0)
 	showLocalsCheckbox:SetChecked(true) -- Default to ON
 	showLocalsCheckbox.text = showLocalsCheckbox:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
 	showLocalsCheckbox.text:SetPoint('LEFT', showLocalsCheckbox, 'RIGHT', 0, 0)
