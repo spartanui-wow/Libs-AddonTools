@@ -63,6 +63,7 @@ end
 ---Options Manager - Simple interface for managing AceConfig options
 LibAT.Options = {
 	optionsTable = {},
+	categoryInfo = {},
 	registry = nil,
 	dialog = nil,
 }
@@ -90,6 +91,12 @@ function LibAT.Options:AddOptions(options, name, parent)
 	-- Store the options
 	self.optionsTable[name] = options
 
+	-- Store the category info for later retrieval
+	if not self.categoryInfo then
+		self.categoryInfo = {}
+	end
+	self.categoryInfo[name] = { name = name, parent = parent }
+
 	if LibAT.Logger and LibAT.Logger.logger then
 		LibAT.Logger.logger.debug('AddOptions called for: ' .. tostring(name) .. ' with parent: ' .. tostring(parent or 'none'))
 	end
@@ -111,12 +118,20 @@ function LibAT.Options:AddOptions(options, name, parent)
 						args = {},
 					}
 					self.registry:RegisterOptionsTable(parent, parentOptions)
-					self.dialog:AddToBlizOptions(parent, parent)
+					local frame, categoryID = self.dialog:AddToBlizOptions(parent, parent)
 					self.optionsTable[parent] = parentOptions
+					-- Store the parent's category ID
+					if not self.categoryInfo[parent] then
+						self.categoryInfo[parent] = {}
+					end
+					self.categoryInfo[parent].categoryID = categoryID
 				end
-				self.dialog:AddToBlizOptions(name, name, parent)
+				local frame, categoryID = self.dialog:AddToBlizOptions(name, name, parent)
+				-- Store the category ID returned by AddToBlizOptions
+				self.categoryInfo[name].categoryID = categoryID
 			else
-				self.dialog:AddToBlizOptions(name, name)
+				local frame, categoryID = self.dialog:AddToBlizOptions(name, name)
+				self.categoryInfo[name].categoryID = categoryID
 			end
 		end)
 
@@ -124,7 +139,8 @@ function LibAT.Options:AddOptions(options, name, parent)
 			-- Fallback: add without parent if there was an error
 			LibAT:Print('Warning: Could not add options with parent "' .. tostring(parent) .. '", adding as standalone. Error: ' .. tostring(err))
 			pcall(function()
-				self.dialog:AddToBlizOptions(name, name)
+				local frame, categoryID = self.dialog:AddToBlizOptions(name, name)
+				self.categoryInfo[name].categoryID = categoryID
 			end)
 		end
 	end
@@ -160,7 +176,33 @@ function LibAT.Options:ToggleOptions(path)
 		end
 	end
 
-	-- Open the AceConfig standalone frame
+	-- Try to open in Blizzard Settings panel first (modern API)
+	if Settings and Settings.OpenToCategory then
+		-- Get the stored category ID for this option
+		local categoryID = self.categoryInfo and self.categoryInfo[targetName] and self.categoryInfo[targetName].categoryID or targetName
+
+		if LibAT.Logger and LibAT.Logger.logger then
+			LibAT.Logger.logger.debug('Attempting to open Blizzard Settings with category ID: ' .. tostring(categoryID))
+		end
+
+		-- Use the modern Settings API
+		local opened = Settings.OpenToCategory(categoryID)
+		if opened then
+			if LibAT.Logger and LibAT.Logger.logger then
+				LibAT.Logger.logger.debug('Successfully opened Blizzard Settings panel')
+			end
+			return
+		else
+			if LibAT.Logger and LibAT.Logger.logger then
+				LibAT.Logger.logger.warning('Settings.OpenToCategory returned false or nil')
+			end
+		end
+	end
+
+	-- Fallback: Open the AceConfig standalone frame if Blizzard Settings didn't work
+	if LibAT.Logger and LibAT.Logger.logger then
+		LibAT.Logger.logger.debug('Falling back to standalone AceConfig window')
+	end
 	self.dialog:Open(targetName)
 end
 
