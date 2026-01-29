@@ -252,9 +252,6 @@ end
 function LibAT:OnEnable()
 	-- Mark UI as ready - all UI components have been loaded
 	self.UI.Ready = true
-	if LibAT.Log then
-		LibAT.Log('UI components loaded and ready', 'Core.Framework', 'debug')
-	end
 end
 
 ---Handle slash commands

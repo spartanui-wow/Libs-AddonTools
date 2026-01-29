@@ -322,16 +322,7 @@ local function RegisterSlashCommands()
 end
 
 ---Initialize the DevTools module (called by Ace3)
-function DevTools:OnInitialize()
-	-- Register with logger
-	if LibAT.Logger then
-		logger = LibAT.Logger.RegisterAddon('DevTools')
-	end
-
-	if logger then
-		logger.debug('DevTools OnInitialize called')
-	end
-end
+function DevTools:OnInitialize() end
 
 ---Enable the DevTools module (called by Ace3)
 function DevTools:OnEnable()
@@ -340,8 +331,4 @@ function DevTools:OnEnable()
 
 	-- Setup TableAttributeDisplay hooks
 	SetupTableInspectorHooks()
-
-	if logger then
-		logger.info('Developer Tools initialized')
-	end
 end
