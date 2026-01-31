@@ -27,7 +27,7 @@ local countLabel, sessionLabel, textArea
 local ActiveButton = nil
 local categoryButtons = {}
 local setActiveCategory -- Forward declaration
-local isShowingAll = false -- Track if we're in "Show All" mode
+local isShowingAll = false -- Track if we're in "Show All" mode (also pauses auto-updates)
 ErrorDisplay.BugWindow.window = window
 
 -- Initialize currentErrorList as empty table
@@ -90,6 +90,12 @@ local function updateDisplay(forceRefresh)
 	-- Ensure currentErrorList is a table
 	if not currentErrorList then
 		currentErrorList = {}
+	end
+
+	-- If we're in "Show All" mode and this isn't a forced refresh, skip update
+	-- This prevents new errors from overwriting the text while user is copying
+	if isShowingAll and not forceRefresh then
+		return
 	end
 
 	-- If we're in "Show All" mode, regenerate the all errors display
@@ -408,7 +414,8 @@ function ErrorDisplay.BugWindow.Create()
 		isShowingAll = true
 		-- Uncheck Show Locals to reduce noise when viewing many errors
 		window.Buttons.ShowLocals:SetChecked(false)
-		updateDisplay()
+		-- Use forceRefresh=true so the display actually updates
+		updateDisplay(true)
 	end)
 
 	-- Show Locals checkbox
@@ -509,6 +516,10 @@ function ErrorDisplay.BugWindow:OpenErrorWindow()
 		setActiveCategory(categoryButtons[2])
 		window:Show()
 	else
+		-- Don't refresh if in "Show All" mode - prevents overwriting text while copying
+		if isShowingAll then
+			return
+		end
 		-- Refresh the current tab's error list
 		if ActiveButton then
 			setActiveCategory(ActiveButton)
