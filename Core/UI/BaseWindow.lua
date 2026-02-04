@@ -69,6 +69,12 @@ function LibAT.UI.CreateWindow(config)
 	-- Add closeBtn reference for compatibility (ButtonFrameTemplate provides CloseButton)
 	if window.CloseButton then
 		window.closeBtn = window.CloseButton
+		-- Override the close button to work in combat
+		-- ButtonFrameTemplate's CloseButton uses secure templates that block during combat
+		-- We replace OnClick to directly hide the window instead
+		window.CloseButton:SetScript('OnClick', function()
+			window:Hide()
+		end)
 	end
 
 	-- Store configuration

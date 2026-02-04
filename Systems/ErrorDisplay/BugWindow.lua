@@ -322,6 +322,14 @@ function ErrorDisplay.BugWindow.Create()
 	window:SetDontSavePosition(true)
 	window.Buttons = {}
 
+	-- Override the close button to work in combat
+	-- ButtonFrameTemplate's CloseButton uses secure templates that block during combat
+	if window.CloseButton then
+		window.CloseButton:SetScript('OnClick', function()
+			window:Hide()
+		end)
+	end
+
 	-- Make window draggable
 	window:SetScript('OnMouseDown', function(self, button)
 		if button == 'LeftButton' then
