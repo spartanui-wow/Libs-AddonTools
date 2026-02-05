@@ -434,6 +434,11 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	editBox:SetAutoFocus(false)
 	editBox:EnableMouse(true)
 	editBox:SetTextColor(1, 1, 1)
+
+	-- Initialize cursor tracking fields required by ScrollingEdit functions
+	editBox.cursorOffset = 0
+	editBox.cursorHeight = 0
+
 	editBox:SetScript('OnTextChanged', function(self)
 		ScrollingEdit_OnTextChanged(self, self:GetParent())
 	end)

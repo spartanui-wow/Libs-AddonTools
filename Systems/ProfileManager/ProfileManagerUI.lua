@@ -72,8 +72,10 @@ function ProfileManager.UpdateWindowForMode()
 		return
 	end
 
-	-- Clear text box
-	ProfileManagerState.window.EditBox:SetText('')
+	-- Clear text box (EditBox may not exist if window hasn't been fully created)
+	if ProfileManagerState.window.EditBox then
+		ProfileManagerState.window.EditBox:SetText('')
+	end
 
 	-- Get active addon info for display
 	local addonInfo = ''
@@ -164,8 +166,10 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.RightPanel = LibAT.UI.CreateRightPanel(ProfileManagerState.window.MainContent, ProfileManagerState.window.LeftPanel)
 
 	-- Add description header
-	ProfileManagerState.window.Description = LibAT.UI.CreateLabel(ProfileManagerState.window.RightPanel, '', ProfileManagerState.window.RightPanel:GetWidth() - 40)
+	ProfileManagerState.window.Description = LibAT.UI.CreateLabel(ProfileManagerState.window.RightPanel, '')
 	ProfileManagerState.window.Description:SetPoint('TOP', ProfileManagerState.window.RightPanel, 'TOP', 0, -10)
+	ProfileManagerState.window.Description:SetPoint('LEFT', ProfileManagerState.window.RightPanel, 'LEFT', 20, 0)
+	ProfileManagerState.window.Description:SetPoint('RIGHT', ProfileManagerState.window.RightPanel, 'RIGHT', -20, 0)
 	ProfileManagerState.window.Description:SetJustifyH('CENTER')
 	ProfileManagerState.window.Description:SetWordWrap(true)
 
