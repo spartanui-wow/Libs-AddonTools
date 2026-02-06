@@ -39,6 +39,10 @@ For optimal IntelliSense support, include these type definitions in your addon:
 
 ---@class LibAT.Logger
 ---@field RegisterAddon fun(addonName: string, categories?: string[]): LoggerObject
+
+---Logger object with convenience methods
+---@class LoggerObject
+---@field RegisterCategory fun(self: LoggerObject, categoryName: string|table): LoggerObject
 ```
 
 ## Registration API
@@ -126,6 +130,57 @@ logger.Categories.modules.debug("Loading module: " .. moduleName)
 logger.Categories.display.info("Updating display layout")
 logger.Categories.plugins.debug("Plugin registered: " .. pluginName)
 ```
+
+### Dynamic Category Registration
+
+For addons that create categories at runtime (e.g., module systems), use the `RegisterCategory` method on an existing logger object.
+
+#### `loggerObject:RegisterCategory(categoryName)`
+
+Creates a new subcategory logger under the parent addon's logger. Accepts either a string name or an AceAddon module table (the module name is extracted automatically).
+
+**Type Signature:**
+
+```lua
+---@param categoryName string|table Category name string, or an AceAddon module table with :GetName()
+---@return LoggerObject logger Logger object for the new category
+function loggerObject:RegisterCategory(categoryName)
+```
+
+**Parameters:**
+
+- `categoryName` (string|table): Either a plain string name, or an AceAddon module object. If a table is passed, the name is extracted via `:GetName()` or the `.name` field.
+
+**Returns:**
+
+- `LoggerObject`: Logger object scoped to the new category, with methods: log, debug, info, warning, error, critical
+
+**Examples:**
+
+```lua
+-- String-based registration
+local addonLogger = LibAT.Logger.RegisterAddon("MyAddon")
+local combatLog = addonLogger:RegisterCategory("Combat")
+combatLog.info("Combat module loaded")
+
+-- AceAddon module registration (SpartanUI pattern)
+-- SUI.logger is already registered as LibAT.Logger.RegisterAddon('SpartanUI')
+function module:OnInitialize()
+    if SUI.logger then
+        module.logger = SUI.logger:RegisterCategory('ModuleName')
+        -- or pass the module table directly:
+        module.logger = SUI.logger:RegisterCategory(module)
+    end
+end
+
+module.logger.info("Module initialized")
+module.logger.debug("Processing data...")
+```
+
+**Notes:**
+- Category names cannot contain dots (`.`) — dots are reserved for hierarchical source naming
+- If a category with the same name already exists, the existing logger is returned (no duplicates)
+- Categories appear as subcategories under the parent addon in the `/logs` UI
 
 ## Hierarchical Logging Patterns
 

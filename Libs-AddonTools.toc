@@ -34,6 +34,10 @@ Systems\ErrorDisplay\Config.lua
 #Libraries (rest of Ace3)
 libs\Ace3\Ace3.xml
 
+# Compression & Encoding Libraries
+libs\LibCompress\lib.xml
+libs\LibBase64-1.0\lib.xml
+
 # Core Framework
 Core\Framework.lua
 
@@ -57,9 +61,11 @@ Systems\Logger\Logger.lua
 Systems\Logger\LoggerUI.lua
 Systems\Logger\LoggerOptions.lua
 
-# Profile Manager System (split into 2 files for maintainability)
+# Profile Manager System
 Systems\ProfileManager\ProfileManagerUI.lua
+Systems\ProfileManager\Serialization.lua
 Systems\ProfileManager\ProfileManager.lua
+Systems\ProfileManager\AddonDiscovery.lua
 
 # Developer Tools System
 Systems\DeveloperTools\DevTools.lua

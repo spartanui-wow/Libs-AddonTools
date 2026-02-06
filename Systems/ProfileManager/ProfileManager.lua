@@ -141,10 +141,7 @@ function ProfileManager:ShowExport(addonId, namespace)
 	ProfileManagerState.window.activeNamespace = namespace
 
 	-- Build navigation key
-	local navKey = 'Addons.' .. addonId .. '.Export'
-	if namespace then
-		navKey = navKey .. '.' .. namespace
-	end
+	local navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
 
 	-- Update navigation tree
 	if ProfileManagerState.window.NavTree then
@@ -180,10 +177,7 @@ function ProfileManager:ShowImport(addonId, namespace)
 	ProfileManagerState.window.activeNamespace = namespace
 
 	-- Build navigation key
-	local navKey = 'Addons.' .. addonId .. '.Import'
-	if namespace then
-		navKey = navKey .. '.' .. namespace
-	end
+	local navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
 
 	-- Update navigation tree
 	if ProfileManagerState.window.NavTree then
@@ -199,6 +193,8 @@ end
 ----------------------------------------------------------------------------------------------------
 
 ---Build navigation tree categories from registered addons
+---Namespaces are listed directly under each addon (no Import/Export sub-nodes)
+---Mode (import/export) is controlled by the "Switch Mode" button
 ---@return table categories Navigation tree category structure
 local function BuildAddonCategories()
 	local categories = {}
@@ -220,114 +216,54 @@ local function BuildAddonCategories()
 		-- Check if addon has namespaces
 		local hasNamespaces = addon.namespaces and #addon.namespaces > 0
 
-		-- Create subcategories for Import and Export
 		local subCategories = {}
 		local sortedKeys = {}
 
-		-- Import subcategory
+		-- "All" entry - full DB export/import
+		subCategories['ALL'] = {
+			name = 'All (Full DB)',
+			key = categoryKey .. '.ALL',
+			onSelect = function()
+				ProfileManagerState.window.activeAddonId = addonId
+				ProfileManagerState.window.activeNamespace = nil
+				LibAT.ProfileManager.UpdateWindowForMode()
+			end,
+		}
+		table.insert(sortedKeys, 'ALL')
+
+		-- "Core DB" entry - base profile data only
+		subCategories['__COREDB__'] = {
+			name = 'Core DB',
+			key = categoryKey .. '.__COREDB__',
+			onSelect = function()
+				ProfileManagerState.window.activeAddonId = addonId
+				ProfileManagerState.window.activeNamespace = '__COREDB__'
+				LibAT.ProfileManager.UpdateWindowForMode()
+			end,
+		}
+		table.insert(sortedKeys, '__COREDB__')
+
+		-- Individual namespaces (sorted alphabetically)
 		if hasNamespaces then
-			-- Add Import with namespace options
-			subCategories['Import'] = {
-				name = 'Import',
-				key = categoryKey .. '.Import',
-				expanded = false,
-				subCategories = {},
-				sortedKeys = {},
-			}
-
-			-- Add "ALL" option
-			subCategories['Import'].subCategories['ALL'] = {
-				name = 'All Namespaces',
-				key = categoryKey .. '.Import.ALL',
-				onSelect = function()
-					ProfileManagerState.window.mode = 'import'
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
-			table.insert(subCategories['Import'].sortedKeys, 'ALL')
-
-			-- Add individual namespaces
+			local sortedNamespaces = {}
 			for _, ns in ipairs(addon.namespaces) do
-				subCategories['Import'].subCategories[ns] = {
+				table.insert(sortedNamespaces, ns)
+			end
+			table.sort(sortedNamespaces)
+
+			for _, ns in ipairs(sortedNamespaces) do
+				subCategories[ns] = {
 					name = ns,
-					key = categoryKey .. '.Import.' .. ns,
+					key = categoryKey .. '.' .. ns,
 					onSelect = function()
-						ProfileManagerState.window.mode = 'import'
 						ProfileManagerState.window.activeAddonId = addonId
 						ProfileManagerState.window.activeNamespace = ns
 						LibAT.ProfileManager.UpdateWindowForMode()
 					end,
 				}
-				table.insert(subCategories['Import'].sortedKeys, ns)
+				table.insert(sortedKeys, ns)
 			end
-		else
-			-- Simple import without namespaces
-			subCategories['Import'] = {
-				name = 'Import',
-				key = categoryKey .. '.Import',
-				onSelect = function()
-					ProfileManagerState.window.mode = 'import'
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
 		end
-		table.insert(sortedKeys, 'Import')
-
-		-- Export subcategory (same structure as Import)
-		if hasNamespaces then
-			subCategories['Export'] = {
-				name = 'Export',
-				key = categoryKey .. '.Export',
-				expanded = false,
-				subCategories = {},
-				sortedKeys = {},
-			}
-
-			-- Add "ALL" option
-			subCategories['Export'].subCategories['ALL'] = {
-				name = 'All Namespaces',
-				key = categoryKey .. '.Export.ALL',
-				onSelect = function()
-					ProfileManagerState.window.mode = 'export'
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
-			table.insert(subCategories['Export'].sortedKeys, 'ALL')
-
-			-- Add individual namespaces
-			for _, ns in ipairs(addon.namespaces) do
-				subCategories['Export'].subCategories[ns] = {
-					name = ns,
-					key = categoryKey .. '.Export.' .. ns,
-					onSelect = function()
-						ProfileManagerState.window.mode = 'export'
-						ProfileManagerState.window.activeAddonId = addonId
-						ProfileManagerState.window.activeNamespace = ns
-						LibAT.ProfileManager.UpdateWindowForMode()
-					end,
-				}
-				table.insert(subCategories['Export'].sortedKeys, ns)
-			end
-		else
-			-- Simple export without namespaces
-			subCategories['Export'] = {
-				name = 'Export',
-				key = categoryKey .. '.Export',
-				onSelect = function()
-					ProfileManagerState.window.mode = 'export'
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
-		end
-		table.insert(sortedKeys, 'Export')
 
 		-- Create main category
 		categories[addonId] = {
@@ -335,6 +271,7 @@ local function BuildAddonCategories()
 			key = categoryKey,
 			expanded = false,
 			icon = addon.icon,
+			isToken = addon.autoDiscovered or false,
 			subCategories = subCategories,
 			sortedKeys = sortedKeys,
 		}
@@ -373,7 +310,7 @@ function ProfileManager:DoExport()
 
 	-- Build export data
 	local exportData = {
-		version = '2.0.0',
+		version = '3.0.0',
 		timestamp = date('%Y-%m-%d %H:%M:%S'),
 		addon = addon.displayName,
 		addonId = addon.id,
@@ -381,21 +318,38 @@ function ProfileManager:DoExport()
 	}
 
 	-- Export based on namespace selection
-	if ProfileManagerState.window.activeNamespace then
-		-- Export single namespace
-		if db.sv.namespaces and db.sv.namespaces[ProfileManagerState.window.activeNamespace] then
-			exportData.data[ProfileManagerState.window.activeNamespace] = db.sv.namespaces[ProfileManagerState.window.activeNamespace]
-			exportData.namespace = ProfileManagerState.window.activeNamespace
+	local activeNS = ProfileManagerState.window.activeNamespace
+	if activeNS == '__COREDB__' then
+		-- Export only the current active profile (core DB)
+		exportData.namespace = '__COREDB__'
+		if db.sv.profiles then
+			-- Find the current profile key
+			local currentProfileKey = db.keys and db.keys.profile or 'Default'
+			if db.sv.profiles[currentProfileKey] then
+				exportData.data = db.sv.profiles[currentProfileKey]
+			else
+				LibAT:Print('|cffff0000Error:|r Current profile "' .. currentProfileKey .. '" not found in database')
+				return
+			end
 		else
-			LibAT:Print('|cffff0000Error:|r Namespace "' .. ProfileManagerState.window.activeNamespace .. '" not found')
+			LibAT:Print('|cffff0000Error:|r No profile data found in database')
+			return
+		end
+	elseif activeNS then
+		-- Export single namespace
+		if db.sv.namespaces and db.sv.namespaces[activeNS] then
+			exportData.data[activeNS] = db.sv.namespaces[activeNS]
+			exportData.namespace = activeNS
+		else
+			LibAT:Print('|cffff0000Error:|r Namespace "' .. activeNS .. '" not found')
 			return
 		end
 	else
 		-- Export all namespaces (excluding blacklist)
 		if db.sv.namespaces then
-			for namespace, data in pairs(db.sv.namespaces) do
+			for namespace, nsData in pairs(db.sv.namespaces) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					exportData.data[namespace] = data
+					exportData.data[namespace] = nsData
 				end
 			end
 		end
@@ -406,32 +360,37 @@ function ProfileManager:DoExport()
 		end
 	end
 
-	-- Serialize to string
-	local exportString = '-- ' .. addon.displayName .. ' Profile Export\n'
-	exportString = exportString .. '-- Generated: ' .. exportData.timestamp .. '\n'
-	exportString = exportString .. '-- Version: ' .. exportData.version .. '\n'
-	if ProfileManagerState.window.activeNamespace then
-		exportString = exportString .. '-- Namespace: ' .. ProfileManagerState.window.activeNamespace .. '\n'
-	end
-	exportString = exportString .. '\n'
-
-	local function serializeTable(tbl, indent)
-		indent = indent or ''
-		local result = '{\n'
-		for k, v in pairs(tbl) do
-			result = result .. indent .. '  [' .. string.format('%q', tostring(k)) .. '] = '
-			if type(v) == 'table' then
-				result = result .. serializeTable(v, indent .. '  ')
-			else
-				result = result .. string.format('%q', tostring(v))
-			end
-			result = result .. ',\n'
-		end
-		result = result .. indent .. '}'
-		return result
+	-- Encode using base64 pipeline
+	local encoded, encodeErr = ProfileManager.EncodeData(exportData)
+	if not encoded then
+		LibAT:Print('|cffff0000Export failed:|r ' .. tostring(encodeErr))
+		return
 	end
 
-	exportString = exportString .. 'return ' .. serializeTable(exportData)
+	-- Build comment header
+	local header = '-- ' .. addon.displayName .. ' Profile Export\n'
+	header = header .. '-- Generated: ' .. exportData.timestamp .. '\n'
+	header = header .. '-- Version: ' .. exportData.version .. ' (Base64 Encoded)\n'
+	if activeNS == '__COREDB__' then
+		header = header .. '-- Section: Core DB\n'
+	elseif activeNS then
+		header = header .. '-- Namespace: ' .. activeNS .. '\n'
+	else
+		header = header .. '-- Section: All Namespaces\n'
+	end
+	header = header .. '\n'
+
+	local exportString = header .. encoded
+
+	-- Show the export action button area if it exists, hide it
+	if ProfileManagerState.window.ExportActionButton then
+		ProfileManagerState.window.ExportActionButton:Hide()
+	end
+
+	-- Show TextPanel and fill EditBox
+	if ProfileManagerState.window.TextPanel then
+		ProfileManagerState.window.TextPanel:Show()
+	end
 
 	ProfileManagerState.window.EditBox:SetText(exportString)
 	ProfileManagerState.window.EditBox:SetCursorPosition(0)
@@ -441,6 +400,7 @@ function ProfileManager:DoExport()
 end
 
 -- Import function - Works with registered addons
+-- Supports both base64 encoded format (v3.0.0+) and legacy Lua table format
 function ProfileManager:DoImport()
 	if not ProfileManagerState.window then
 		return
@@ -458,10 +418,38 @@ function ProfileManager:DoImport()
 		return
 	end
 
-	-- Try to parse the import data
-	local success, importData = pcall(loadstring(importText))
-	if not success or type(importData) ~= 'table' then
-		LibAT:Print('|cffff0000Invalid profile data. Please check the format.|r')
+	-- Strip comment header lines
+	local dataText = importText:gsub('%-%-[^\n]*\n', '')
+	dataText = dataText:match('^%s*(.-)%s*$') -- trim whitespace
+
+	if not dataText or dataText == '' then
+		LibAT:Print('|cffff0000Invalid profile data. No content after stripping headers.|r')
+		return
+	end
+
+	-- Detect format and decode
+	local importData, decodeErr
+
+	if dataText:match('^return%s*{') then
+		-- Legacy format: Lua table string
+		local func = loadstring(dataText)
+		if func then
+			local success, result = pcall(func)
+			if success and type(result) == 'table' then
+				importData = result
+			else
+				decodeErr = 'Failed to evaluate Lua table: ' .. tostring(result)
+			end
+		else
+			decodeErr = 'Invalid Lua table format'
+		end
+	else
+		-- New format: Base64 encoded
+		importData, decodeErr = ProfileManager.DecodeData(dataText)
+	end
+
+	if not importData then
+		LibAT:Print('|cffff0000Invalid profile data:|r ' .. tostring(decodeErr))
 		return
 	end
 
@@ -482,22 +470,39 @@ function ProfileManager:DoImport()
 
 	-- Apply import data
 	local importCount = 0
+	local activeNS = ProfileManagerState.window.activeNamespace
 
-	if ProfileManagerState.window.activeNamespace then
-		-- Import single namespace
-		if importData.namespace and importData.namespace == ProfileManagerState.window.activeNamespace then
-			if importData.data[ProfileManagerState.window.activeNamespace] then
-				if not db.sv.namespaces then
-					db.sv.namespaces = {}
-				end
-				db.sv.namespaces[ProfileManagerState.window.activeNamespace] = importData.data[ProfileManagerState.window.activeNamespace]
-				importCount = 1
-			else
-				LibAT:Print('|cffff0000Error:|r Import data does not contain namespace "' .. ProfileManagerState.window.activeNamespace .. '"')
-				return
+	if activeNS == '__COREDB__' then
+		-- Import Core DB (current active profile)
+		if importData.namespace == '__COREDB__' and importData.data then
+			if not db.sv.profiles then
+				db.sv.profiles = {}
 			end
+			local currentProfileKey = db.keys and db.keys.profile or 'Default'
+			db.sv.profiles[currentProfileKey] = importData.data
+			importCount = 1
 		else
-			LibAT:Print('|cffff0000Error:|r Import data namespace mismatch')
+			LibAT:Print('|cffff0000Error:|r Import data is not a Core DB export')
+			return
+		end
+	elseif activeNS then
+		-- Import single namespace
+		local nsData
+		if importData.data and importData.data[activeNS] then
+			nsData = importData.data[activeNS]
+		elseif importData.namespace == activeNS and importData.data then
+			-- Data might be directly in importData.data if it was a single namespace export
+			nsData = importData.data[activeNS] or importData.data
+		end
+
+		if nsData then
+			if not db.sv.namespaces then
+				db.sv.namespaces = {}
+			end
+			db.sv.namespaces[activeNS] = nsData
+			importCount = 1
+		else
+			LibAT:Print('|cffff0000Error:|r Import data does not contain namespace "' .. activeNS .. '"')
 			return
 		end
 	else
@@ -506,9 +511,9 @@ function ProfileManager:DoImport()
 			if not db.sv.namespaces then
 				db.sv.namespaces = {}
 			end
-			for namespace, data in pairs(importData.data) do
+			for namespace, nsData in pairs(importData.data) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					db.sv.namespaces[namespace] = data
+					db.sv.namespaces[namespace] = nsData
 					importCount = importCount + 1
 				end
 			end
@@ -521,7 +526,7 @@ function ProfileManager:DoImport()
 	end
 
 	if importCount > 0 then
-		LibAT:Print('|cff00ff00Profile imported successfully!|r Imported ' .. importCount .. ' namespace(s) for ' .. addon.displayName)
+		LibAT:Print('|cff00ff00Profile imported successfully!|r Imported ' .. importCount .. ' section(s) for ' .. addon.displayName)
 		LibAT:Print('|cffff9900Please /reload to apply changes.|r')
 	else
 		LibAT:Print('|cffff0000No data was imported.|r')
@@ -564,10 +569,29 @@ function ProfileManager:Initialize()
 			ProfileManager:ExportUI()
 		elseif msg == 'import' then
 			ProfileManager:ImportUI()
+		elseif msg == 'discover' or msg == 'refresh' then
+			local count = ProfileManager.DiscoverAddons()
+			LibAT:Print('Auto-discovery found ' .. count .. ' new addon(s)')
 		else
 			ProfileManager:ToggleWindow()
 		end
 	end
+
+	-- Run auto-discovery after PLAYER_LOGIN when SavedVariables are available
+	local discoveryFrame = CreateFrame('Frame')
+	discoveryFrame:RegisterEvent('PLAYER_LOGIN')
+	discoveryFrame:SetScript('OnEvent', function(frame)
+		frame:UnregisterEvent('PLAYER_LOGIN')
+		-- Delay slightly to allow other addons to finish loading
+		C_Timer.After(2, function()
+			if ProfileManager.DiscoverAddons then
+				local count = ProfileManager.DiscoverAddons()
+				if count > 0 and ProfileManagerState.logger then
+					ProfileManagerState.logger.info('Auto-discovered ' .. count .. ' addon(s)')
+				end
+			end
+		end)
+	end)
 
 	LibAT:Debug('Profile Manager initialized - Use /profiles to open')
 	LibAT:Debug('Addons can register with: LibAT.ProfileManager:RegisterAddon({name = "MyAddon", db = MyAddonDB})')

@@ -79,37 +79,72 @@ function ProfileManager.UpdateWindowForMode()
 
 	-- Get active addon info for display
 	local addonInfo = ''
+	local sectionName = ''
 	if ProfileManagerState.window.activeAddonId and ProfileManagerState.registeredAddons[ProfileManagerState.window.activeAddonId] then
 		local addon = ProfileManagerState.registeredAddons[ProfileManagerState.window.activeAddonId]
+		local activeNS = ProfileManagerState.window.activeNamespace
 		addonInfo = ' - ' .. addon.displayName
-		if ProfileManagerState.window.activeNamespace then
-			addonInfo = addonInfo .. ' (' .. ProfileManagerState.window.activeNamespace .. ')'
-		elseif addon.namespaces and #addon.namespaces > 0 then
-			addonInfo = addonInfo .. ' (All Namespaces)'
+		if activeNS == '__COREDB__' then
+			addonInfo = addonInfo .. ' (Core DB)'
+			sectionName = addon.displayName .. ' Core DB'
+		elseif activeNS then
+			addonInfo = addonInfo .. ' (' .. activeNS .. ')'
+			sectionName = addon.displayName .. ' ' .. activeNS
+		else
+			addonInfo = addonInfo .. ' (All)'
+			sectionName = addon.displayName
 		end
 	end
 
 	-- Update mode display
 	if ProfileManagerState.window.mode == 'export' then
 		ProfileManagerState.window.ModeLabel:SetText('|cff00ff00Export Mode|r' .. addonInfo)
-		ProfileManagerState.window.Description:SetText('Click Export to generate profile data, then copy the text below.')
-		ProfileManagerState.window.ExportButton:Show()
+
+		-- In export mode: show action button, hide text area initially
+		if ProfileManagerState.window.activeAddonId then
+			ProfileManagerState.window.Description:SetText('')
+			ProfileManagerState.window.Description:Hide()
+
+			if ProfileManagerState.window.ExportActionButton then
+				ProfileManagerState.window.ExportActionButton:SetText('Export ' .. sectionName)
+				ProfileManagerState.window.ExportActionButton:Show()
+			end
+
+			-- Hide the text panel until export is generated
+			if ProfileManagerState.window.TextPanel then
+				ProfileManagerState.window.TextPanel:Hide()
+			end
+		else
+			ProfileManagerState.window.Description:SetText('Select a section from the left panel to export.')
+			ProfileManagerState.window.Description:Show()
+			if ProfileManagerState.window.ExportActionButton then
+				ProfileManagerState.window.ExportActionButton:Hide()
+			end
+		end
+
+		-- Hide bottom action bar import/export buttons (action is on the centered button now)
+		ProfileManagerState.window.ExportButton:Hide()
 		ProfileManagerState.window.ImportButton:Hide()
 	else
 		ProfileManagerState.window.ModeLabel:SetText('|cff00aaffImport Mode|r' .. addonInfo)
 		ProfileManagerState.window.Description:SetText('Paste profile data below, then click Import to apply changes.')
+		ProfileManagerState.window.Description:Show()
+
+		-- In import mode: hide export action button, show text area
+		if ProfileManagerState.window.ExportActionButton then
+			ProfileManagerState.window.ExportActionButton:Hide()
+		end
+		if ProfileManagerState.window.TextPanel then
+			ProfileManagerState.window.TextPanel:Show()
+		end
+
 		ProfileManagerState.window.ExportButton:Hide()
 		ProfileManagerState.window.ImportButton:Show()
 	end
 
 	-- Update navigation tree to highlight current selection
 	if ProfileManagerState.window.NavTree and ProfileManagerState.window.activeAddonId then
-		local navKey = 'Addons.' .. ProfileManagerState.window.activeAddonId .. '.' .. (ProfileManagerState.window.mode == 'export' and 'Export' or 'Import')
-		if ProfileManagerState.window.activeNamespace then
-			navKey = navKey .. '.' .. ProfileManagerState.window.activeNamespace
-		elseif ProfileManagerState.registeredAddons[ProfileManagerState.window.activeAddonId] and ProfileManagerState.registeredAddons[ProfileManagerState.window.activeAddonId].namespaces then
-			navKey = navKey .. '.ALL'
-		end
+		local navKey = 'Addons.' .. ProfileManagerState.window.activeAddonId .. '.' .. (ProfileManagerState.window.activeNamespace or 'ALL')
 		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
 	end
@@ -172,6 +207,14 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.Description:SetPoint('RIGHT', ProfileManagerState.window.RightPanel, 'RIGHT', -20, 0)
 	ProfileManagerState.window.Description:SetJustifyH('CENTER')
 	ProfileManagerState.window.Description:SetWordWrap(true)
+
+	-- Create export action button (centered, shown in export mode)
+	ProfileManagerState.window.ExportActionButton = LibAT.UI.CreateButton(ProfileManagerState.window.RightPanel, 250, 40, 'Export')
+	ProfileManagerState.window.ExportActionButton:SetPoint('CENTER', ProfileManagerState.window.RightPanel, 'CENTER', 0, 0)
+	ProfileManagerState.window.ExportActionButton:SetScript('OnClick', function()
+		ProfileManager:DoExport()
+	end)
+	ProfileManagerState.window.ExportActionButton:Hide()
 
 	-- Create scrollable text display for profile data
 	ProfileManagerState.window.TextPanel, ProfileManagerState.window.EditBox = LibAT.UI.CreateScrollableTextDisplay(ProfileManagerState.window.RightPanel)

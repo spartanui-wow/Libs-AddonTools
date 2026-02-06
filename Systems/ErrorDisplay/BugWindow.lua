@@ -330,6 +330,9 @@ function ErrorDisplay.BugWindow.Create()
 		end)
 	end
 
+	-- Allow Escape key to close the window
+	tinsert(UISpecialFrames, 'LibATErrorWindow')
+
 	-- Make window draggable
 	window:SetScript('OnMouseDown', function(self, button)
 		if button == 'LeftButton' then

@@ -202,9 +202,21 @@ local function CreateLoggerObject(addonName, moduleName)
 	end
 
 	-- RegisterCategory method for dynamic category creation
+	-- Accepts a string name or an AceAddon module table (extracts name automatically)
 	loggerObj.RegisterCategory = function(self, categoryName)
+		-- Support AceAddon module tables: extract name automatically
+		if type(categoryName) == 'table' then
+			if categoryName.GetName and type(categoryName.GetName) == 'function' then
+				categoryName = categoryName:GetName()
+			elseif categoryName.name and type(categoryName.name) == 'string' then
+				categoryName = categoryName.name
+			else
+				error('RegisterCategory: table passed but could not extract a name (no :GetName() or .name field)')
+			end
+		end
+
 		if not categoryName or categoryName == '' or type(categoryName) ~= 'string' then
-			error('RegisterCategory: categoryName must be a non-empty string')
+			error('RegisterCategory: categoryName must be a non-empty string or a module table with :GetName()')
 		end
 
 		-- Check for invalid characters

@@ -77,6 +77,9 @@ function LibAT.UI.CreateWindow(config)
 		end)
 	end
 
+	-- Allow Escape key to close the window
+	tinsert(UISpecialFrames, config.name)
+
 	-- Store configuration
 	window.config = config
 
