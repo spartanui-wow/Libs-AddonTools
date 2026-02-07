@@ -69,3 +69,10 @@ Systems\ProfileManager\AddonDiscovery.lua
 
 # Developer Tools System
 Systems\DeveloperTools\DevTools.lua
+
+# Developer UI System (tabbed: Logs, CLI, Errors, Macros)
+Systems\DevUI\DevUI.lua
+Systems\DevUI\Tabs\Logs.lua
+Systems\DevUI\Tabs\CLI.lua
+Systems\DevUI\Tabs\Errors.lua
+Systems\DevUI\Tabs\Macros.lua

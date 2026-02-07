@@ -184,7 +184,9 @@ function LibAT.Options:ToggleOptions(path)
 	end
 
 	-- Try to open in Blizzard Settings panel first (modern API)
-	if Settings and Settings.OpenToCategory then
+	-- Settings.OpenToCategory calls the protected OpenSettingsPanel() internally,
+	-- so it cannot be used during combat lockdown — fall through to standalone dialog instead
+	if Settings and Settings.OpenToCategory and not InCombatLockdown() then
 		-- Get the stored category ID for this option
 		local categoryID = self.categoryInfo and self.categoryInfo[targetName] and self.categoryInfo[targetName].categoryID
 

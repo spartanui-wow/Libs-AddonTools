@@ -165,6 +165,11 @@ LoggerState.ParseLogSource = ParseLogSource
 -- Initialize the external Logger API
 LibAT.Logger = {} ---@class LibAT.Logger
 
+-- Expose LoggerState for DevUI Logs tab (shared data, no duplication)
+LibAT.Logger.GetState = function()
+	return LoggerState
+end
+
 ---Helper function to create a logger object for a module
 ---@param addonName string The addon name
 ---@param moduleName string The full module name (addonName or addonName.category)
