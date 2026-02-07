@@ -10,12 +10,55 @@ local LibAT = LibAT
 ---@param width number Button width
 ---@param height number Button height
 ---@param text string Button text
----@return Frame button Standard WoW UI button
-function LibAT.UI.CreateButton(parent, width, height, text)
-	local button = CreateFrame('Button', nil, parent, 'UIPanelButtonTemplate')
-	button:SetSize(width, height)
-	button:SetText(text)
-	return button
+---@param black? boolean Optional flag to use black AH-style button (category style)
+---@return Frame button Standard WoW UI button or black AH-style button
+function LibAT.UI.CreateButton(parent, width, height, text, black)
+	if black then
+		-- Create black AH-style button (category style from SetupFilterButton)
+		local button = CreateFrame('Button', nil, parent)
+		button:SetSize(width, height)
+
+		-- Create textures
+		button.NormalTexture = button:CreateTexture(nil, 'BACKGROUND')
+		button.NormalTexture:SetAtlas('auctionhouse-nav-button', false)
+		button.NormalTexture:SetSize(width + 6, height + 11)
+		button.NormalTexture:SetPoint('TOPLEFT', -2, 0)
+
+		button.SelectedTexture = button:CreateTexture(nil, 'ARTWORK')
+		button.SelectedTexture:SetAtlas('auctionhouse-nav-button-select', false)
+		button.SelectedTexture:SetSize(width + 2, height)
+		button.SelectedTexture:SetPoint('LEFT')
+		button.SelectedTexture:Hide()
+
+		button.HighlightTexture = button:CreateTexture(nil, 'BORDER')
+		button.HighlightTexture:SetAtlas('auctionhouse-nav-button-highlight', false)
+		button.HighlightTexture:SetSize(width + 2, height)
+		button.HighlightTexture:SetPoint('LEFT')
+		button.HighlightTexture:SetBlendMode('BLEND')
+
+		-- Set highlight texture
+		button:SetHighlightTexture(button.HighlightTexture)
+
+		-- Button text
+		button.Text = button:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+		button.Text:SetSize(0, 8)
+		button.Text:SetPoint('LEFT', button, 'LEFT', 8, 0)
+		button.Text:SetPoint('RIGHT', button, 'RIGHT', -8, 0)
+		button.Text:SetJustifyH('CENTER')
+		button.Text:SetText(text)
+
+		-- Font objects
+		button:SetNormalFontObject(GameFontNormalSmall)
+		button:SetHighlightFontObject(GameFontHighlightSmall)
+
+		return button
+	else
+		-- Standard UIPanelButtonTemplate
+		local button = CreateFrame('Button', nil, parent, 'UIPanelButtonTemplate')
+		button:SetSize(width, height)
+		button:SetText(text)
+		return button
+	end
 end
 
 ---Create a filter button styled like the AuctionHouse navigation buttons
