@@ -200,3 +200,51 @@ ProfileManager.RegisterDiscoveryAdapter('masque', {
 		return ProfileManager.WrapAceDBSavedVariables('MasqueDB')
 	end,
 })
+
+----------------------------------------------------------------------------------------------------
+-- Libs-* Addon Discovery Adapters
+----------------------------------------------------------------------------------------------------
+
+-- Lib's TimePlayed
+ProfileManager.RegisterDiscoveryAdapter('libs-timeplayed', {
+	display = "Lib's TimePlayed",
+	isReady = function()
+		return type(_G.LibsTimePlayedDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('LibsTimePlayedDB')
+	end,
+})
+
+-- Lib's Social
+ProfileManager.RegisterDiscoveryAdapter('libs-social', {
+	display = "Lib's Social",
+	isReady = function()
+		return type(_G.LibsSocialDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('LibsSocialDB')
+	end,
+})
+
+-- Lib's FarmAssistant
+ProfileManager.RegisterDiscoveryAdapter('libs-farmassistant', {
+	display = "Lib's FarmAssistant",
+	isReady = function()
+		return type(_G.LibsFarmAssistantDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('LibsFarmAssistantDB')
+	end,
+})
+
+-- Lib's DataBar
+ProfileManager.RegisterDiscoveryAdapter('libs-databar', {
+	display = "Lib's DataBar",
+	isReady = function()
+		return type(_G.LibsDataBarDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('LibsDataBarDB')
+	end,
+})
