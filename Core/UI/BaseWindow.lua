@@ -12,6 +12,9 @@ local LibAT = LibAT
 ---@field height number Window height (default 538)
 ---@field portrait? string Optional portrait texture path
 ---@field hidePortrait? boolean Hide the portrait (default true)
+---@field resizable? boolean Allow the window to be resized (default false)
+---@field minWidth? number Minimum resize width (default 200)
+---@field minHeight? number Minimum resize height (default 150)
 
 ----------------------------------------------------------------------------------------------------
 -- Base Window Creation
@@ -82,6 +85,48 @@ function LibAT.UI.CreateWindow(config)
 
 	-- Store configuration
 	window.config = config
+
+	---Enable or disable window resizing with a drag handle in the bottom-right corner
+	---@param enable boolean Whether to enable resizing
+	---@param minW? number Minimum width (default config.minWidth or 200)
+	---@param minH? number Minimum height (default config.minHeight or 150)
+	function window:EnableResize(enable, minW, minH)
+		if enable then
+			self:SetResizable(true)
+			self:SetResizeBounds(minW or config.minWidth or 200, minH or config.minHeight or 150)
+
+			if not self.resizeHandle then
+				-- Create resize grip in bottom-right corner
+				local handle = CreateFrame('Button', nil, self)
+				handle:SetSize(16, 16)
+				handle:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -2, 2)
+				handle:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up')
+				handle:SetHighlightTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight')
+				handle:SetPushedTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down')
+
+				handle:SetScript('OnMouseDown', function()
+					self:StartSizing('BOTTOMRIGHT')
+				end)
+				handle:SetScript('OnMouseUp', function()
+					self:StopMovingOrSizing()
+				end)
+
+				self.resizeHandle = handle
+			end
+
+			self.resizeHandle:Show()
+		else
+			self:SetResizable(false)
+			if self.resizeHandle then
+				self.resizeHandle:Hide()
+			end
+		end
+	end
+
+	-- Apply resizable from config
+	if config.resizable then
+		window:EnableResize(true)
+	end
 
 	return window
 end
