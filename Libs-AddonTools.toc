@@ -67,6 +67,10 @@ Systems\ProfileManager\Serialization.lua
 Systems\ProfileManager\ProfileManager.lua
 Systems\ProfileManager\AddonDiscovery.lua
 
+# Setup Wizard System
+Systems\SetupWizard\SetupWizard.lua
+Systems\SetupWizard\SetupWizardUI.lua
+
 # Developer Tools System
 Systems\DeveloperTools\DevTools.lua
 

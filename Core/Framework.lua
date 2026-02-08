@@ -229,6 +229,9 @@ end
 function LibAT:OnInitialize()
 	-- Initialize database
 	local defaults = {
+		global = {
+			setupWizardDismissed = false,
+		},
 		profile = {
 			errorDisplay = {
 				autoPopup = false,
@@ -252,6 +255,14 @@ end
 function LibAT:OnEnable()
 	-- Mark UI as ready - all UI components have been loaded
 	self.UI.Ready = true
+
+	-- Check for first-run setup wizard prompt after a short delay
+	-- Delay allows other addons to register their setup pages first
+	C_Timer.After(3, function()
+		if LibAT.SetupWizard and LibAT.SetupWizard.CheckFirstRun then
+			LibAT.SetupWizard:CheckFirstRun()
+		end
+	end)
 end
 
 ---Handle slash commands
@@ -290,6 +301,13 @@ SlashCmdList['LIBAT'] = function(msg)
 			LibAT:Print('Unknown profiles subcommand: ' .. subcommand)
 			LibAT:Print('Available: show')
 		end
+	elseif command == 'setup' or command == 'wizard' then
+		-- Open the Setup Wizard
+		if LibAT.SetupWizard then
+			LibAT.SetupWizard:ToggleWindow()
+		else
+			LibAT:Print('Setup Wizard system not available')
+		end
 	elseif command == 'logs' or command == 'log' then
 		-- Default action: toggle logs (or handle subcommands if added later)
 		if subcommand == 'show' or subcommand == 'toggle' or subcommand == '' then
@@ -308,11 +326,13 @@ SlashCmdList['LIBAT'] = function(msg)
 		LibAT:Print('  /libat errors [show] - Open error display window')
 		LibAT:Print('  /libat profiles [show] - Open profile manager')
 		LibAT:Print('  /libat logs [show|toggle] - Toggle logger window')
+		LibAT:Print('  /libat setup - Open setup wizard')
 		LibAT:Print(' ')
 		LibAT:Print('Shortcuts:')
 		LibAT:Print('  /errors - Open error display')
 		LibAT:Print('  /logs - Toggle logger')
 		LibAT:Print('  /profiles - Open profile manager')
+		LibAT:Print('  /setup - Open setup wizard')
 		LibAT:Print(' ')
 		LibAT:Print('Developer Tools:')
 		LibAT:Print('  /frame <name> [true] - Inspect frame and set _G.FRAME')
@@ -337,6 +357,11 @@ end
 SLASH_PROFILES1 = '/profiles'
 SlashCmdList['PROFILES'] = function(msg)
 	SlashCmdList['LIBAT']('profiles ' .. (msg or ''))
+end
+
+SLASH_SETUP1 = '/setup'
+SlashCmdList['SETUP'] = function(msg)
+	SlashCmdList['LIBAT']('setup ' .. (msg or ''))
 end
 
 SLASH_RL1 = '/rl'
