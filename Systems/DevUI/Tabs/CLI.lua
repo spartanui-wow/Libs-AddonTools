@@ -267,6 +267,24 @@ BuildContent = function(contentFrame)
 	TabState.EditorBox:SetPoint('TOPLEFT', editorLabel, 'BOTTOMLEFT', 0, -4)
 	TabState.EditorBox:SetPoint('RIGHT', rightPanel, 'RIGHT', -8, 0)
 
+	-- Add background to editor
+	Mixin(TabState.EditorBox, BackdropTemplateMixin)
+	TabState.EditorBox:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		tile = true, tileSize = 16, edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 },
+	})
+	TabState.EditorBox:SetBackdropColor(0, 0, 0, 0.5)
+	TabState.EditorBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+
+	-- Keep editBox width in sync with scroll frame for proper click detection
+	TabState.EditorBox:SetScript('OnSizeChanged', function(self)
+		if self.editBox then
+			self.editBox:SetWidth(self:GetWidth() - 20)
+		end
+	end)
+
 	-- Set monospace font on the editor's EditBox
 	if DevUIState.MonoFont and TabState.EditorBox.editBox then
 		TabState.EditorBox.editBox:SetFontObject(DevUIState.MonoFont)
@@ -276,7 +294,7 @@ BuildContent = function(contentFrame)
 	local buttonBar = CreateFrame('Frame', nil, rightPanel)
 	buttonBar:SetHeight(28)
 
-	local runButton = LibAT.UI.CreateButton(buttonBar, 70, 22, 'Run')
+	local runButton = LibAT.UI.CreateButton(buttonBar, 70, 22, 'Run', true)
 	runButton:SetPoint('LEFT', buttonBar, 'LEFT', 0, 0)
 	runButton:SetScript('OnClick', function()
 		if TabState.EditorBox and TabState.ResultsBox then
@@ -286,19 +304,19 @@ BuildContent = function(contentFrame)
 		end
 	end)
 
-	local saveButton = LibAT.UI.CreateButton(buttonBar, 70, 22, 'Save')
+	local saveButton = LibAT.UI.CreateButton(buttonBar, 70, 22, 'Save', true)
 	saveButton:SetPoint('LEFT', runButton, 'RIGHT', 5, 0)
 	saveButton:SetScript('OnClick', function()
 		SaveCurrentScript()
 	end)
 
-	local deleteButton = LibAT.UI.CreateButton(buttonBar, 70, 22, 'Delete')
+	local deleteButton = LibAT.UI.CreateButton(buttonBar, 70, 22, 'Delete', true)
 	deleteButton:SetPoint('LEFT', saveButton, 'RIGHT', 5, 0)
 	deleteButton:SetScript('OnClick', function()
 		DeleteCurrentScript()
 	end)
 
-	local clearOutputButton = LibAT.UI.CreateButton(buttonBar, 90, 22, 'Clear Output')
+	local clearOutputButton = LibAT.UI.CreateButton(buttonBar, 90, 22, 'Clear Output', true)
 	clearOutputButton:SetPoint('LEFT', deleteButton, 'RIGHT', 5, 0)
 	clearOutputButton:SetScript('OnClick', function()
 		if TabState.ResultsBox then
@@ -315,6 +333,24 @@ BuildContent = function(contentFrame)
 	TabState.ResultsBox:SetPoint('BOTTOMLEFT', rightPanel, 'BOTTOMLEFT', 8, 8)
 	TabState.ResultsBox:SetPoint('RIGHT', rightPanel, 'RIGHT', -8, 0)
 	TabState.ResultsBox:SetReadOnly(true)
+
+	-- Add background to results
+	Mixin(TabState.ResultsBox, BackdropTemplateMixin)
+	TabState.ResultsBox:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		tile = true, tileSize = 16, edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 },
+	})
+	TabState.ResultsBox:SetBackdropColor(0, 0, 0, 0.5)
+	TabState.ResultsBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+
+	-- Keep editBox width in sync with scroll frame for proper click detection
+	TabState.ResultsBox:SetScript('OnSizeChanged', function(self)
+		if self.editBox then
+			self.editBox:SetWidth(self:GetWidth() - 20)
+		end
+	end)
 
 	-- Set monospace font on the results box
 	if DevUIState.MonoFont and TabState.ResultsBox.editBox then
@@ -335,8 +371,8 @@ BuildContent = function(contentFrame)
 	TabState.EditorBox:SetPoint('BOTTOMLEFT', buttonBar, 'TOPLEFT', 0, 4)
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI')
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 4)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

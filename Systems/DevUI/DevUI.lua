@@ -18,10 +18,10 @@ local DevUIState = {
 
 -- Tab definitions
 local TAB_CONFIG = {
-	{ key = 'Logs', tooltipText = 'Logs', activeAtlas = 'UI-HUD-MicroMenu-EJMicroButton-Up', inactiveAtlas = 'UI-HUD-MicroMenu-EJMicroButton-Disabled' },
+	{ key = 'Logs', tooltipText = 'Logs', activeAtlas = 'Campaign-QuestLog-LoreBook', inactiveAtlas = 'Campaign-QuestLog-LoreBook' },
 	{ key = 'CLI', tooltipText = 'Lua Console', activeAtlas = 'UI-HUD-MicroMenu-ChatMicroButton-Up', inactiveAtlas = 'UI-HUD-MicroMenu-ChatMicroButton-Disabled' },
 	{ key = 'Errors', tooltipText = 'Errors', activeAtlas = 'common-icon-redx', inactiveAtlas = 'common-icon-redx' },
-	{ key = 'Macros', tooltipText = 'Macros', activeAtlas = 'UI-HUD-MicroMenu-MainMenuMicroButton-Up', inactiveAtlas = 'UI-HUD-MicroMenu-MainMenuMicroButton-Disabled' },
+	{ key = 'Macros', tooltipText = 'Macros', activeAtlas = 'NPE_Icon', inactiveAtlas = 'NPE_Icon' },
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -66,8 +66,10 @@ local function CreateSideTab(parent, index, config)
 	tab.HighlightTexture:SetPoint('CENTER')
 
 	-- Anchoring: first tab at TOPRIGHT of window, subsequent tabs stack vertically
+	-- Tabs sit at a lower frame level so they appear to come out from under the window edge
+	tab:SetFrameLevel(parent:GetFrameLevel() - 1)
 	if index == 1 then
-		tab:SetPoint('TOPLEFT', parent, 'TOPRIGHT', 3, -28)
+		tab:SetPoint('TOPLEFT', parent, 'TOPRIGHT', 0, -28)
 	else
 		tab:SetPoint('TOP', DevUIState.TabButtons[index - 1], 'BOTTOM', 0, -3)
 	end
@@ -80,6 +82,8 @@ local function CreateSideTab(parent, index, config)
 		else
 			self.Icon:SetAtlas(self.inactiveAtlas, true)
 		end
+		self.Icon:SetDesaturated(not checked)
+		self.Icon:SetAlpha(checked and 1 or 0.6)
 		self.SelectedTexture:SetShown(checked)
 	end
 

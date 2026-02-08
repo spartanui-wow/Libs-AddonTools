@@ -284,8 +284,8 @@ end
 BuildContent = function(contentFrame)
 	TabState.ContentFrame = contentFrame
 
-	-- Control frame with Show Locals checkbox
-	local controlFrame = LibAT.UI.CreateControlFrame(contentFrame)
+	-- Control frame with Show Locals checkbox — contentFrame already starts below title bar
+	local controlFrame = LibAT.UI.CreateControlFrame(contentFrame, -2)
 
 	TabState.ShowLocals = LibAT.UI.CreateCheckbox(controlFrame, 'Show Locals')
 	TabState.ShowLocals:SetPoint('LEFT', controlFrame, 'LEFT', 60, 0)
@@ -355,8 +355,8 @@ BuildContent = function(contentFrame)
 	})
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI')
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 4)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

@@ -105,6 +105,7 @@ RebuildMacroList = function()
 				subCategoryIndex = i,
 				selected = (TabState.CurrentMacroIndex == i),
 			})
+			macroButton:SetText('') -- Clear template text to avoid duplicate label
 
 			-- Add icon texture to the button
 			local iconTexture = macroButton:CreateTexture(nil, 'ARTWORK')
@@ -117,6 +118,7 @@ RebuildMacroList = function()
 			macroButton.Text:SetPoint('RIGHT', macroButton, 'RIGHT', -4, 0)
 			macroButton.Text:SetJustifyH('LEFT')
 			macroButton.Text:SetText(name)
+			macroButton.Text:SetTextColor(1, 1, 1)
 
 			local macroIndex = i
 			macroButton:SetScript('OnClick', function(self)
@@ -171,6 +173,7 @@ RebuildMacroList = function()
 				subCategoryIndex = i,
 				selected = (TabState.CurrentMacroIndex == i),
 			})
+			macroButton:SetText('') -- Clear template text to avoid duplicate label
 
 			-- Add icon texture
 			local iconTexture = macroButton:CreateTexture(nil, 'ARTWORK')
@@ -182,6 +185,7 @@ RebuildMacroList = function()
 			macroButton.Text:SetPoint('RIGHT', macroButton, 'RIGHT', -4, 0)
 			macroButton.Text:SetJustifyH('LEFT')
 			macroButton.Text:SetText(name)
+			macroButton.Text:SetTextColor(1, 1, 1)
 
 			local macroIndex = i
 			macroButton:SetScript('OnClick', function(self)
@@ -323,14 +327,49 @@ BuildContent = function(contentFrame)
 	-- Right panel: Macro editor
 	TabState.RightPanel = LibAT.UI.CreateRightPanel(mainContent, TabState.LeftPanel)
 
-	-- Name row: icon + name editbox
-	TabState.IconTexture = TabState.RightPanel:CreateTexture(nil, 'ARTWORK')
-	TabState.IconTexture:SetSize(32, 32)
-	TabState.IconTexture:SetPoint('TOPLEFT', TabState.RightPanel, 'TOPLEFT', 8, -8)
+	-- Name row: clickable icon + name editbox
+	local iconButton = CreateFrame('Button', nil, TabState.RightPanel)
+	iconButton:SetSize(32, 32)
+	iconButton:SetPoint('TOPLEFT', TabState.RightPanel, 'TOPLEFT', 8, -8)
+	TabState.IconTexture = iconButton:CreateTexture(nil, 'ARTWORK')
+	TabState.IconTexture:SetAllPoints()
 	TabState.IconTexture:SetTexture('Interface\\Icons\\INV_Misc_QuestionMark')
+	iconButton:SetHighlightTexture('Interface\\Buttons\\ButtonHilight-Square')
+	iconButton:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText('Change Icon')
+		GameTooltip:AddLine('Click to enter an icon FileID or texture path', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	iconButton:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+	end)
+	iconButton:SetScript('OnClick', function()
+		StaticPopupDialogs['LIBAT_MACRO_ICON'] = {
+			text = 'Enter icon FileID or texture path:',
+			button1 = 'OK',
+			button2 = 'Cancel',
+			hasEditBox = true,
+			OnAccept = function(self)
+				local text = self.editBox:GetText()
+				local fileID = tonumber(text)
+				if fileID then
+					TabState.CurrentMacroIcon = fileID
+					TabState.IconTexture:SetTexture(fileID)
+				elseif text ~= '' then
+					TabState.CurrentMacroIcon = text
+					TabState.IconTexture:SetTexture(text)
+				end
+			end,
+			timeout = 0,
+			whileDead = true,
+			preferredIndex = 3,
+		}
+		StaticPopup_Show('LIBAT_MACRO_ICON')
+	end)
 
 	local nameLabel = TabState.RightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	nameLabel:SetPoint('LEFT', TabState.IconTexture, 'RIGHT', 8, 0)
+	nameLabel:SetPoint('LEFT', iconButton, 'RIGHT', 8, 0)
 	nameLabel:SetText('Name:')
 	nameLabel:SetTextColor(1, 0.82, 0)
 
@@ -343,14 +382,32 @@ BuildContent = function(contentFrame)
 
 	-- Macro body editor (fills most of the space)
 	local bodyLabel = TabState.RightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	bodyLabel:SetPoint('TOPLEFT', TabState.IconTexture, 'BOTTOMLEFT', 0, -8)
+	bodyLabel:SetPoint('TOPLEFT', iconButton, 'BOTTOMLEFT', 0, -8)
 	bodyLabel:SetText('Macro Body:')
 	bodyLabel:SetTextColor(1, 0.82, 0)
 
 	TabState.BodyBox = LibAT.UI.CreateMultiLineBox(TabState.RightPanel, 100, 100) -- Size via anchors
 	TabState.BodyBox:SetPoint('TOPLEFT', bodyLabel, 'BOTTOMLEFT', 0, -4)
-	TabState.BodyBox:SetPoint('RIGHT', TabState.RightPanel, 'RIGHT', -8, 0)
+	TabState.BodyBox:SetPoint('RIGHT', TabState.RightPanel, 'RIGHT', -28, 0)
 	TabState.BodyBox:SetPoint('BOTTOM', TabState.RightPanel, 'BOTTOM', 0, 40)
+
+	-- Add background to macro body editor
+	Mixin(TabState.BodyBox, BackdropTemplateMixin)
+	TabState.BodyBox:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		tile = true, tileSize = 16, edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 },
+	})
+	TabState.BodyBox:SetBackdropColor(0, 0, 0, 0.5)
+	TabState.BodyBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+
+	-- Keep editBox width in sync with scroll frame for proper click detection
+	TabState.BodyBox:SetScript('OnSizeChanged', function(self)
+		if self.editBox then
+			self.editBox:SetWidth(self:GetWidth() - 20)
+		end
+	end)
 
 	-- Set monospace font
 	if DevUIState.MonoFont and TabState.BodyBox.editBox then
@@ -377,8 +434,8 @@ BuildContent = function(contentFrame)
 	end)
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI')
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 4)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

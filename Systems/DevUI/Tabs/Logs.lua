@@ -567,8 +567,8 @@ BuildContent = function(contentFrame)
 		return
 	end
 
-	-- Control frame (top bar)
-	TabState.ControlFrame = LibAT.UI.CreateControlFrame(contentFrame)
+	-- Control frame (top bar) — contentFrame already starts below title bar, so use minimal offset
+	TabState.ControlFrame = LibAT.UI.CreateControlFrame(contentFrame, -2)
 
 	-- Header anchor for controls
 	local headerAnchor = CreateFrame('Frame', nil, contentFrame)
@@ -674,8 +674,8 @@ BuildContent = function(contentFrame)
 	})
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI')
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 4)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)
@@ -687,6 +687,14 @@ BuildContent = function(contentFrame)
 
 	-- Setup logging level dropdown
 	SetupLogLevelDropdown()
+
+	-- Set initial logging level text
+	if LoggerState and LoggerState.GetLogLevelByPriority then
+		local _, globalLevelData = LoggerState.GetLogLevelByPriority(LoggerState.GlobalLogLevel)
+		if globalLevelData then
+			TabState.LoggingLevelButton:SetText('Level: ' .. globalLevelData.color .. globalLevelData.display .. '|r')
+		end
+	end
 
 	-- Build initial categories
 	BuildLogSourceCategories()
