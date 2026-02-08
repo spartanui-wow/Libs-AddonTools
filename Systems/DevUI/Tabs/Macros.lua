@@ -379,6 +379,13 @@ BuildContent = function(contentFrame)
 	TabState.NameBox:SetPoint('RIGHT', TabState.RightPanel, 'RIGHT', -8, 0)
 	TabState.NameBox:SetAutoFocus(false)
 	TabState.NameBox:SetFontObject('GameFontHighlight')
+	TabState.NameBox:SetScript('OnEnterPressed', function(self)
+		self:ClearFocus()
+		SaveCurrentMacro()
+		if TabState.BodyBox and TabState.BodyBox.editBox then
+			TabState.BodyBox.editBox:SetFocus()
+		end
+	end)
 
 	-- Macro body editor (fills most of the space)
 	local bodyLabel = TabState.RightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
@@ -401,13 +408,6 @@ BuildContent = function(contentFrame)
 	})
 	TabState.BodyBox:SetBackdropColor(0, 0, 0, 0.5)
 	TabState.BodyBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
-
-	-- Keep editBox width in sync with scroll frame for proper click detection
-	TabState.BodyBox:SetScript('OnSizeChanged', function(self)
-		if self.editBox then
-			self.editBox:SetWidth(self:GetWidth() - 20)
-		end
-	end)
 
 	-- Set monospace font
 	if DevUIState.MonoFont and TabState.BodyBox.editBox then

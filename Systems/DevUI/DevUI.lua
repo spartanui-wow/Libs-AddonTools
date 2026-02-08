@@ -49,9 +49,10 @@ local function CreateSideTab(parent, index, config)
 	tab.Background:SetAtlas('questlog-tab-side', true)
 	tab.Background:SetPoint('CENTER')
 
-	-- ARTWORK: Icon
+	-- ARTWORK: Icon (scaled down from native atlas size)
 	tab.Icon = tab:CreateTexture(nil, 'ARTWORK')
-	tab.Icon:SetAtlas(config.inactiveAtlas, true)
+	tab.Icon:SetAtlas(config.inactiveAtlas, false)
+	tab.Icon:SetSize(20, 20)
 	tab.Icon:SetPoint('CENTER', -2, 0)
 
 	-- OVERLAY: Selected glow
@@ -78,9 +79,11 @@ local function CreateSideTab(parent, index, config)
 	---@param checked boolean
 	function tab:SetChecked(checked)
 		if checked then
-			self.Icon:SetAtlas(self.activeAtlas, true)
+			self.Icon:SetAtlas(self.activeAtlas, false)
+			self.Icon:SetSize(22, 22)
 		else
-			self.Icon:SetAtlas(self.inactiveAtlas, true)
+			self.Icon:SetAtlas(self.inactiveAtlas, false)
+			self.Icon:SetSize(20, 20)
 		end
 		self.Icon:SetDesaturated(not checked)
 		self.Icon:SetAlpha(checked and 1 or 0.6)

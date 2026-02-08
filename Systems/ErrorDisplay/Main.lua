@@ -26,7 +26,7 @@ local icon = LibStub('LibDBIcon-1.0')
 ErrorDisplay.icon = icon
 
 -- Create LibDataBroker data object
-local ldbObject = LDB:NewDataObject(MinimapIconName, {
+local ldbObject = LDB:NewDataObject('Libs Error Display', {
 	type = 'data source',
 	text = '0',
 	icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png',

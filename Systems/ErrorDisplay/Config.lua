@@ -123,9 +123,9 @@ function ErrorDisplay.Config:CreatePanel()
 		local shouldShow = self:GetChecked()
 		if ErrorDisplay.icon then
 			if shouldShow then
-				ErrorDisplay.icon:Show('Libs-AddonToolsErrorDisplay')
+				ErrorDisplay.icon:Show('Libs Error Display')
 			else
-				ErrorDisplay.icon:Hide('Libs-AddonToolsErrorDisplay')
+				ErrorDisplay.icon:Hide('Libs Error Display')
 			end
 		end
 	end)

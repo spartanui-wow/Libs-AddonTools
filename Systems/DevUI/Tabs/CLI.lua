@@ -278,13 +278,6 @@ BuildContent = function(contentFrame)
 	TabState.EditorBox:SetBackdropColor(0, 0, 0, 0.5)
 	TabState.EditorBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
 
-	-- Keep editBox width in sync with scroll frame for proper click detection
-	TabState.EditorBox:SetScript('OnSizeChanged', function(self)
-		if self.editBox then
-			self.editBox:SetWidth(self:GetWidth() - 20)
-		end
-	end)
-
 	-- Set monospace font on the editor's EditBox
 	if DevUIState.MonoFont and TabState.EditorBox.editBox then
 		TabState.EditorBox.editBox:SetFontObject(DevUIState.MonoFont)
@@ -344,13 +337,6 @@ BuildContent = function(contentFrame)
 	})
 	TabState.ResultsBox:SetBackdropColor(0, 0, 0, 0.5)
 	TabState.ResultsBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
-
-	-- Keep editBox width in sync with scroll frame for proper click detection
-	TabState.ResultsBox:SetScript('OnSizeChanged', function(self)
-		if self.editBox then
-			self.editBox:SetWidth(self:GetWidth() - 20)
-		end
-	end)
 
 	-- Set monospace font on the results box
 	if DevUIState.MonoFont and TabState.ResultsBox.editBox then
