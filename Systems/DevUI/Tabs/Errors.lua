@@ -352,6 +352,49 @@ BuildContent = function(contentFrame)
 				NextError()
 			end,
 		},
+		{
+			text = 'Ignore',
+			width = 80,
+			onClick = function()
+				local handler = GetErrorHandler()
+				if not handler or not TabState.CurrentError then
+					return
+				end
+
+				if handler:IgnoreError(TabState.CurrentError) then
+					TabState.CurrentError = nil
+					TabState.CurrentErrorIndex = 0
+					RebuildErrorList()
+
+					if TabState.EditBox then
+						TabState.EditBox:SetText('Error ignored. Select another error from the left panel.')
+					end
+				end
+			end,
+		},
+		{
+			text = 'Clear All',
+			width = 80,
+			onClick = function()
+				if not _G.LibATErrorDisplay then
+					return
+				end
+
+				_G.LibATErrorDisplay.Reset()
+				TabState.CurrentError = nil
+				TabState.CurrentErrorIndex = 0
+				RebuildErrorList()
+
+				if TabState.EditBox then
+					TabState.EditBox:SetText('All errors have been cleared.')
+				end
+
+				-- Update error count label
+				if TabState.ErrorCountLabel then
+					TabState.ErrorCountLabel:SetText('Total: 0 | Ignored: 0')
+				end
+			end,
+		},
 	})
 
 	-- Reload UI button
