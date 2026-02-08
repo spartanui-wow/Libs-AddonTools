@@ -258,10 +258,23 @@ end
 ---@param multiline? boolean Optional multiline support (default false)
 ---@return EditBox editBox Standard edit box
 function LibAT.UI.CreateEditBox(parent, width, height, multiline)
-	local editBox = CreateFrame('EditBox', nil, parent)
+	local editBox = CreateFrame('EditBox', nil, parent, 'BackdropTemplate')
 	editBox:SetSize(width, height)
 	editBox:SetAutoFocus(false)
 	editBox:SetFontObject('GameFontHighlight')
+	editBox:SetTextInsets(4, 4, 2, 2)
+
+	-- Add a subtle border so the field is visually identifiable
+	editBox:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		tile = true,
+		tileSize = 16,
+		edgeSize = 12,
+		insets = { left = 3, right = 3, top = 3, bottom = 3 },
+	})
+	editBox:SetBackdropColor(0, 0, 0, 0.5)
+	editBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
 
 	if multiline then
 		editBox:SetMultiLine(true)
@@ -477,6 +490,7 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	editBox:SetAutoFocus(false)
 	editBox:EnableMouse(true)
 	editBox:SetTextColor(1, 1, 1)
+	editBox:SetWidth(1) -- Initial width; updated by OnSizeChanged below
 
 	-- Initialize cursor tracking fields required by ScrollingEdit functions
 	editBox.cursorOffset = 0
@@ -490,6 +504,11 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	end)
 
 	scrollFrame:SetScrollChild(editBox)
+
+	-- Keep editBox width in sync with scroll frame (scroll children can't use anchors)
+	scrollFrame:SetScript('OnSizeChanged', function(self)
+		editBox:SetWidth(math.max(self:GetWidth() - 20, 1))
+	end)
 
 	return scrollFrame, editBox
 end
@@ -573,6 +592,80 @@ function LibAT.UI.CreateHeader(parent, text)
 	header:SetText(text)
 	header:SetTextColor(1, 0.82, 0) -- Gold color
 	return header
+end
+
+----------------------------------------------------------------------------------------------------
+-- Tooltip Style Constants
+-- Shared color and formatting constants for consistent tooltip styling across Libs-* addons
+----------------------------------------------------------------------------------------------------
+
+---@class LibAT.UI.TooltipStyle
+LibAT.UI.TooltipStyle = {
+	-- Header colors (addon title, section headers)
+	headerColor = { r = 1, g = 0.82, b = 0 }, -- Gold
+	headerHex = 'ffd100',
+
+	-- Subheader / section divider color
+	subHeaderColor = { r = 0.8, g = 0.8, b = 0.8 }, -- Light gray
+	subHeaderHex = 'cccccc',
+
+	-- Normal text color
+	textColor = { r = 1, g = 1, b = 1 }, -- White
+	textHex = 'ffffff',
+
+	-- Hint text color (click hints, instructions)
+	hintColor = { r = 0.7, g = 0.7, b = 0.7 }, -- Gray
+	hintHex = 'b3b3b3',
+
+	-- Value/highlight color
+	valueColor = { r = 0, g = 1, b = 0 }, -- Green
+	valueHex = '00ff00',
+
+	-- Warning/alert color
+	warningColor = { r = 1, g = 0.5, b = 0 }, -- Orange
+	warningHex = 'ff8000',
+
+	-- Divider character for section separators
+	dividerChar = '\226\148\128', -- Unicode box-drawing horizontal line (─)
+}
+
+---Format text as a tooltip hint (gray, smaller)
+---@param text string The hint text
+---@return string formatted Color-coded hint text
+function LibAT.UI.TooltipStyle.FormatHint(text)
+	return '|cff' .. LibAT.UI.TooltipStyle.hintHex .. text .. '|r'
+end
+
+---Format text as a tooltip header (gold)
+---@param text string The header text
+---@return string formatted Color-coded header text
+function LibAT.UI.TooltipStyle.FormatHeader(text)
+	return '|cff' .. LibAT.UI.TooltipStyle.headerHex .. text .. '|r'
+end
+
+---Format text as a tooltip value (green)
+---@param text string The value text
+---@return string formatted Color-coded value text
+function LibAT.UI.TooltipStyle.FormatValue(text)
+	return '|cff' .. LibAT.UI.TooltipStyle.valueHex .. text .. '|r'
+end
+
+---Build a section divider line (e.g., "── Section Name ──")
+---@param title? string Optional section title
+---@param width? number Optional total character width (default 40)
+---@return string divider Formatted divider string
+function LibAT.UI.TooltipStyle.BuildDivider(title, width)
+	width = width or 40
+	local divChar = LibAT.UI.TooltipStyle.dividerChar
+	local hex = LibAT.UI.TooltipStyle.subHeaderHex
+
+	if title then
+		local sideLen = math.max(2, math.floor((width - #title - 2) / 2))
+		local side = string.rep(divChar, sideLen)
+		return '|cff' .. hex .. side .. ' ' .. title .. ' ' .. side .. '|r'
+	else
+		return '|cff' .. hex .. string.rep(divChar, width) .. '|r'
+	end
 end
 
 return UI
