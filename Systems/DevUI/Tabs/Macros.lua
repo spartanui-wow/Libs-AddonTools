@@ -8,6 +8,10 @@ LibAT.DevUI = LibAT.DevUI or {}
 
 local DevUI, DevUIState
 
+-- Forward declarations (must be before InitMacros so closures capture the locals)
+local RebuildMacroList
+local BuildContent
+
 -- Tab-local UI state
 local TabState = {
 	ContentFrame = nil,
@@ -44,8 +48,7 @@ function LibAT.DevUI.InitMacros(devUIModule, state)
 	}
 end
 
-----------------------------------------------------------------------------------------------------
--- Forward declarations
+-- Additional forward declarations
 local LoadMacro
 local UpdateCharCount
 
@@ -54,7 +57,7 @@ local UpdateCharCount
 ----------------------------------------------------------------------------------------------------
 
 ---Rebuild the macro list in the left panel
-local function RebuildMacroList()
+RebuildMacroList = function()
 	-- Clear existing buttons
 	for _, button in pairs(TabState.MacroButtons) do
 		button:Hide()
@@ -292,7 +295,7 @@ end
 
 ---Build the Macros tab content
 ---@param contentFrame Frame The parent content frame from DevUI
-local function BuildContent(contentFrame)
+BuildContent = function(contentFrame)
 	TabState.ContentFrame = contentFrame
 
 	-- Main content area (no control frame needed)
@@ -385,4 +388,3 @@ local function BuildContent(contentFrame)
 		TabState.BodyBox:SetValue('')
 	end
 end
-

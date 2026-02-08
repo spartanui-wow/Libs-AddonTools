@@ -7,6 +7,10 @@ LibAT.DevUI = LibAT.DevUI or {}
 
 local DevUI, DevUIState
 
+-- Forward declarations (must be before InitCLI so closures capture the locals)
+local RebuildScriptList
+local BuildContent
+
 -- Tab-local UI state
 local TabState = {
 	ContentFrame = nil,
@@ -87,7 +91,7 @@ end
 ----------------------------------------------------------------------------------------------------
 
 ---Rebuild the saved scripts list in the left panel
-local function RebuildScriptList()
+RebuildScriptList = function()
 	-- Clear existing buttons
 	for _, button in pairs(TabState.ScriptButtons) do
 		button:Hide()
@@ -205,7 +209,7 @@ end
 
 ---Build the CLI tab content
 ---@param contentFrame Frame The parent content frame from DevUI
-local function BuildContent(contentFrame)
+BuildContent = function(contentFrame)
 	TabState.ContentFrame = contentFrame
 
 	-- Main content area (skip control frame — CLI doesn't need search/filters)
@@ -337,4 +341,3 @@ local function BuildContent(contentFrame)
 		LibAT:SafeReloadUI()
 	end)
 end
-

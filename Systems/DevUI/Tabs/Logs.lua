@@ -9,6 +9,13 @@ LibAT.DevUI = LibAT.DevUI or {}
 local DevUI, DevUIState
 local LoggerState -- Retrieved from Logger module via GetState accessor
 
+-- Forward declarations (must be before InitLogs so closures capture the locals)
+local BuildCategoryTree
+local BuildLogSourceCategories
+local UpdateLogsDisplay
+local SetupLogLevelDropdown
+local BuildContent
+
 -- Tab-local UI state (separate from standalone Logger window)
 local TabState = {
 	ContentFrame = nil,
@@ -109,13 +116,9 @@ end
 -- Category Tree
 ----------------------------------------------------------------------------------------------------
 
--- Forward declarations
-local BuildCategoryTree
-local UpdateLogsDisplay
-local SetupLogLevelDropdown
-
 ---Build hierarchical log source categories from LoggerState data
-local function BuildLogSourceCategories()
+---Assigns to the forward-declared local above
+BuildLogSourceCategories = function()
 	if not TabState.ModuleTree then
 		return
 	end
@@ -552,7 +555,7 @@ end
 
 ---Build the Logs tab content within the provided content frame
 ---@param contentFrame Frame The parent content frame from DevUI
-local function BuildContent(contentFrame)
+BuildContent = function(contentFrame)
 	TabState.ContentFrame = contentFrame
 
 	-- Get LoggerState
@@ -734,4 +737,3 @@ SetupLogLevelDropdown = function()
 		end
 	end)
 end
-

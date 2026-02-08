@@ -8,6 +8,12 @@ LibAT.DevUI = LibAT.DevUI or {}
 
 local DevUI, DevUIState
 
+-- Forward declarations (must be before InitErrors so closures capture the locals)
+local GetErrorHandler
+local RebuildErrorList
+local DisplayError
+local BuildContent
+
 -- Tab-local UI state
 local TabState = {
 	ContentFrame = nil,
@@ -54,7 +60,7 @@ end
 
 ---Get the ErrorHandler from the ErrorDisplay system
 ---@return table|nil ErrorHandler
-local function GetErrorHandler()
+GetErrorHandler = function()
 	if _G.LibATErrorDisplay and _G.LibATErrorDisplay.ErrorHandler then
 		return _G.LibATErrorDisplay.ErrorHandler
 	end
@@ -65,11 +71,8 @@ end
 -- Error List Building
 ----------------------------------------------------------------------------------------------------
 
--- Forward declaration
-local DisplayError
-
 ---Rebuild the session-based error list in the left panel
-local function RebuildErrorList()
+RebuildErrorList = function()
 	-- Clear existing buttons
 	for _, button in pairs(TabState.ErrorButtons) do
 		button:Hide()
@@ -278,7 +281,7 @@ end
 
 ---Build the Errors tab content
 ---@param contentFrame Frame The parent content frame from DevUI
-local function BuildContent(contentFrame)
+BuildContent = function(contentFrame)
 	TabState.ContentFrame = contentFrame
 
 	-- Control frame with Show Locals checkbox
@@ -363,4 +366,3 @@ local function BuildContent(contentFrame)
 		TabState.EditBox:SetText('Error Display system not available.\nBugGrabber may not be loaded.')
 	end
 end
-
