@@ -490,4 +490,56 @@ function ErrorDisplay.ErrorHandler:ClearIgnoredErrors()
 	end
 end
 
+----------------------------------------------------------------------------------------------------
+-- Debug Header (shared by BugWindow and DevUI Errors tab)
+----------------------------------------------------------------------------------------------------
+
+-- Expansion level to name mapping
+local EXPANSION_NAMES = {
+	[0] = 'Classic',
+	[1] = 'The Burning Crusade',
+	[2] = 'Wrath of the Lich King',
+	[3] = 'Cataclysm',
+	[4] = 'Mists of Pandaria',
+	[5] = 'Warlords of Draenor',
+	[6] = 'Legion',
+	[7] = 'Battle for Azeroth',
+	[8] = 'Shadowlands',
+	[9] = 'Dragonflight',
+	[10] = 'The War Within',
+	[11] = 'Midnight',
+}
+
+-- Client type detection based on WOW_PROJECT_ID
+local function GetClientType()
+	if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
+		return 'Retail'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+		return 'Classic Era'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC then
+		return 'TBC Classic'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
+		return 'Wrath Classic'
+	elseif WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC then
+		return 'Cataclysm Classic'
+	else
+		return 'Unknown'
+	end
+end
+
+---Generate a debug header with game version, faction, and class info for error reports
+---@return string header Formatted debug header string
+function ErrorDisplay.ErrorHandler:GenerateDebugHeader()
+	local buildVersion, _, _, interfaceVersion = GetBuildInfo()
+	local expansionLevel = GetServerExpansionLevel()
+	local expansionName = EXPANSION_NAMES[expansionLevel] or 'Unknown'
+	local clientType = GetClientType()
+
+	local faction = UnitFactionGroup('player') or 'Unknown'
+	local _, class = UnitClass('player')
+	class = class or 'Unknown'
+
+	return string.format('**Game Version:** %s - %s %s %d  \n**Faction:** %s  \n**Class:** %s\n\n', clientType, expansionName, buildVersion, interfaceVersion, faction, class)
+end
+
 return ErrorDisplay.ErrorHandler

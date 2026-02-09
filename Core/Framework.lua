@@ -60,12 +60,27 @@ function LibAT:SafeReloadUI(showMessage)
 	return true
 end
 
----Options Manager - Simple interface for managing AceConfig options
+---Options Manager - Single master options table with one Blizzard Settings entry
+---Modules add their options as child groups within the master table's args.
 LibAT.Options = {
-	optionsTable = {},
-	categoryInfo = {},
 	registry = nil,
 	dialog = nil,
+	categoryID = nil,
+	registered = false,
+	---@type AceConfig.OptionsTable
+	masterOptions = {
+		type = 'group',
+		name = 'Libs-AddonTools',
+		childGroups = 'tab',
+		args = {
+			Description = {
+				name = 'Shared tools and utilities used by SpartanUI and related addons.\n\nSelect a tab to configure specific systems.',
+				type = 'description',
+				order = 0,
+				fontSize = 'medium',
+			},
+		},
+	},
 }
 
 ---Initialize the Options system with AceConfig
@@ -76,80 +91,53 @@ function LibAT.Options:Init()
 	end
 end
 
----Add options to the config system
----@param options table The options table
----@param name string The name for this options group
----@param parent? string Optional parent category
-function LibAT.Options:AddOptions(options, name, parent)
-	self:Init()
-
-	if not self.registry then
-		LibAT:Print('Warning: AceConfig not available, options cannot be registered')
+---Register the master options table with Blizzard Settings (called once)
+function LibAT.Options:Register()
+	if self.registered then
 		return
 	end
 
-	-- Store the options
-	self.optionsTable[name] = options
-
-	-- Store the category info for later retrieval
-	if not self.categoryInfo then
-		self.categoryInfo = {}
+	self:Init()
+	if not self.registry or not self.dialog then
+		return
 	end
-	self.categoryInfo[name] = { name = name, parent = parent }
+
+	self.registry:RegisterOptionsTable('Libs-AddonTools', self.masterOptions)
+
+	local success, err = pcall(function()
+		local frame, categoryID = self.dialog:AddToBlizOptions('Libs-AddonTools', 'Libs-AddonTools')
+		self.categoryID = categoryID
+	end)
+
+	if not success then
+		LibAT:Print('Warning: Could not register options with Blizzard Settings: ' .. tostring(err))
+	end
+
+	self.registered = true
+end
+
+---Add options to the config system as a child group
+---Modules should call this during OnInitialize. Blizzard registration happens in LibAT:OnEnable().
+---@param options table The options table (type='group')
+---@param name string The name for this options group
+---@param parent? string Ignored (kept for API compatibility) — all options go under the master table
+function LibAT.Options:AddOptions(options, name, parent)
+	self:Init()
 
 	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.debug('AddOptions called for: ' .. tostring(name) .. ' with parent: ' .. tostring(parent or 'none'))
+		LibAT.Logger.logger.debug('AddOptions called for: ' .. tostring(name))
 	end
 
-	-- Register with AceConfig if available
-	if self.registry and self.dialog then
-		self.registry:RegisterOptionsTable(name, options)
+	-- Add the options as a child group in the master table
+	self.masterOptions.args[name] = options
+	-- Ensure it renders as a group/tab
+	if not options.type then
+		options.type = 'group'
+	end
 
-		-- Try to add to Blizzard options
-		-- If parent is specified but doesn't exist, add without parent
-		local success, err = pcall(function()
-			if parent then
-				-- First ensure parent exists by trying to create it
-				if not self.optionsTable[parent] then
-					-- Create a parent category with description
-					local parentOptions = {
-						type = 'group',
-						name = parent,
-						args = {
-							Description = {
-								name = 'Shared tools and utilities used by SpartanUI and related addons.\n\nSelect a subcategory to configure specific systems.',
-								type = 'description',
-								order = 0,
-								fontSize = 'medium',
-							},
-						},
-					}
-					self.registry:RegisterOptionsTable(parent, parentOptions)
-					local frame, categoryID = self.dialog:AddToBlizOptions(parent, parent)
-					self.optionsTable[parent] = parentOptions
-					-- Store the parent's category ID
-					if not self.categoryInfo[parent] then
-						self.categoryInfo[parent] = {}
-					end
-					self.categoryInfo[parent].categoryID = categoryID
-				end
-				local frame, categoryID = self.dialog:AddToBlizOptions(name, name, parent)
-				-- Store the category ID returned by AddToBlizOptions
-				self.categoryInfo[name].categoryID = categoryID
-			else
-				local frame, categoryID = self.dialog:AddToBlizOptions(name, name)
-				self.categoryInfo[name].categoryID = categoryID
-			end
-		end)
-
-		if not success then
-			-- Fallback: add without parent if there was an error
-			LibAT:Print('Warning: Could not add options with parent "' .. tostring(parent) .. '", adding as standalone. Error: ' .. tostring(err))
-			pcall(function()
-				local frame, categoryID = self.dialog:AddToBlizOptions(name, name)
-				self.categoryInfo[name].categoryID = categoryID
-			end)
-		end
+	-- If already registered with Blizzard (late addition after OnEnable), notify change
+	if self.registered and self.registry then
+		self.registry:NotifyChange('Libs-AddonTools')
 	end
 end
 
@@ -165,52 +153,28 @@ function LibAT.Options:ToggleOptions(path)
 		return
 	end
 
-	local targetName
-	if path and #path > 0 then
-		targetName = path[#path]
-	else
-		targetName = 'Libs-AddonTools'
-	end
-
 	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.debug('Opening options panel: ' .. tostring(targetName))
-		-- Check if the options table exists
-		local registered = self.registry:GetOptionsTable(targetName)
-		if registered then
-			LibAT.Logger.logger.debug('Options table found for: ' .. targetName)
-		else
-			LibAT.Logger.logger.error('No options table registered for: ' .. targetName)
-		end
+		LibAT.Logger.logger.debug('Opening options panel')
 	end
 
 	-- Try to open in Blizzard Settings panel first (modern API)
 	-- Settings.OpenToCategory calls the protected OpenSettingsPanel() internally,
 	-- so it cannot be used during combat lockdown — fall through to standalone dialog instead
 	if Settings and Settings.OpenToCategory and not InCombatLockdown() then
-		-- Get the stored category ID for this option
-		local categoryID = self.categoryInfo and self.categoryInfo[targetName] and self.categoryInfo[targetName].categoryID
-
-		if categoryID then
+		if self.categoryID then
 			if LibAT.Logger and LibAT.Logger.logger then
-				LibAT.Logger.logger.debug('Opening Blizzard Settings with category ID: ' .. tostring(categoryID))
+				LibAT.Logger.logger.debug('Opening Blizzard Settings with category ID: ' .. tostring(self.categoryID))
 			end
-
-			-- Settings.OpenToCategory doesn't return a meaningful value, so we just call it and return
-			-- The category ID from AddToBlizOptions is required for this to work
-			Settings.OpenToCategory(categoryID)
+			Settings.OpenToCategory(self.categoryID)
 			return
-		else
-			if LibAT.Logger and LibAT.Logger.logger then
-				LibAT.Logger.logger.warning('No category ID found for: ' .. tostring(targetName) .. ', falling back to standalone dialog')
-			end
 		end
 	end
 
-	-- Fallback: Open the AceConfig standalone frame if Blizzard Settings API unavailable or no category ID
+	-- Fallback: Open the AceConfig standalone frame
 	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.debug('Opening standalone AceConfig window for: ' .. tostring(targetName))
+		LibAT.Logger.logger.debug('Opening standalone AceConfig window')
 	end
-	self.dialog:Open(targetName)
+	self.dialog:Open('Libs-AddonTools')
 end
 
 ---Register a system with LibAT
@@ -255,6 +219,9 @@ end
 function LibAT:OnEnable()
 	-- Mark UI as ready - all UI components have been loaded
 	self.UI.Ready = true
+
+	-- Register options with Blizzard now that all modules have added theirs via OnInitialize
+	LibAT.Options:Register()
 
 	-- Check for first-run setup wizard prompt after a short delay
 	-- Delay allows other addons to register their setup pages first

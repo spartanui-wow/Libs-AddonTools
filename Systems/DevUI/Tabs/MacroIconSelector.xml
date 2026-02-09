@@ -1,0 +1,17 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<!-- Icon browser popup for the DevUI Macro Editor -->
+	<!-- Reuses Blizzard's IconSelectorPopupFrameTemplate (same as default Macro UI) -->
+	<Frame name="LibAT_MacroIconSelector"
+		   mixin="LibATMacroIconSelectorMixin"
+		   inherits="IconSelectorPopupFrameTemplate"
+		   toplevel="true"
+		   frameStrata="DIALOG"
+		   parent="UIParent"
+		   movable="true"
+		   enableMouse="true"
+		   hidden="true">
+		<KeyValues>
+			<KeyValue key="editBoxHeaderText" value="MACRO_POPUP_TEXT" type="global"/>
+		</KeyValues>
+	</Frame>
+</Ui>

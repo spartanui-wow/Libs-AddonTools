@@ -536,6 +536,9 @@ function logger:OnInitialize()
 	-- Load settings
 	LoggerState.GlobalLogLevel = logger.DB.globalLogLevel or 2
 	LoggerState.ModuleLogLevels = logger.DB.moduleLogLevels or {}
+
+	-- Register options during OnInitialize so they're in the master table before LibAT:OnEnable registers with Blizzard
+	LibAT.Logger.AddOptions()
 end
 
 function logger:OnEnable()
@@ -558,6 +561,4 @@ function logger:OnEnable()
 	-- Register direct WoW slash commands
 	SLASH_LibATLOGS1 = '/logs'
 	SlashCmdList['LibATLOGS'] = ToggleLogWindow
-
-	LibAT.Logger.AddOptions()
 end

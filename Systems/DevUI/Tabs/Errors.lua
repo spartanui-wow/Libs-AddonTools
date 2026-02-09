@@ -353,6 +353,36 @@ BuildContent = function(contentFrame)
 			end,
 		},
 		{
+			text = 'Show All',
+			width = 80,
+			onClick = function()
+				local handler = GetErrorHandler()
+				if not handler then
+					return
+				end
+
+				local allErrors = handler:GetAllErrorsFromAllSessions() or {}
+				if #allErrors == 0 then
+					if TabState.EditBox then
+						TabState.EditBox:SetText('No errors to display.')
+					end
+					return
+				end
+
+				local showLocals = TabState.ShowLocals and TabState.ShowLocals:GetChecked() or false
+				local text = handler:GenerateDebugHeader()
+				text = text .. '=================================\n\n'
+
+				for i, err in ipairs(allErrors) do
+					text = text .. string.format('---------------------------------\n                  Error #%d\n---------------------------------\n\n```lua\n%s\n```\n\n', i, handler:FormatError(err, showLocals))
+				end
+
+				if TabState.EditBox then
+					TabState.EditBox:SetText(text)
+				end
+			end,
+		},
+		{
 			text = 'Ignore',
 			width = 80,
 			onClick = function()
@@ -398,8 +428,8 @@ BuildContent = function(contentFrame)
 	})
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

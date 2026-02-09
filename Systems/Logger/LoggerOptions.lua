@@ -69,152 +69,76 @@ local function AddOptions()
 	-- Validate and purge invalid DB entries before building options
 	ValidateAndPurgeModulesDB()
 
-	---@type AceConfig.OptionsTable
-	local options = {
-		name = 'Logging',
-		type = 'group',
-		args = {
-			Description = {
-				name = 'SpartanUI uses a comprehensive logging system that captures all messages and filters by log level.\nAll modules are always enabled - use log level settings to control what messages are displayed.',
-				type = 'description',
-				order = 0,
-			},
-			GlobalLogLevel = {
-				name = 'Global Log Level',
-				desc = 'Minimum log level to display globally. Individual modules can override this.',
-				type = 'select',
-				values = function()
-					local values = {}
-					-- Create ordered list to ensure proper display order
-					local orderedLevels = {}
-					for level, data in pairs(LoggerState.LOG_LEVELS) do
-						table.insert(orderedLevels, { level = level, data = data })
-					end
-					table.sort(orderedLevels, function(a, b)
-						return a.data.priority < b.data.priority
-					end)
+	-- Helper: build log level values table
+	local function GetLogLevelValues(includeGlobal)
+		local values = {}
+		if includeGlobal then
+			values[0] = 'Global (inherit)'
+		end
+		local orderedLevels = {}
+		for level, data in pairs(LoggerState.LOG_LEVELS) do
+			table.insert(orderedLevels, { level = level, data = data })
+		end
+		table.sort(orderedLevels, function(a, b)
+			return a.data.priority < b.data.priority
+		end)
+		for _, levelData in ipairs(orderedLevels) do
+			values[levelData.data.priority] = levelData.data.display
+		end
+		return values
+	end
 
-					for _, levelData in ipairs(orderedLevels) do
-						values[levelData.data.priority] = levelData.data.display
-					end
-					return values
-				end,
-				sorting = function()
-					-- Return sorted order for dropdown
-					local sorted = {}
-					local orderedLevels = {}
-					for level, data in pairs(LoggerState.LOG_LEVELS) do
-						table.insert(orderedLevels, { level = level, data = data })
-					end
-					table.sort(orderedLevels, function(a, b)
-						return a.data.priority < b.data.priority
-					end)
+	-- Helper: build log level sorting table
+	local function GetLogLevelSorting(includeGlobal)
+		local sorted = {}
+		if includeGlobal then
+			table.insert(sorted, 0)
+		end
+		local orderedLevels = {}
+		for level, data in pairs(LoggerState.LOG_LEVELS) do
+			table.insert(orderedLevels, { level = level, data = data })
+		end
+		table.sort(orderedLevels, function(a, b)
+			return a.data.priority < b.data.priority
+		end)
+		for _, levelData in ipairs(orderedLevels) do
+			table.insert(sorted, levelData.data.priority)
+		end
+		return sorted
+	end
 
-					for _, levelData in ipairs(orderedLevels) do
-						table.insert(sorted, levelData.data.priority)
-					end
-					return sorted
-				end,
-				get = function(info)
-					return logger.DB.globalLogLevel
-				end,
-				set = function(info, val)
-					logger.DB.globalLogLevel = val
-					LoggerState.GlobalLogLevel = val
-					if LoggerState.LogWindow then
-						LibAT.Logger.UpdateLogDisplay()
-					end
-				end,
-				order = 1,
-			},
-			CaptureWarningsErrors = {
-				name = 'Always Capture Warnings/Errors',
-				desc = 'Always capture warning, error, and critical messages regardless of log level settings.',
-				type = 'toggle',
-				get = function(info)
-					return logger.DB.captureWarningsErrors
-				end,
-				set = function(info, val)
-					logger.DB.captureWarningsErrors = val
-				end,
-				order = 2,
-			},
-			MaxLogHistory = {
-				name = 'Maximum Log History',
-				desc = 'Maximum number of log entries to keep per module. Higher values use more memory but preserve more log history.',
-				type = 'range',
-				min = 1000,
-				max = 10000,
-				step = 100,
-				get = function(info)
-					return logger.DB.maxLogHistory
-				end,
-				set = function(info, val)
-					logger.DB.maxLogHistory = val
-				end,
-				order = 3,
-			},
-			ModuleHeader = {
-				name = 'Module Logging Control',
-				type = 'header',
-				order = 10,
-			},
-			ResetAllToGlobal = {
-				name = 'Reset All Modules to Global',
-				desc = 'Reset all modules to use the global log level setting (remove individual overrides).',
-				type = 'execute',
-				order = 11,
-				func = function()
-					for k, _ in pairs(logger.DB.modules) do
-						logger.DB.moduleLogLevels[k] = 0
-						LoggerState.ModuleLogLevels[k] = 0
-					end
-					if LoggerState.LogWindow then
-						LibAT.Logger.UpdateLogDisplay()
-					end
-					LibAT:Print('All module log levels reset to global setting.')
-				end,
-			},
+	-- Build per-module log level args
+	local moduleArgs = {
+		ResetAllToGlobal = {
+			name = 'Reset All Modules to Global',
+			desc = 'Reset all modules to use the global log level setting (remove individual overrides).',
+			type = 'execute',
+			order = 1,
+			func = function()
+				for k, _ in pairs(logger.DB.modules) do
+					logger.DB.moduleLogLevels[k] = 0
+					LoggerState.ModuleLogLevels[k] = 0
+				end
+				if LoggerState.LogWindow then
+					LibAT.Logger.UpdateLogDisplay()
+				end
+				LibAT:Print('All module log levels reset to global setting.')
+			end,
 		},
 	}
 
+	local moduleOrder = 2
 	for k, _ in pairs(logger.DB.modules) do
 		if type(k) == 'string' then
-			options.args[k] = {
+			moduleArgs[k] = {
 				name = k,
 				desc = 'Set the minimum log level for the ' .. k .. ' module. Use "Global" to inherit the global log level setting.',
 				type = 'select',
 				values = function()
-					local values = { [0] = 'Global (inherit)' }
-					-- Create ordered list to ensure proper display order
-					local orderedLevels = {}
-					for level, data in pairs(LoggerState.LOG_LEVELS) do
-						table.insert(orderedLevels, { level = level, data = data })
-					end
-					table.sort(orderedLevels, function(a, b)
-						return a.data.priority < b.data.priority
-					end)
-
-					for _, levelData in ipairs(orderedLevels) do
-						values[levelData.data.priority] = levelData.data.display
-					end
-					return values
+					return GetLogLevelValues(true)
 				end,
 				sorting = function()
-					-- Return sorted order for dropdown
-					local sorted = { 0 } -- Global first
-					local orderedLevels = {}
-					for level, data in pairs(LoggerState.LOG_LEVELS) do
-						table.insert(orderedLevels, { level = level, data = data })
-					end
-					table.sort(orderedLevels, function(a, b)
-						return a.data.priority < b.data.priority
-					end)
-
-					for _, levelData in ipairs(orderedLevels) do
-						table.insert(sorted, levelData.data.priority)
-					end
-					return sorted
+					return GetLogLevelSorting(true)
 				end,
 				get = function(info)
 					return logger.DB.moduleLogLevels[info[#info]] or 0
@@ -226,14 +150,98 @@ local function AddOptions()
 						LibAT.Logger.UpdateLogDisplay()
 					end
 				end,
-				order = (#options.args + 1),
+				order = moduleOrder,
 			}
+			moduleOrder = moduleOrder + 1
 		end
 	end
+
+	---@type AceConfig.OptionsTable
+	local options = {
+		name = 'Logging',
+		type = 'group',
+		args = {
+			Description = {
+				name = 'SpartanUI uses a comprehensive logging system that captures all messages and filters by log level.\nAll modules are always enabled - use log level settings to control what messages are displayed.',
+				type = 'description',
+				order = 0,
+			},
+			GlobalSettings = {
+				name = 'Global Settings',
+				type = 'group',
+				inline = true,
+				order = 1,
+				args = {
+					GlobalLogLevel = {
+						name = 'Global Log Level',
+						desc = 'Minimum log level to display globally. Individual modules can override this.',
+						type = 'select',
+						values = function()
+							return GetLogLevelValues(false)
+						end,
+						sorting = function()
+							return GetLogLevelSorting(false)
+						end,
+						get = function(info)
+							return logger.DB.globalLogLevel
+						end,
+						set = function(info, val)
+							logger.DB.globalLogLevel = val
+							LoggerState.GlobalLogLevel = val
+							if LoggerState.LogWindow then
+								LibAT.Logger.UpdateLogDisplay()
+							end
+						end,
+						order = 1,
+					},
+					CaptureWarningsErrors = {
+						name = 'Always Capture Warnings/Errors',
+						desc = 'Always capture warning, error, and critical messages regardless of log level settings.',
+						type = 'toggle',
+						get = function(info)
+							return logger.DB.captureWarningsErrors
+						end,
+						set = function(info, val)
+							logger.DB.captureWarningsErrors = val
+						end,
+						order = 2,
+					},
+					MaxLogHistory = {
+						name = 'Maximum Log History',
+						desc = 'Maximum number of log entries to keep per module. Higher values use more memory but preserve more log history.',
+						type = 'range',
+						min = 1000,
+						max = 10000,
+						step = 100,
+						get = function(info)
+							return logger.DB.maxLogHistory
+						end,
+						set = function(info, val)
+							logger.DB.maxLogHistory = val
+						end,
+						order = 3,
+					},
+				},
+			},
+			Spacer = {
+				name = '\n',
+				type = 'description',
+				order = 5,
+			},
+			ModuleLogLevels = {
+				name = 'Module Log Levels',
+				type = 'group',
+				inline = true,
+				order = 10,
+				args = moduleArgs,
+			},
+		},
+	}
+
 	logger.options = options
 
 	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.info('Registering Logger options with ' .. tostring(#options.args) .. ' total options')
+		LibAT.Logger.logger.info('Registering Logger options')
 	end
 
 	LibAT.Options:AddOptions(options, 'Logging', 'Libs-AddonTools')

@@ -511,6 +511,12 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 		editBox:SetWidth(math.max(self:GetWidth() - 20, 1))
 	end)
 
+	-- Click anywhere in scroll area to focus the edit box
+	scrollFrame:EnableMouse(true)
+	scrollFrame:SetScript('OnMouseDown', function()
+		editBox:SetFocus()
+	end)
+
 	return scrollFrame, editBox
 end
 
