@@ -374,7 +374,12 @@ BuildContent = function(contentFrame)
 				text = text .. '=================================\n\n'
 
 				for i, err in ipairs(allErrors) do
-					text = text .. string.format('---------------------------------\n                  Error #%d\n---------------------------------\n\n```lua\n%s\n```\n\n', i, handler:FormatError(err, showLocals))
+					text = text
+						.. string.format(
+							'---------------------------------\n                  Error #%d\n---------------------------------\n\n```lua\n%s\n```\n\n',
+							i,
+							handler:FormatError(err, showLocals)
+						)
 				end
 
 				if TabState.EditBox then
