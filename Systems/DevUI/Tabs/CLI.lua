@@ -242,7 +242,8 @@ BuildContent = function(contentFrame)
 	TabState.ScriptTree:SetSize(160, 1)
 
 	-- Right panel
-	local rightPanel = LibAT.UI.CreateRightPanel(mainContent, TabState.LeftPanel)
+	TabState.RightPanel = LibAT.UI.CreateRightPanel(TabState.MainContent, TabState.LeftPanel)
+	local rightPanel = TabState.RightPanel
 
 	-- Title bar at top of right panel
 	local titleLabel = rightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')

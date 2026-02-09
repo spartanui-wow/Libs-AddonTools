@@ -316,8 +316,8 @@ BuildContent = function(contentFrame)
 	TabState.MacroScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
 
 	TabState.MacroScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.MacroScrollFrame, 'MinimalScrollBar')
-	TabState.MacroScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.MacroScrollFrame, 'TOPRIGHT', 2, 0)
-	TabState.MacroScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.MacroScrollFrame, 'BOTTOMRIGHT', 2, 0)
+	TabState.MacroScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.MacroScrollFrame, 'TOPRIGHT', 6, 0)
+	TabState.MacroScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.MacroScrollFrame, 'BOTTOMRIGHT', 6, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.MacroScrollFrame, TabState.MacroScrollFrame.ScrollBar)
 
 	TabState.MacroTree = CreateFrame('Frame', nil, TabState.MacroScrollFrame)
