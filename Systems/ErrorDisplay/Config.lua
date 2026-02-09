@@ -1,16 +1,6 @@
 ---@class LibATErrorDisplay
 local ErrorDisplay = _G.LibATErrorDisplay
 
--- Localization
-local L = {
-	['Options'] = 'Options',
-	['Auto popup on errors'] = 'Auto popup on errors',
-	['Chat frame output'] = 'Chat frame output',
-	['Font Size'] = 'Font Size',
-	['Reset to Defaults'] = 'Reset to Defaults',
-	['Show Minimap Icon'] = 'Show Minimap Icon',
-}
-
 ErrorDisplay.Config = {}
 
 -- Minimal defaults - only store overrides, use fallbacks for defaults
@@ -50,135 +40,97 @@ function ErrorDisplay.Config:Initialize()
 	self.db = nil
 end
 
--- Create the options panel
+-- Register options via LibAT.Options (AceConfig) instead of manual Blizzard panel
 function ErrorDisplay.Config:CreatePanel()
-	local panel = CreateFrame('Frame')
-	panel.name = 'LibAT Error Display'
+	local MinimapIconName = 'Libs-AddonToolsErrorDisplay'
 
-	local title = panel:CreateFontString(nil, 'ARTWORK', 'GameFontNormalLarge')
-	title:SetPoint('TOPLEFT', 16, -16)
-	title:SetText('LibAT Error Display ' .. L['Options'])
+	---@type AceConfig.OptionsTable
+	local options = {
+		type = 'group',
+		name = 'Error Display',
+		args = {
+			Description = {
+				name = 'Configure how LibAT handles and displays Lua errors.',
+				type = 'description',
+				order = 0,
+				fontSize = 'medium',
+			},
+			autoPopup = {
+				name = 'Auto popup on errors',
+				desc = 'Automatically open the error window when new errors are captured.',
+				type = 'toggle',
+				order = 1,
+				get = function()
+					return ErrorDisplay.db.autoPopup or false
+				end,
+				set = function(_, val)
+					ErrorDisplay.db.autoPopup = val or nil
+				end,
+			},
+			chatframe = {
+				name = 'Chat frame output',
+				desc = 'Print error notifications to the chat frame.',
+				type = 'toggle',
+				order = 2,
+				get = function()
+					return ErrorDisplay.db.chatframe ~= false
+				end,
+				set = function(_, val)
+					ErrorDisplay.db.chatframe = val and nil or false
+				end,
+			},
+			fontSize = {
+				name = 'Font Size',
+				desc = 'Font size for the error display window.',
+				type = 'range',
+				min = 8,
+				max = 24,
+				step = 1,
+				order = 3,
+				get = function()
+					return ErrorDisplay.db.fontSize or 12
+				end,
+				set = function(_, val)
+					ErrorDisplay.db.fontSize = val ~= 12 and val or nil
+					if ErrorDisplay.BugWindow.UpdateFontSize then
+						ErrorDisplay.BugWindow:UpdateFontSize()
+					end
+				end,
+			},
+			minimapIcon = {
+				name = 'Show Minimap Icon',
+				desc = 'Show or hide the minimap icon for error display.',
+				type = 'toggle',
+				order = 4,
+				get = function()
+					if ErrorDisplay.icon and ErrorDisplay.db.minimapIcon then
+						return not ErrorDisplay.db.minimapIcon.hide
+					end
+					return true
+				end,
+				set = function(_, val)
+					if ErrorDisplay.icon then
+						if val then
+							ErrorDisplay.icon:Show(MinimapIconName)
+						else
+							ErrorDisplay.icon:Hide(MinimapIconName)
+						end
+					end
+				end,
+			},
+			resetDefaults = {
+				name = 'Reset to Defaults',
+				desc = 'Reset all Error Display settings to their default values.',
+				type = 'execute',
+				order = 10,
+				func = function()
+					ErrorDisplay.Config:ResetToDefaults()
+				end,
+			},
+		},
+	}
 
-	-- Auto Popup checkbox
-	local autoPopup = CreateFrame('CheckButton', nil, panel, 'InterfaceOptionsCheckButtonTemplate')
-	autoPopup:SetPoint('TOPLEFT', title, 'BOTTOMLEFT', 0, -16)
-	autoPopup.Text:SetText(L['Auto popup on errors'])
-	autoPopup:SetChecked(ErrorDisplay.db.autoPopup or false) -- Default to false
-	autoPopup:SetScript('OnClick', function(self)
-		ErrorDisplay.db.autoPopup = self:GetChecked() or nil -- Store nil if false to save space
-	end)
-
-	-- Chat Frame Output checkbox
-	local chatFrame = CreateFrame('CheckButton', nil, panel, 'InterfaceOptionsCheckButtonTemplate')
-	chatFrame:SetPoint('TOPLEFT', autoPopup, 'BOTTOMLEFT', 0, -8)
-	chatFrame.Text:SetText(L['Chat frame output'])
-	chatFrame:SetChecked(ErrorDisplay.db.chatframe ~= false) -- Default to true
-	chatFrame:SetScript('OnClick', function(self)
-		ErrorDisplay.db.chatframe = self:GetChecked() and nil or false -- Store nil for true, false for false
-	end)
-
-	-- Font Size slider
-	local fontSizeSlider = CreateFrame('Slider', nil, panel, 'OptionsSliderTemplate')
-	fontSizeSlider:SetPoint('TOPLEFT', chatFrame, 'BOTTOMLEFT', 0, -24)
-	fontSizeSlider:SetMinMaxValues(8, 24)
-	fontSizeSlider:SetValueStep(1)
-	fontSizeSlider:SetObeyStepOnDrag(true)
-	fontSizeSlider:SetWidth(200)
-	fontSizeSlider.Low:SetText('8')
-	fontSizeSlider.High:SetText('24')
-	fontSizeSlider.Text:SetText(L['Font Size'])
-	fontSizeSlider:SetValue(ErrorDisplay.db.fontSize or 12) -- Default to 12
-	fontSizeSlider:SetScript('OnValueChanged', function(self, value)
-		value = math.floor(value + 0.5)
-		ErrorDisplay.db.fontSize = value ~= 12 and value or nil -- Store nil if default
-		if ErrorDisplay.BugWindow.UpdateFontSize then
-			ErrorDisplay.BugWindow:UpdateFontSize()
-		end
-	end)
-
-	-- Add a "Reset to Defaults" button
-	local defaultsButton = CreateFrame('Button', nil, panel, 'UIPanelButtonTemplate')
-	defaultsButton:SetText(L['Reset to Defaults'])
-	defaultsButton:SetWidth(150)
-	defaultsButton:SetPoint('TOPLEFT', fontSizeSlider, 'BOTTOMLEFT', 0, -16)
-	defaultsButton:SetScript('OnClick', function()
-		ErrorDisplay.Config:ResetToDefaults()
-		autoPopup:SetChecked(ErrorDisplay.db.autoPopup or false)
-		chatFrame:SetChecked(ErrorDisplay.db.chatframe ~= false)
-		fontSizeSlider:SetValue(ErrorDisplay.db.fontSize or 12)
-	end)
-
-	local minimapIconCheckbox = CreateFrame('CheckButton', nil, panel, 'InterfaceOptionsCheckButtonTemplate')
-	minimapIconCheckbox:SetPoint('TOPLEFT', defaultsButton, 'BOTTOMLEFT', 0, -16)
-	minimapIconCheckbox.Text:SetText(L['Show Minimap Icon'])
-
-	-- Check LibDBIcon state
-	local isShown = true
-	if ErrorDisplay.icon and ErrorDisplay.db.minimapIcon then
-		isShown = not ErrorDisplay.db.minimapIcon.hide
-	end
-	minimapIconCheckbox:SetChecked(isShown)
-
-	minimapIconCheckbox:SetScript('OnClick', function(self)
-		local shouldShow = self:GetChecked()
-		if ErrorDisplay.icon then
-			if shouldShow then
-				ErrorDisplay.icon:Show('Libs Error Display')
-			else
-				ErrorDisplay.icon:Hide('Libs Error Display')
-			end
-		end
-	end)
-
-	panel.okay = function()
-		-- This method is called when the player clicks "Okay" in the Interface Options
-	end
-
-	panel.cancel = function()
-		-- This method is called when the player clicks "Cancel" in the Interface Options
-		-- Reset to the previous values (not needed with direct access)
-	end
-
-	panel.refresh = function()
-		-- This method is called when the panel is shown
-		autoPopup:SetChecked(ErrorDisplay.db.autoPopup or false)
-		chatFrame:SetChecked(ErrorDisplay.db.chatframe ~= false)
-		fontSizeSlider:SetValue(ErrorDisplay.db.fontSize or 12)
-
-		-- Update minimap icon checkbox state
-		local isShown = true
-		if ErrorDisplay.icon and ErrorDisplay.db.minimapIcon then
-			isShown = not ErrorDisplay.db.minimapIcon.hide
-		end
-		minimapIconCheckbox:SetChecked(isShown)
-	end
-
-	if InterfaceOptions_AddCategory then
-		InterfaceOptions_AddCategory(panel)
-	else
-		-- Check if Libs-AddonTools parent category exists, if not create it
-		local parentCategory = Settings.GetCategory('Libs-AddonTools')
-		if not parentCategory then
-			-- Create a placeholder parent frame
-			local parentPanel = CreateFrame('Frame')
-			parentPanel.name = 'Libs-AddonTools'
-			local parentTitle = parentPanel:CreateFontString(nil, 'ARTWORK', 'GameFontNormalLarge')
-			parentTitle:SetPoint('TOPLEFT', 16, -16)
-			parentTitle:SetText('Libs-AddonTools')
-			local parentDesc = parentPanel:CreateFontString(nil, 'ARTWORK', 'GameFontHighlight')
-			parentDesc:SetPoint('TOPLEFT', parentTitle, 'BOTTOMLEFT', 0, -8)
-			parentDesc:SetWidth(600)
-			parentDesc:SetText('Shared tools and utilities used by SpartanUI and related addons.\n\nSelect a subcategory on the left to configure specific systems.')
-			parentDesc:SetJustifyH('LEFT')
-
-			parentCategory = Settings.RegisterCanvasLayoutCategory(parentPanel, 'Libs-AddonTools')
-			Settings.RegisterAddOnCategory(parentCategory)
-		end
-
-		-- Register this panel as a subcategory under Libs-AddonTools
-		local subcategory = Settings.RegisterCanvasLayoutSubcategory(parentCategory, panel, 'Error Display')
-		ErrorDisplay.settingsCategory = subcategory
-	end
+	LibAT.Options:AddOptions(options, 'Error Display', 'Libs-AddonTools')
 end
 
 function ErrorDisplay.Config:ResetToDefaults()

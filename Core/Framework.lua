@@ -60,27 +60,14 @@ function LibAT:SafeReloadUI(showMessage)
 	return true
 end
 
----Options Manager - Single master options table with one Blizzard Settings entry
----Modules add their options as child groups within the master table's args.
+---Options Manager - Mapster-style: parent entry in Blizzard Settings, each module as a separate child
+---Each module gets its own RegisterOptionsTable + AddToBlizOptions call with parent relationship.
 LibAT.Options = {
 	registry = nil,
 	dialog = nil,
 	categoryID = nil,
 	registered = false,
-	---@type AceConfig.OptionsTable
-	masterOptions = {
-		type = 'group',
-		name = 'Libs-AddonTools',
-		childGroups = 'tab',
-		args = {
-			Description = {
-				name = 'Shared tools and utilities used by SpartanUI and related addons.\n\nSelect a tab to configure specific systems.',
-				type = 'description',
-				order = 0,
-				fontSize = 'medium',
-			},
-		},
-	},
+	pendingChildren = {}, -- { {appName, displayName}, ... } — queued before parent registers
 }
 
 ---Initialize the Options system with AceConfig
@@ -91,7 +78,7 @@ function LibAT.Options:Init()
 	end
 end
 
----Register the master options table with Blizzard Settings (called once)
+---Register the parent entry in Blizzard Settings (called once in OnEnable)
 function LibAT.Options:Register()
 	if self.registered then
 		return
@@ -102,7 +89,21 @@ function LibAT.Options:Register()
 		return
 	end
 
-	self.registry:RegisterOptionsTable('Libs-AddonTools', self.masterOptions)
+	-- Register a minimal parent options table — child modules appear as separate entries below it
+	---@type AceConfig.OptionsTable
+	local parentOptions = {
+		type = 'group',
+		name = 'Libs-AddonTools',
+		args = {
+			description = {
+				type = 'description',
+				name = 'Libs-AddonTools provides shared developer utilities, logging, error display, and profile management for WoW addons.\n\nSelect a category on the left to configure individual systems.',
+				order = 1,
+			},
+		},
+	}
+
+	self.registry:RegisterOptionsTable('Libs-AddonTools', parentOptions)
 
 	local success, err = pcall(function()
 		local frame, categoryID = self.dialog:AddToBlizOptions('Libs-AddonTools', 'Libs-AddonTools')
@@ -116,29 +117,65 @@ function LibAT.Options:Register()
 	self.registered = true
 end
 
----Add options to the config system as a child group
----Modules should call this during OnInitialize. Blizzard registration happens in LibAT:OnEnable().
+---Add a module's options as a separate child entry under Libs-AddonTools in Blizzard Settings
+---Each call registers its own options table and adds it as a child of the parent.
+---Modules should call this during OnInitialize. Parent registration happens in LibAT:OnEnable().
 ---@param options table The options table (type='group')
----@param name string The name for this options group
----@param parent? string Ignored (kept for API compatibility) — all options go under the master table
+---@param name string The display name for this child entry (e.g. 'Logging')
+---@param parent? string Ignored (kept for API compatibility)
 function LibAT.Options:AddOptions(options, name, parent)
 	self:Init()
+	if not self.registry or not self.dialog then
+		return
+	end
 
 	if LibAT.Logger and LibAT.Logger.logger then
 		LibAT.Logger.logger.debug('AddOptions called for: ' .. tostring(name))
 	end
 
-	-- Add the options as a child group in the master table
-	self.masterOptions.args[name] = options
-	-- Ensure it renders as a group/tab
+	-- Ensure it has a type
 	if not options.type then
 		options.type = 'group'
 	end
 
-	-- If already registered with Blizzard (late addition after OnEnable), notify change
-	if self.registered and self.registry then
-		self.registry:NotifyChange('Libs-AddonTools')
+	-- Each module gets a unique appName for AceConfig registration
+	local appName = 'Libs-AddonTools_' .. name
+
+	-- Register this module's options table with AceConfig
+	self.registry:RegisterOptionsTable(appName, options)
+
+	-- If parent is already registered with Blizzard, add as child immediately
+	-- Otherwise queue for RegisterChildren() which runs after Register() in OnEnable
+	if self.registered then
+		local success, err = pcall(function()
+			self.dialog:AddToBlizOptions(appName, name, 'Libs-AddonTools')
+		end)
+		if not success then
+			LibAT:Print('Warning: Could not add ' .. name .. ' to Blizzard Settings: ' .. tostring(err))
+		end
+	else
+		table.insert(self.pendingChildren, { appName = appName, displayName = name })
 	end
+end
+
+---Register all pending child entries with Blizzard Settings
+---Called after Register() to add any modules that called AddOptions before the parent was registered.
+function LibAT.Options:RegisterChildren()
+	if not self.registered or not self.dialog then
+		return
+	end
+
+	for _, child in ipairs(self.pendingChildren) do
+		local success, err = pcall(function()
+			self.dialog:AddToBlizOptions(child.appName, child.displayName, 'Libs-AddonTools')
+		end)
+		if not success then
+			LibAT:Print('Warning: Could not add ' .. child.displayName .. ' to Blizzard Settings: ' .. tostring(err))
+		end
+	end
+
+	-- Clear the pending list — all children are now registered
+	self.pendingChildren = {}
 end
 
 ---Toggle options dialog
@@ -220,8 +257,9 @@ function LibAT:OnEnable()
 	-- Mark UI as ready - all UI components have been loaded
 	self.UI.Ready = true
 
-	-- Register options with Blizzard now that all modules have added theirs via OnInitialize
+	-- Register parent options entry with Blizzard, then add all child modules that were queued during OnInitialize
 	LibAT.Options:Register()
+	LibAT.Options:RegisterChildren()
 
 	-- Check for first-run setup wizard prompt after a short delay
 	-- Delay allows other addons to register their setup pages first

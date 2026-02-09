@@ -32,10 +32,8 @@ local ldbObject = LDB:NewDataObject('Libs Error Display', {
 	icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png',
 	OnClick = function(self, button)
 		if button == 'RightButton' then
-			-- Open settings
-			if ErrorDisplay.settingsCategory then
-				Settings.OpenToCategory(ErrorDisplay.settingsCategory.ID)
-			end
+			-- Open settings via LibAT options
+			LibAT.Options:ToggleOptions()
 		else
 			if IsAltKeyDown() then
 				ErrorDisplay.Reset()
@@ -169,9 +167,7 @@ function ErrorDisplay:Initialize()
 	SLASH_LIBATERRORS1 = '/libaterrors'
 	SlashCmdList['LIBATERRORS'] = function(msg)
 		if msg == 'config' or msg == 'options' then
-			if ErrorDisplay.settingsCategory then
-				Settings.OpenToCategory(ErrorDisplay.settingsCategory.ID)
-			end
+			LibAT.Options:ToggleOptions()
 		else
 			ErrorDisplay.BugWindow:OpenErrorWindow()
 		end
