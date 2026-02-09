@@ -358,6 +358,9 @@ function ProfileManager:DoExport()
 		if db.sv.profiles then
 			exportData.profiles = db.sv.profiles
 		end
+
+		-- Record which profile was active at export time (for targeted import)
+		exportData.activeProfile = db.keys and db.keys.profile or 'Default'
 	end
 
 	-- Encode using base64 pipeline
@@ -506,22 +509,67 @@ function ProfileManager:DoImport()
 			return
 		end
 	else
-		-- Import all namespaces
+		-- Import all namespaces — merge source profile into current target profile
+		local currentProfileKey = db.keys and db.keys.profile or 'Default'
+		local sourceProfileKey = importData.activeProfile
+
 		if importData.data then
 			if not db.sv.namespaces then
 				db.sv.namespaces = {}
 			end
 			for namespace, nsData in pairs(importData.data) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					db.sv.namespaces[namespace] = nsData
+					if not db.sv.namespaces[namespace] then
+						db.sv.namespaces[namespace] = {}
+					end
+					-- Copy non-profile keys (globals, etc.) directly
+					for key, value in pairs(nsData) do
+						if key ~= 'profiles' then
+							db.sv.namespaces[namespace][key] = value
+						end
+					end
+					-- Merge profiles: map source's active profile into target's active profile
+					if nsData.profiles then
+						if not db.sv.namespaces[namespace].profiles then
+							db.sv.namespaces[namespace].profiles = {}
+						end
+						-- Find source profile data: prefer activeProfile key, fall back to first available
+						local sourceData = sourceProfileKey and nsData.profiles[sourceProfileKey]
+						if not sourceData then
+							local firstKey = next(nsData.profiles)
+							if firstKey then
+								sourceData = nsData.profiles[firstKey]
+							end
+						end
+						if sourceData then
+							db.sv.namespaces[namespace].profiles[currentProfileKey] = sourceData
+						end
+					end
 					importCount = importCount + 1
 				end
 			end
 		end
 
-		-- Import profiles if available
+		-- Import profiles: merge source's active profile into current target profile
 		if importData.profiles then
-			db.sv.profiles = importData.profiles
+			if not db.sv.profiles then
+				db.sv.profiles = {}
+			end
+			-- Find source profile data: prefer activeProfile key, fall back to first available
+			local sourceProfileData = sourceProfileKey and importData.profiles[sourceProfileKey]
+			if not sourceProfileData then
+				local firstKey = next(importData.profiles)
+				if firstKey then
+					sourceProfileData = importData.profiles[firstKey]
+				end
+			end
+			if sourceProfileData then
+				db.sv.profiles[currentProfileKey] = sourceProfileData
+				-- Prevent setup wizard from showing after import
+				if type(sourceProfileData.SetupWizard) == 'table' then
+					sourceProfileData.SetupWizard.FirstLaunch = false
+				end
+			end
 		end
 	end
 
