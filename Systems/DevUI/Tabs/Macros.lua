@@ -338,34 +338,34 @@ BuildContent = function(contentFrame)
 	iconButton:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
 		GameTooltip:SetText('Change Icon')
-		GameTooltip:AddLine('Click to enter an icon FileID or texture path', 1, 1, 1, true)
+		GameTooltip:AddLine('Click to browse icons', 1, 1, 1, true)
 		GameTooltip:Show()
 	end)
 	iconButton:SetScript('OnLeave', function()
 		GameTooltip:Hide()
 	end)
 	iconButton:SetScript('OnClick', function()
-		StaticPopupDialogs['LIBAT_MACRO_ICON'] = {
-			text = 'Enter icon FileID or texture path:',
-			button1 = 'OK',
-			button2 = 'Cancel',
-			hasEditBox = true,
-			OnAccept = function(self)
-				local text = self.editBox:GetText()
-				local fileID = tonumber(text)
-				if fileID then
-					TabState.CurrentMacroIcon = fileID
-					TabState.IconTexture:SetTexture(fileID)
-				elseif text ~= '' then
-					TabState.CurrentMacroIcon = text
-					TabState.IconTexture:SetTexture(text)
-				end
-			end,
-			timeout = 0,
-			whileDead = true,
-			preferredIndex = 3,
-		}
-		StaticPopup_Show('LIBAT_MACRO_ICON')
+		if not LibAT_MacroIconSelector then
+			return
+		end
+
+		-- Pass current icon so the browser can pre-select it
+		LibAT_MacroIconSelector.currentIcon = TabState.CurrentMacroIcon
+
+		-- Set callback to apply the selected icon back to the editor
+		LibAT_MacroIconSelector.onIconSelected = function(iconTexture)
+			TabState.CurrentMacroIcon = iconTexture
+			TabState.IconTexture:SetTexture(iconTexture)
+		end
+
+		-- Position beside the DevUI window and show
+		LibAT_MacroIconSelector:ClearAllPoints()
+		if DevUIState.Window then
+			LibAT_MacroIconSelector:SetPoint('TOPLEFT', DevUIState.Window, 'TOPRIGHT', 5, 0)
+		else
+			LibAT_MacroIconSelector:SetPoint('CENTER')
+		end
+		LibAT_MacroIconSelector:Show()
 	end)
 
 	local nameLabel = TabState.RightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
@@ -403,7 +403,9 @@ BuildContent = function(contentFrame)
 	TabState.BodyBox:SetBackdrop({
 		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
 		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
-		tile = true, tileSize = 16, edgeSize = 12,
+		tile = true,
+		tileSize = 16,
+		edgeSize = 12,
 		insets = { left = 3, right = 3, top = 3, bottom = 3 },
 	})
 	TabState.BodyBox:SetBackdropColor(0, 0, 0, 0.5)
@@ -434,8 +436,8 @@ BuildContent = function(contentFrame)
 	end)
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)
