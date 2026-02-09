@@ -172,15 +172,15 @@ end
 ---Create a left panel for navigation (styled like AuctionFrame's category list)
 ---@param parent Frame The parent frame
 ---@param width? number Optional width (default 155)
----@param xOffset? number Optional X offset from left (default 10)
----@param yOffset? number Optional Y offset from top (default 0)
----@param bottomOffset? number Optional bottom offset (default 20)
+---@param xOffset? number Optional X offset from left (default 5)
+---@param yOffset? number Optional Y offset from top (default 5)
+---@param bottomOffset? number Optional bottom offset (default 13)
 ---@return Frame leftPanel The left navigation panel
 function LibAT.UI.CreateLeftPanel(parent, width, xOffset, yOffset, bottomOffset)
 	width = width or 155
-	xOffset = xOffset or 10
-	yOffset = yOffset or 0
-	bottomOffset = bottomOffset or 20
+	xOffset = xOffset or 5
+	yOffset = yOffset or 5
+	bottomOffset = bottomOffset or 13
 
 	local leftPanel = CreateFrame('Frame', nil, parent)
 	leftPanel:SetPoint('TOPLEFT', parent, 'TOPLEFT', xOffset, yOffset)
@@ -204,15 +204,15 @@ end
 ---@param parent Frame The parent frame
 ---@param leftPanel Frame The left panel to anchor beside
 ---@param spacing? number Optional spacing between panels (default 20)
----@param rightOffset? number Optional right offset (default -10)
+---@param rightOffset? number Optional right offset (default -5)
 ---@param yOffset? number Optional Y offset from top (default 0)
----@param bottomOffset? number Optional bottom offset (default 20)
+---@param bottomOffset? number Optional bottom offset (default 15)
 ---@return Frame rightPanel The right content panel
 function LibAT.UI.CreateRightPanel(parent, leftPanel, spacing, rightOffset, yOffset, bottomOffset)
 	spacing = spacing or 20
-	rightOffset = rightOffset or -10
+	rightOffset = rightOffset or -5
 	yOffset = yOffset or 0
-	bottomOffset = bottomOffset or 20
+	bottomOffset = bottomOffset or 15
 
 	local rightPanel = CreateFrame('Frame', nil, parent)
 	rightPanel:SetPoint('TOPLEFT', leftPanel, 'TOPRIGHT', spacing, yOffset)
@@ -238,7 +238,7 @@ end
 ---@param bottomOffset? number Optional bottom offset (default 4)
 ---@param rightOffset? number Optional right offset (default -3)
 ---@return table buttons Array of created button frames
-function LibAT.UI.CreateActionButtons(window, buttons, spacing, spacing, bottomOffset, rightOffset)
+function LibAT.UI.CreateActionButtons(window, buttons, spacing, bottomOffset, rightOffset)
 	spacing = spacing or 5
 	bottomOffset = bottomOffset or 4
 	rightOffset = rightOffset or -3
@@ -248,9 +248,7 @@ function LibAT.UI.CreateActionButtons(window, buttons, spacing, spacing, bottomO
 
 	for i = #buttons, 1, -1 do -- Reverse order so rightmost button is first
 		local buttonConfig = buttons[i]
-		local button = CreateFrame('Button', nil, window, 'UIPanelButtonTemplate')
-		button:SetSize(buttonConfig.width or 70, buttonConfig.height or 22)
-		button:SetText(buttonConfig.text or 'Button')
+		local button = LibAT.UI.CreateButton(window, buttonConfig.width or 70, buttonConfig.height or 22, buttonConfig.text or 'Button', buttonConfig.black)
 
 		if previousButton then
 			button:SetPoint('RIGHT', previousButton, 'LEFT', -spacing, 0)

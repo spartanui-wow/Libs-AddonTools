@@ -249,7 +249,9 @@ function SetupWizard:CreateWindow()
 	self.window.WelcomeText:SetPoint('RIGHT', self.window.ContentScrollChild, 'RIGHT', -20, 0)
 	self.window.WelcomeText:SetJustifyH('CENTER')
 	self.window.WelcomeText:SetWordWrap(true)
-	self.window.WelcomeText:SetText('Welcome to the Libs-AddonTools Setup Wizard.\n\nSelect an addon from the left panel to begin configuring it.\nCompleted pages will show a |A:common-icon-checkmark:0:0|a checkmark.')
+	self.window.WelcomeText:SetText(
+		'Welcome to the Libs-AddonTools Setup Wizard.\n\nSelect an addon from the left panel to begin configuring it.\nCompleted pages will show a |A:common-icon-checkmark:0:0|a checkmark.'
+	)
 
 	-- Create bottom navigation bar
 	local bottomBar = CreateFrame('Frame', nil, self.window)

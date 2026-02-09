@@ -318,8 +318,8 @@ BuildContent = function(contentFrame)
 	TabState.ErrorScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
 
 	TabState.ErrorScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.ErrorScrollFrame, 'MinimalScrollBar')
-	TabState.ErrorScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ErrorScrollFrame, 'TOPRIGHT', 2, 0)
-	TabState.ErrorScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ErrorScrollFrame, 'BOTTOMRIGHT', 2, 0)
+	TabState.ErrorScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ErrorScrollFrame, 'TOPRIGHT', 6, 0)
+	TabState.ErrorScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ErrorScrollFrame, 'BOTTOMRIGHT', 6, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.ErrorScrollFrame, TabState.ErrorScrollFrame.ScrollBar)
 
 	TabState.ErrorTree = CreateFrame('Frame', nil, TabState.ErrorScrollFrame)

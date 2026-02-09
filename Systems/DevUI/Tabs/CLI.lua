@@ -212,13 +212,14 @@ end
 BuildContent = function(contentFrame)
 	TabState.ContentFrame = contentFrame
 
-	-- Main content area (skip control frame — CLI doesn't need search/filters)
-	local mainContent = CreateFrame('Frame', nil, contentFrame)
-	mainContent:SetPoint('TOPLEFT', contentFrame, 'TOPLEFT', 0, -4)
-	mainContent:SetPoint('BOTTOMRIGHT', contentFrame, 'BOTTOMRIGHT', 0, 0)
+	-- Control frame (top bar) — contentFrame already starts below title bar, so use minimal offset
+	TabState.ControlFrame = LibAT.UI.CreateControlFrame(contentFrame, -2)
+
+	-- Main content area
+	TabState.MainContent = LibAT.UI.CreateContentFrame(contentFrame, TabState.ControlFrame)
 
 	-- Left panel: Saved scripts
-	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(mainContent)
+	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(TabState.MainContent)
 
 	-- "Saved Scripts" header
 	local header = TabState.LeftPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
@@ -228,12 +229,12 @@ BuildContent = function(contentFrame)
 
 	-- Script scroll frame
 	TabState.ScriptScrollFrame = CreateFrame('ScrollFrame', nil, TabState.LeftPanel)
-	TabState.ScriptScrollFrame:SetPoint('TOPLEFT', TabState.LeftPanel, 'TOPLEFT', 2, -22)
+	TabState.ScriptScrollFrame:SetPoint('TOPLEFT', TabState.LeftPanel, 'TOPLEFT', 2, -7)
 	TabState.ScriptScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
 
 	TabState.ScriptScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.ScriptScrollFrame, 'MinimalScrollBar')
-	TabState.ScriptScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ScriptScrollFrame, 'TOPRIGHT', 2, 0)
-	TabState.ScriptScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ScriptScrollFrame, 'BOTTOMRIGHT', 2, 0)
+	TabState.ScriptScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ScriptScrollFrame, 'TOPRIGHT', 6, 0)
+	TabState.ScriptScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ScriptScrollFrame, 'BOTTOMRIGHT', 6, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.ScriptScrollFrame, TabState.ScriptScrollFrame.ScrollBar)
 
 	TabState.ScriptTree = CreateFrame('Frame', nil, TabState.ScriptScrollFrame)
@@ -272,7 +273,9 @@ BuildContent = function(contentFrame)
 	TabState.EditorBox:SetBackdrop({
 		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
 		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
-		tile = true, tileSize = 16, edgeSize = 12,
+		tile = true,
+		tileSize = 16,
+		edgeSize = 12,
 		insets = { left = 3, right = 3, top = 3, bottom = 3 },
 	})
 	TabState.EditorBox:SetBackdropColor(0, 0, 0, 0.5)
@@ -332,7 +335,9 @@ BuildContent = function(contentFrame)
 	TabState.ResultsBox:SetBackdrop({
 		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
 		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
-		tile = true, tileSize = 16, edgeSize = 12,
+		tile = true,
+		tileSize = 16,
+		edgeSize = 12,
 		insets = { left = 3, right = 3, top = 3, bottom = 3 },
 	})
 	TabState.ResultsBox:SetBackdropColor(0, 0, 0, 0.5)
@@ -357,8 +362,8 @@ BuildContent = function(contentFrame)
 	TabState.EditorBox:SetPoint('BOTTOMLEFT', buttonBar, 'TOPLEFT', 0, 4)
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

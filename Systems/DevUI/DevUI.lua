@@ -18,10 +18,10 @@ local DevUIState = {
 
 -- Tab definitions
 local TAB_CONFIG = {
-	{ key = 'Logs', tooltipText = 'Logs', activeAtlas = 'Campaign-QuestLog-LoreBook', inactiveAtlas = 'Campaign-QuestLog-LoreBook' },
-	{ key = 'CLI', tooltipText = 'Lua Console', activeAtlas = 'UI-HUD-MicroMenu-ChatMicroButton-Up', inactiveAtlas = 'UI-HUD-MicroMenu-ChatMicroButton-Disabled' },
-	{ key = 'Errors', tooltipText = 'Errors', activeAtlas = 'common-icon-redx', inactiveAtlas = 'common-icon-redx' },
-	{ key = 'Macros', tooltipText = 'Macros', activeAtlas = 'NPE_Icon', inactiveAtlas = 'NPE_Icon' },
+	{ key = 'Logs', tooltipText = 'Logs', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\logs.png' },
+	{ key = 'CLI', tooltipText = 'CLI', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\cli.png' },
+	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\errors.png' },
+	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\macros.png' },
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -38,9 +38,10 @@ local function CreateSideTab(parent, index, config)
 	tab:SetSize(43, 55)
 	tab:EnableMouse(true)
 
-	-- Store config
+	-- Store config — supports both atlas-based and file path-based icons
 	tab.activeAtlas = config.activeAtlas
 	tab.inactiveAtlas = config.inactiveAtlas
+	tab.iconPath = config.icon -- File path (e.g. Interface\\AddOns\\...)
 	tab.tooltipText = config.tooltipText
 	tab.tabIndex = index
 
@@ -51,7 +52,11 @@ local function CreateSideTab(parent, index, config)
 
 	-- ARTWORK: Icon (scaled down from native atlas size)
 	tab.Icon = tab:CreateTexture(nil, 'ARTWORK')
-	tab.Icon:SetAtlas(config.inactiveAtlas, false)
+	if config.icon then
+		tab.Icon:SetTexture(config.icon)
+	else
+		tab.Icon:SetAtlas(config.inactiveAtlas, false)
+	end
 	tab.Icon:SetSize(20, 20)
 	tab.Icon:SetPoint('CENTER', -2, 0)
 
@@ -75,15 +80,21 @@ local function CreateSideTab(parent, index, config)
 		tab:SetPoint('TOP', DevUIState.TabButtons[index - 1], 'BOTTOM', 0, -3)
 	end
 
-	-- SetChecked method: swap icon atlas and toggle selected glow
+	-- SetChecked method: swap icon and toggle selected glow
 	---@param checked boolean
 	function tab:SetChecked(checked)
-		if checked then
-			self.Icon:SetAtlas(self.activeAtlas, false)
-			self.Icon:SetSize(22, 22)
+		if self.iconPath then
+			-- File path icon — just resize, no atlas swap needed
+			self.Icon:SetSize(checked and 22 or 20, checked and 22 or 20)
 		else
-			self.Icon:SetAtlas(self.inactiveAtlas, false)
-			self.Icon:SetSize(20, 20)
+			-- Atlas-based icon — swap between active/inactive atlas
+			if checked then
+				self.Icon:SetAtlas(self.activeAtlas, false)
+				self.Icon:SetSize(22, 22)
+			else
+				self.Icon:SetAtlas(self.inactiveAtlas, false)
+				self.Icon:SetSize(20, 20)
+			end
 		end
 		self.Icon:SetDesaturated(not checked)
 		self.Icon:SetAlpha(checked and 1 or 0.6)

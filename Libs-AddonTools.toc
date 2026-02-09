@@ -79,4 +79,6 @@ Systems\DevUI\DevUI.lua
 Systems\DevUI\Tabs\Logs.lua
 Systems\DevUI\Tabs\CLI.lua
 Systems\DevUI\Tabs\Errors.lua
+Systems\DevUI\Tabs\MacroIconSelectorMixin.lua
+Systems\DevUI\Tabs\MacroIconSelector.xml
 Systems\DevUI\Tabs\Macros.lua

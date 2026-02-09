@@ -574,7 +574,7 @@ BuildContent = function(contentFrame)
 	local headerAnchor = CreateFrame('Frame', nil, contentFrame)
 	headerAnchor:SetPoint('TOPLEFT', TabState.ControlFrame, 'TOPLEFT', 53, 0)
 	headerAnchor:SetPoint('TOPRIGHT', TabState.ControlFrame, 'TOPRIGHT', -16, 0)
-	headerAnchor:SetHeight(28)
+	headerAnchor:SetHeight(22)
 
 	-- Search All Modules checkbox
 	TabState.SearchAllModules = LibAT.UI.CreateCheckbox(headerAnchor, 'Search All Modules')
@@ -613,7 +613,7 @@ BuildContent = function(contentFrame)
 	TabState.MainContent = LibAT.UI.CreateContentFrame(contentFrame, TabState.ControlFrame)
 
 	-- Left panel: module navigation
-	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(TabState.MainContent)
+	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(TabState.MainContent, nil)
 
 	-- Module scroll frame
 	TabState.ModuleScrollFrame = CreateFrame('ScrollFrame', nil, TabState.LeftPanel)
@@ -621,8 +621,8 @@ BuildContent = function(contentFrame)
 	TabState.ModuleScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
 
 	TabState.ModuleScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.ModuleScrollFrame, 'MinimalScrollBar')
-	TabState.ModuleScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ModuleScrollFrame, 'TOPRIGHT', 2, 0)
-	TabState.ModuleScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ModuleScrollFrame, 'BOTTOMRIGHT', 2, 0)
+	TabState.ModuleScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ModuleScrollFrame, 'TOPRIGHT', 6, 0)
+	TabState.ModuleScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ModuleScrollFrame, 'BOTTOMRIGHT', 6, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.ModuleScrollFrame, TabState.ModuleScrollFrame.ScrollBar)
 
 	TabState.ModuleTree = CreateFrame('Frame', nil, TabState.ModuleScrollFrame)
@@ -635,7 +635,7 @@ BuildContent = function(contentFrame)
 	-- Scrollable text display
 	TabState.TextPanel, TabState.EditBox = LibAT.UI.CreateScrollableTextDisplay(TabState.RightPanel)
 	TabState.TextPanel:SetPoint('TOPLEFT', TabState.RightPanel, 'TOPLEFT', 6, -6)
-	TabState.TextPanel:SetPoint('BOTTOMRIGHT', TabState.RightPanel, 'BOTTOMRIGHT', 0, 2)
+	TabState.TextPanel:SetPoint('BOTTOMRIGHT', TabState.RightPanel, 'BOTTOMRIGHT', 0, 0)
 	TabState.EditBox:SetWidth(TabState.TextPanel:GetWidth() - 20)
 	TabState.EditBox:SetText('No logs active - select a module from the left or enable "Search All Modules"')
 
@@ -671,18 +671,18 @@ BuildContent = function(contentFrame)
 				end
 			end,
 		},
-	})
+	}, 5, 3, 0)
 
 	-- Reload UI button
-	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 22, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 3, 1)
+	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
+	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)
 
 	-- Auto-scroll checkbox
 	TabState.AutoScroll = LibAT.UI.CreateCheckbox(contentFrame, 'Auto-scroll')
-	TabState.AutoScroll:SetPoint('CENTER', TabState.RightPanel, 'BOTTOM', 0, -15)
+	TabState.AutoScroll:SetPoint('CENTER', TabState.RightPanel, 'BOTTOM', 0, -20)
 	TabState.AutoScroll:SetChecked(TabState.AutoScrollEnabled)
 
 	-- Setup logging level dropdown
