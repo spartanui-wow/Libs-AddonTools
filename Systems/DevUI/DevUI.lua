@@ -177,6 +177,11 @@ local function CreateDevUIWindow()
 		height = 538,
 	})
 
+	-- Hide the ButtonFrameTemplate's built-in Inset NineSlice — tabs provide their own panel styling
+	if DevUIState.Window.Inset then
+		DevUIState.Window.Inset:Hide()
+	end
+
 	-- Create content frames for each tab
 	for i = 1, #TAB_CONFIG do
 		local content = CreateFrame('Frame', 'LibAT_DevUI_Content' .. i, DevUIState.Window)

@@ -23,6 +23,7 @@ local TabState = {
 	IconTexture = nil,
 	BodyBox = nil, -- Multiline editor ScrollFrame
 	CharCountLabel = nil,
+	DragButton = nil, -- Drag-to-actionbar button
 	MacroButtons = {},
 	CurrentMacroIndex = nil, -- Currently selected macro index
 	CurrentMacroIcon = nil, -- Current macro icon fileID
@@ -237,6 +238,10 @@ LoadMacro = function(macroIndex)
 	if TabState.BodyBox then
 		TabState.BodyBox:SetValue(body or '')
 	end
+	if TabState.DragButton then
+		TabState.DragButton:SetNormalTexture(icon)
+		TabState.DragButton:Show()
+	end
 
 	UpdateCharCount()
 end
@@ -305,10 +310,10 @@ BuildContent = function(contentFrame)
 	-- Main content area (no control frame needed)
 	local mainContent = CreateFrame('Frame', nil, contentFrame)
 	mainContent:SetPoint('TOPLEFT', contentFrame, 'TOPLEFT', 0, -4)
-	mainContent:SetPoint('BOTTOMRIGHT', contentFrame, 'BOTTOMRIGHT', 0, 0)
+	mainContent:SetPoint('BOTTOMRIGHT', contentFrame, 'BOTTOMRIGHT', 0, 15)
 
-	-- Left panel: Macro list
-	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(mainContent)
+	-- Left panel: Macro list (shortened to leave room for drag button below)
+	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(mainContent, nil, nil, nil, 63)
 
 	-- Macro scroll frame
 	TabState.MacroScrollFrame = CreateFrame('ScrollFrame', nil, TabState.LeftPanel)
@@ -373,10 +378,17 @@ BuildContent = function(contentFrame)
 	nameLabel:SetText('Name:')
 	nameLabel:SetTextColor(1, 0.82, 0)
 
+	local saveButton = LibAT.UI.CreateButton(TabState.RightPanel, 70, 22, 'Save')
+	saveButton:SetPoint('RIGHT', TabState.RightPanel, 'RIGHT', -8, 0)
+	saveButton:SetPoint('TOP', iconButton, 'TOP', 0, 0)
+	saveButton:SetScript('OnClick', function()
+		SaveCurrentMacro()
+	end)
+
 	TabState.NameBox = CreateFrame('EditBox', nil, TabState.RightPanel, 'InputBoxTemplate')
 	TabState.NameBox:SetHeight(22)
 	TabState.NameBox:SetPoint('LEFT', nameLabel, 'RIGHT', 6, 0)
-	TabState.NameBox:SetPoint('RIGHT', TabState.RightPanel, 'RIGHT', -8, 0)
+	TabState.NameBox:SetPoint('RIGHT', saveButton, 'LEFT', -6, 0)
 	TabState.NameBox:SetAutoFocus(false)
 	TabState.NameBox:SetFontObject('GameFontHighlight')
 	TabState.NameBox:SetScript('OnEnterPressed', function(self)
@@ -396,7 +408,7 @@ BuildContent = function(contentFrame)
 	TabState.BodyBox = LibAT.UI.CreateMultiLineBox(TabState.RightPanel, 100, 100) -- Size via anchors
 	TabState.BodyBox:SetPoint('TOPLEFT', bodyLabel, 'BOTTOMLEFT', 0, -4)
 	TabState.BodyBox:SetPoint('RIGHT', TabState.RightPanel, 'RIGHT', -28, 0)
-	TabState.BodyBox:SetPoint('BOTTOM', TabState.RightPanel, 'BOTTOM', 0, 40)
+	TabState.BodyBox:SetPoint('BOTTOM', TabState.RightPanel, 'BOTTOM', 0, 20)
 
 	-- Add background to macro body editor
 	Mixin(TabState.BodyBox, BackdropTemplateMixin)
@@ -423,16 +435,49 @@ BuildContent = function(contentFrame)
 		end)
 	end
 
-	-- Bottom bar: char count + save button
+	-- Character count (centered below the body editor)
 	TabState.CharCountLabel = TabState.RightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	TabState.CharCountLabel:SetPoint('BOTTOMLEFT', TabState.RightPanel, 'BOTTOMLEFT', 8, 12)
+	TabState.CharCountLabel:SetPoint('TOP', TabState.BodyBox, 'BOTTOM', 0, -2)
 	TabState.CharCountLabel:SetText('0/255')
 	TabState.CharCountLabel:SetTextColor(1, 1, 1)
+	TabState.CharCountLabel:SetJustifyH('CENTER')
 
-	local saveButton = LibAT.UI.CreateButton(TabState.RightPanel, 70, 22, 'Save')
-	saveButton:SetPoint('BOTTOMRIGHT', TabState.RightPanel, 'BOTTOMRIGHT', -8, 8)
-	saveButton:SetScript('OnClick', function()
-		SaveCurrentMacro()
+	-- Drag-to-actionbar area (below the left panel, above reload button)
+	TabState.DragButton = CreateFrame('Button', 'LibAT_MacroDragButton', mainContent)
+	TabState.DragButton:SetSize(32, 32)
+	TabState.DragButton:SetPoint('TOPLEFT', TabState.LeftPanel, 'BOTTOMLEFT', 8, -6)
+	TabState.DragButton:RegisterForDrag('LeftButton')
+	TabState.DragButton:Hide() -- Hidden until a macro is selected
+
+	-- Icon (use NormalTexture so it always renders visibly)
+	TabState.DragButton:SetNormalTexture('Interface\\Icons\\INV_Misc_QuestionMark')
+
+	-- Highlight on hover
+	TabState.DragButton:SetHighlightTexture('Interface\\Buttons\\ButtonHilight-Square')
+
+	-- Label to the right of the icon
+	local dragLabel = mainContent:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	dragLabel:SetPoint('LEFT', TabState.DragButton, 'RIGHT', 6, 0)
+	dragLabel:SetText('Drag to\naction bars')
+	dragLabel:SetJustifyH('LEFT')
+	dragLabel:SetTextColor(0.6, 0.6, 0.6)
+
+	-- Drag starts PickupMacro (hardware-initiated, so protected API is allowed)
+	TabState.DragButton:SetScript('OnDragStart', function()
+		if TabState.CurrentMacroIndex and not InCombatLockdown() then
+			PickupMacro(TabState.CurrentMacroIndex)
+		end
+	end)
+
+	-- Tooltip
+	TabState.DragButton:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText('Drag to Action Bar')
+		GameTooltip:AddLine('Drag this icon to place the macro on your action bars.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	TabState.DragButton:SetScript('OnLeave', function()
+		GameTooltip:Hide()
 	end)
 
 	-- Reload UI button

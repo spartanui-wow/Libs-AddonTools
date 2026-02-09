@@ -490,6 +490,7 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	editBox:SetAutoFocus(false)
 	editBox:EnableMouse(true)
 	editBox:SetTextColor(1, 1, 1)
+	editBox:SetTextInsets(5, 5, 5, 5)
 	editBox:SetWidth(1) -- Initial width; updated by OnSizeChanged below
 
 	-- Initialize cursor tracking fields required by ScrollingEdit functions
