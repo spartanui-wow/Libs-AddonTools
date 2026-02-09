@@ -502,6 +502,7 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	editBox:SetScript('OnCursorChanged', function(self, x, y, w, h)
 		ScrollingEdit_OnCursorChanged(self, x, y - 10, w, h)
 	end)
+	editBox:SetScript('OnEscapePressed', editBox.ClearFocus)
 
 	scrollFrame:SetScrollChild(editBox)
 

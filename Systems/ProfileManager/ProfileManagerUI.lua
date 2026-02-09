@@ -279,8 +279,8 @@ function ProfileManager.CreateWindow()
 
 	-- Create import destination container (label + dropdown, shown in import mode only)
 	local importDestFrame = CreateFrame('Frame', nil, ProfileManagerState.window.RightPanel)
-	importDestFrame:SetSize(300, 40)
-	importDestFrame:SetPoint('TOP', ProfileManagerState.window.Description, 'BOTTOM', 0, -4)
+	importDestFrame:SetSize(500, 40)
+	importDestFrame:SetPoint('TOPLEFT', ProfileManagerState.window.Description, 'BOTTOMLEFT', 0, -4)
 	ProfileManagerState.window.ImportDestFrame = importDestFrame
 
 	local destLabel = importDestFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
@@ -298,13 +298,15 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.NewProfileInput:SetPoint('LEFT', ProfileManagerState.window.ImportDestDropdown, 'RIGHT', 8, 0)
 	ProfileManagerState.window.NewProfileInput:SetAutoFocus(false)
 	ProfileManagerState.window.NewProfileInput:SetFontObject('GameFontHighlightSmall')
+	ProfileManagerState.window.NewProfileInput:SetScript('OnEscapePressed', ProfileManagerState.window.NewProfileInput.ClearFocus)
 	ProfileManagerState.window.NewProfileInput:Hide()
 
 	importDestFrame:Hide()
 
 	-- Create scrollable text display for profile data
+	-- Anchor to the RightPanel directly so the editbox fills the full width
 	ProfileManagerState.window.TextPanel, ProfileManagerState.window.EditBox = LibAT.UI.CreateScrollableTextDisplay(ProfileManagerState.window.RightPanel)
-	ProfileManagerState.window.TextPanel:SetPoint('TOPLEFT', importDestFrame, 'BOTTOMLEFT', -9, -2)
+	ProfileManagerState.window.TextPanel:SetPoint('TOPLEFT', ProfileManagerState.window.RightPanel, 'TOPLEFT', 6, -60)
 	ProfileManagerState.window.TextPanel:SetPoint('BOTTOMRIGHT', ProfileManagerState.window.RightPanel, 'BOTTOMRIGHT', -6, 15)
 	ProfileManagerState.window.EditBox:SetWidth(ProfileManagerState.window.TextPanel:GetWidth() - 20)
 
