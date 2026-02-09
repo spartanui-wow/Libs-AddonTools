@@ -61,6 +61,7 @@ local LoggerState = {
 	CurrentSearchTerm = '',
 	SearchAllModules = false,
 	AutoScrollEnabled = true,
+	Paused = false,
 
 	-- Registration system for external addons
 	RegisteredAddons = {}, -- Simple addons registered under "External Addons"

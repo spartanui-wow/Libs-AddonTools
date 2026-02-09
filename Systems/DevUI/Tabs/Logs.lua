@@ -38,6 +38,7 @@ local TabState = {
 	CurrentSearchTerm = '',
 	SearchAllEnabled = false,
 	AutoScrollEnabled = true,
+	Paused = false,
 }
 
 ---Initialize the Logs tab with shared state
@@ -535,7 +536,7 @@ UpdateLogsDisplay = function()
 
 	TabState.EditBox:SetText(logText)
 
-	-- Auto-scroll to bottom
+	-- Auto-scroll to bottom if enabled
 	if TabState.AutoScroll and TabState.AutoScroll:GetChecked() and TabState.EditBox then
 		TabState.EditBox:SetCursorPosition(string.len(logText))
 	end
@@ -680,9 +681,25 @@ BuildContent = function(contentFrame)
 		LibAT:SafeReloadUI()
 	end)
 
-	-- Auto-scroll checkbox
+	-- Pause button anchored left of action buttons
+	TabState.PauseButton = LibAT.UI.CreateButton(contentFrame, 70, 20, TabState.Paused and 'Resume' or 'Pause', true)
+	TabState.PauseButton:SetPoint('RIGHT', actionButtons[1], 'LEFT', -10, 0)
+	TabState.PauseButton:SetScript('OnClick', function()
+		TabState.Paused = not TabState.Paused
+		local newText = TabState.Paused and 'Resume' or 'Pause'
+		if TabState.PauseButton.Text then
+			TabState.PauseButton.Text:SetText(newText)
+		else
+			TabState.PauseButton:SetText(newText)
+		end
+		if not TabState.Paused then
+			UpdateLogsDisplay()
+		end
+	end)
+
+	-- Auto-scroll checkbox left of Pause button
 	TabState.AutoScroll = LibAT.UI.CreateCheckbox(contentFrame, 'Auto-scroll')
-	TabState.AutoScroll:SetPoint('CENTER', TabState.RightPanel, 'BOTTOM', 0, -20)
+	TabState.AutoScroll:SetPoint('RIGHT', TabState.PauseButton, 'LEFT', -10, 0)
 	TabState.AutoScroll:SetChecked(TabState.AutoScrollEnabled)
 
 	-- Setup logging level dropdown

@@ -505,11 +505,21 @@ local function CreateLogWindow()
 		LibAT:SafeReloadUI()
 	end)
 
-	-- Auto-scroll checkbox centered under right panel
+	-- Pause button anchored left of action buttons
+	LoggerState.LogWindow.PauseButton = LibAT.UI.CreateButton(LoggerState.LogWindow, 70, 22, LoggerState.Paused and 'Resume' or 'Pause')
+	LoggerState.LogWindow.PauseButton:SetPoint('RIGHT', LoggerState.LogWindow.ClearButton, 'LEFT', -10, 0)
+	LoggerState.LogWindow.PauseButton:SetScript('OnClick', function()
+		LoggerState.Paused = not LoggerState.Paused
+		LoggerState.LogWindow.PauseButton:SetText(LoggerState.Paused and 'Resume' or 'Pause')
+		if not LoggerState.Paused then
+			LibAT.Logger.UpdateLogDisplay(true)
+		end
+	end)
+
+	-- Auto-scroll checkbox left of Pause button
 	LoggerState.LogWindow.AutoScroll = LibAT.UI.CreateCheckbox(LoggerState.LogWindow, 'Auto-scroll')
-	LoggerState.LogWindow.AutoScroll:SetPoint('CENTER', LoggerState.LogWindow.RightPanel, 'BOTTOM', 0, -15)
+	LoggerState.LogWindow.AutoScroll:SetPoint('RIGHT', LoggerState.LogWindow.PauseButton, 'LEFT', -10, 0)
 	LoggerState.LogWindow.AutoScroll:SetChecked(LoggerState.AutoScrollEnabled)
-	LoggerState.LogWindow.AutoScrollLabel = LoggerState.LogWindow.AutoScroll.Label
 
 	-- Initialize data structures
 	LoggerState.LogWindow.Categories = {}
@@ -589,8 +599,13 @@ local function MatchesSearchCriteria(logEntry, searchTerm, logLevel)
 end
 
 -- Function to update the log display based on current module and filter settings
-local function UpdateLogDisplay()
+---@param force? boolean Skip pause check (used by Resume button)
+local function UpdateLogDisplay(force)
 	if not LoggerState.LogWindow or not LoggerState.LogWindow.EditBox then
+		return
+	end
+
+	if LoggerState.Paused and not force then
 		return
 	end
 
