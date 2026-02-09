@@ -31,41 +31,80 @@ function ProfileManager.BuildNavigationTree()
 	-- Build addon categories
 	local addonCategories = ProfileManagerState.BuildAddonCategories()
 
-	-- Combine with settings category
-	local allCategories = addonCategories
-
-	-- Add settings at the end
-	allCategories['Settings'] = {
-		name = 'Settings',
-		key = 'Settings',
-		expanded = false,
-		subCategories = {
-			['Options'] = {
-				name = 'Options',
-				key = 'Settings.Options',
-				onSelect = function()
-					LibAT:Print('Profile options coming in Phase 2')
-				end,
-			},
-			['Namespaces'] = {
-				name = 'Namespace Filter',
-				key = 'Settings.Namespaces',
-				onSelect = function()
-					LibAT:Print('Namespace filtering coming in Phase 2')
-				end,
-			},
-		},
-		sortedKeys = { 'Options', 'Namespaces' },
-	}
-
 	-- Update navigation tree
-	ProfileManagerState.window.NavTree.config.categories = allCategories
+	ProfileManagerState.window.NavTree.config.categories = addonCategories
 	LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Window Management Functions
 ----------------------------------------------------------------------------------------------------
+
+---Update the import destination dropdown with profiles from the selected addon
+local function UpdateImportDestDropdown()
+	local win = ProfileManagerState.window
+	if not win or not win.ImportDestDropdown then
+		return
+	end
+
+	-- Reset destination to current profile
+	win.importDestination = nil
+	win.NewProfileInput:Hide()
+	win.NewProfileInput:SetText('')
+
+	-- Get the current profile key for display
+	local currentProfileKey = 'Default'
+	if win.activeAddonId and ProfileManagerState.registeredAddons[win.activeAddonId] then
+		local addon = ProfileManagerState.registeredAddons[win.activeAddonId]
+		if addon.db and addon.db.keys and addon.db.keys.profile then
+			currentProfileKey = addon.db.keys.profile
+		end
+	end
+
+	win.ImportDestDropdown:SetText('Current Profile (' .. currentProfileKey .. ')')
+
+	-- Setup the menu with profile choices
+	if win.ImportDestDropdown.SetupMenu then
+		win.ImportDestDropdown:SetupMenu(function(owner, rootDescription)
+			-- Current profile option
+			rootDescription:CreateButton('Current Profile (' .. currentProfileKey .. ')', function()
+				win.importDestination = nil
+				win.ImportDestDropdown:SetText('Current Profile (' .. currentProfileKey .. ')')
+				win.NewProfileInput:Hide()
+			end)
+
+			-- Existing profiles from the addon's DB
+			if win.activeAddonId and ProfileManagerState.registeredAddons[win.activeAddonId] then
+				local addon = ProfileManagerState.registeredAddons[win.activeAddonId]
+				if addon.db and addon.db.sv and addon.db.sv.profiles then
+					local sortedProfiles = {}
+					for profileName in pairs(addon.db.sv.profiles) do
+						if profileName ~= currentProfileKey then
+							table.insert(sortedProfiles, profileName)
+						end
+					end
+					table.sort(sortedProfiles)
+
+					for _, profileName in ipairs(sortedProfiles) do
+						rootDescription:CreateButton(profileName, function()
+							win.importDestination = profileName
+							win.ImportDestDropdown:SetText(profileName)
+							win.NewProfileInput:Hide()
+						end)
+					end
+				end
+			end
+
+			-- Create New option
+			rootDescription:CreateButton('|cff00ff00Create New...|r', function()
+				win.importDestination = '__NEW__'
+				win.ImportDestDropdown:SetText('New Profile:')
+				win.NewProfileInput:Show()
+				win.NewProfileInput:SetFocus()
+			end)
+		end)
+	end
+end
 
 function ProfileManager.UpdateWindowForMode()
 	if not ProfileManagerState.window then
@@ -122,6 +161,11 @@ function ProfileManager.UpdateWindowForMode()
 			end
 		end
 
+		-- Hide import destination dropdown in export mode
+		if ProfileManagerState.window.ImportDestFrame then
+			ProfileManagerState.window.ImportDestFrame:Hide()
+		end
+
 		-- Hide bottom action bar import/export buttons (action is on the centered button now)
 		ProfileManagerState.window.ExportButton:Hide()
 		ProfileManagerState.window.ImportButton:Hide()
@@ -136,6 +180,15 @@ function ProfileManager.UpdateWindowForMode()
 		end
 		if ProfileManagerState.window.TextPanel then
 			ProfileManagerState.window.TextPanel:Show()
+		end
+
+		-- Show import destination dropdown only when an addon is selected and namespace is Core DB or nil (profile-level import)
+		local activeNS = ProfileManagerState.window.activeNamespace
+		if ProfileManagerState.window.ImportDestFrame and ProfileManagerState.window.activeAddonId and (activeNS == '__COREDB__' or activeNS == nil) then
+			ProfileManagerState.window.ImportDestFrame:Show()
+			UpdateImportDestDropdown()
+		elseif ProfileManagerState.window.ImportDestFrame then
+			ProfileManagerState.window.ImportDestFrame:Hide()
 		end
 
 		ProfileManagerState.window.ExportButton:Hide()
@@ -200,6 +253,14 @@ function ProfileManager.CreateWindow()
 	-- Create right panel for content
 	ProfileManagerState.window.RightPanel = LibAT.UI.CreateRightPanel(ProfileManagerState.window.MainContent, ProfileManagerState.window.LeftPanel)
 
+	-- Allow clicking anywhere in the right panel to focus the editbox
+	ProfileManagerState.window.RightPanel:EnableMouse(true)
+	ProfileManagerState.window.RightPanel:SetScript('OnMouseDown', function()
+		if ProfileManagerState.window.TextPanel and ProfileManagerState.window.TextPanel:IsShown() and ProfileManagerState.window.EditBox then
+			ProfileManagerState.window.EditBox:SetFocus()
+		end
+	end)
+
 	-- Add description header
 	ProfileManagerState.window.Description = LibAT.UI.CreateLabel(ProfileManagerState.window.RightPanel, '')
 	ProfileManagerState.window.Description:SetPoint('TOP', ProfileManagerState.window.RightPanel, 'TOP', 0, -10)
@@ -216,11 +277,41 @@ function ProfileManager.CreateWindow()
 	end)
 	ProfileManagerState.window.ExportActionButton:Hide()
 
+	-- Create import destination container (label + dropdown, shown in import mode only)
+	local importDestFrame = CreateFrame('Frame', nil, ProfileManagerState.window.RightPanel)
+	importDestFrame:SetSize(300, 40)
+	importDestFrame:SetPoint('TOP', ProfileManagerState.window.Description, 'BOTTOM', 0, -4)
+	ProfileManagerState.window.ImportDestFrame = importDestFrame
+
+	local destLabel = importDestFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	destLabel:SetPoint('LEFT', importDestFrame, 'LEFT', 0, 0)
+	destLabel:SetText('Import to:')
+	destLabel:SetTextColor(1, 0.82, 0)
+
+	ProfileManagerState.window.ImportDestDropdown = LibAT.UI.CreateDropdown(importDestFrame, 'Current Profile', 220, 22)
+	ProfileManagerState.window.ImportDestDropdown:SetPoint('LEFT', destLabel, 'RIGHT', 8, 0)
+	ProfileManagerState.window.importDestination = nil -- nil = current profile
+
+	-- New profile name input (hidden by default, shown when "Create New..." is selected)
+	ProfileManagerState.window.NewProfileInput = CreateFrame('EditBox', nil, importDestFrame, 'InputBoxTemplate')
+	ProfileManagerState.window.NewProfileInput:SetSize(150, 22)
+	ProfileManagerState.window.NewProfileInput:SetPoint('LEFT', ProfileManagerState.window.ImportDestDropdown, 'RIGHT', 8, 0)
+	ProfileManagerState.window.NewProfileInput:SetAutoFocus(false)
+	ProfileManagerState.window.NewProfileInput:SetFontObject('GameFontHighlightSmall')
+	ProfileManagerState.window.NewProfileInput:Hide()
+
+	importDestFrame:Hide()
+
 	-- Create scrollable text display for profile data
 	ProfileManagerState.window.TextPanel, ProfileManagerState.window.EditBox = LibAT.UI.CreateScrollableTextDisplay(ProfileManagerState.window.RightPanel)
-	ProfileManagerState.window.TextPanel:SetPoint('TOPLEFT', ProfileManagerState.window.Description, 'BOTTOMLEFT', 6, -10)
-	ProfileManagerState.window.TextPanel:SetPoint('BOTTOMRIGHT', ProfileManagerState.window.RightPanel, 'BOTTOMRIGHT', -6, 50)
+	ProfileManagerState.window.TextPanel:SetPoint('TOPLEFT', importDestFrame, 'BOTTOMLEFT', -9, -2)
+	ProfileManagerState.window.TextPanel:SetPoint('BOTTOMRIGHT', ProfileManagerState.window.RightPanel, 'BOTTOMRIGHT', -6, 15)
 	ProfileManagerState.window.EditBox:SetWidth(ProfileManagerState.window.TextPanel:GetWidth() - 20)
+
+	-- Move the right pane scrollbar further right to avoid overlapping the panel edge
+	ProfileManagerState.window.TextPanel.ScrollBar:ClearAllPoints()
+	ProfileManagerState.window.TextPanel.ScrollBar:SetPoint('TOPLEFT', ProfileManagerState.window.TextPanel, 'TOPRIGHT', 12, 0)
+	ProfileManagerState.window.TextPanel.ScrollBar:SetPoint('BOTTOMLEFT', ProfileManagerState.window.TextPanel, 'BOTTOMRIGHT', 12, 0)
 
 	-- Create action buttons
 	local actionButtons = LibAT.UI.CreateActionButtons(ProfileManagerState.window, {

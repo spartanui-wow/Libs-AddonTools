@@ -143,10 +143,17 @@ function ProfileManager:ShowExport(addonId, namespace)
 	-- Build navigation key
 	local navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
 
-	-- Update navigation tree
+	-- Update navigation tree and auto-expand the addon's category
 	if ProfileManagerState.window.NavTree then
 		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.ProfileManager.BuildNavigationTree()
+
+		-- Auto-expand the category so the selected item is visible
+		local categories = ProfileManagerState.window.NavTree.config.categories
+		if categories[addonId] then
+			categories[addonId].expanded = true
+			LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
+		end
 	end
 
 	LibAT.ProfileManager.UpdateWindowForMode()
@@ -179,10 +186,17 @@ function ProfileManager:ShowImport(addonId, namespace)
 	-- Build navigation key
 	local navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
 
-	-- Update navigation tree
+	-- Update navigation tree and auto-expand the addon's category
 	if ProfileManagerState.window.NavTree then
 		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.ProfileManager.BuildNavigationTree()
+
+		-- Auto-expand the category so the selected item is visible
+		local categories = ProfileManagerState.window.NavTree.config.categories
+		if categories[addonId] then
+			categories[addonId].expanded = true
+			LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
+		end
 	end
 
 	LibAT.ProfileManager.UpdateWindowForMode()
@@ -471,18 +485,40 @@ function ProfileManager:DoImport()
 		LibAT:Print('Continuing with import anyway...')
 	end
 
+	-- Determine import destination profile key
+	local importDest = ProfileManagerState.window.importDestination
+	local targetProfileKey
+	if importDest == '__NEW__' then
+		-- Create new profile from user input
+		local newName = ProfileManagerState.window.NewProfileInput and ProfileManagerState.window.NewProfileInput:GetText() or ''
+		newName = newName:match('^%s*(.-)%s*$') -- trim
+		if not newName or newName == '' then
+			LibAT:Print('|cffff0000Error:|r Please enter a name for the new profile.')
+			return
+		end
+		targetProfileKey = newName
+		if not db.sv.profiles then
+			db.sv.profiles = {}
+		end
+	elseif importDest and importDest ~= '' then
+		-- Import to a specific existing profile
+		targetProfileKey = importDest
+	else
+		-- Default: import to current active profile
+		targetProfileKey = db.keys and db.keys.profile or 'Default'
+	end
+
 	-- Apply import data
 	local importCount = 0
 	local activeNS = ProfileManagerState.window.activeNamespace
 
 	if activeNS == '__COREDB__' then
-		-- Import Core DB (current active profile)
+		-- Import Core DB to the target profile
 		if importData.namespace == '__COREDB__' and importData.data then
 			if not db.sv.profiles then
 				db.sv.profiles = {}
 			end
-			local currentProfileKey = db.keys and db.keys.profile or 'Default'
-			db.sv.profiles[currentProfileKey] = importData.data
+			db.sv.profiles[targetProfileKey] = importData.data
 			importCount = 1
 		else
 			LibAT:Print('|cffff0000Error:|r Import data is not a Core DB export')
@@ -509,8 +545,7 @@ function ProfileManager:DoImport()
 			return
 		end
 	else
-		-- Import all namespaces — merge source profile into current target profile
-		local currentProfileKey = db.keys and db.keys.profile or 'Default'
+		-- Import all namespaces — merge source profile into target profile
 		local sourceProfileKey = importData.activeProfile
 
 		if importData.data then
@@ -528,7 +563,7 @@ function ProfileManager:DoImport()
 							db.sv.namespaces[namespace][key] = value
 						end
 					end
-					-- Merge profiles: map source's active profile into target's active profile
+					-- Merge profiles: map source's active profile into target profile
 					if nsData.profiles then
 						if not db.sv.namespaces[namespace].profiles then
 							db.sv.namespaces[namespace].profiles = {}
@@ -542,7 +577,7 @@ function ProfileManager:DoImport()
 							end
 						end
 						if sourceData then
-							db.sv.namespaces[namespace].profiles[currentProfileKey] = sourceData
+							db.sv.namespaces[namespace].profiles[targetProfileKey] = sourceData
 						end
 					end
 					importCount = importCount + 1
@@ -550,7 +585,7 @@ function ProfileManager:DoImport()
 			end
 		end
 
-		-- Import profiles: merge source's active profile into current target profile
+		-- Import profiles: merge source's active profile into target profile
 		if importData.profiles then
 			if not db.sv.profiles then
 				db.sv.profiles = {}
@@ -564,7 +599,7 @@ function ProfileManager:DoImport()
 				end
 			end
 			if sourceProfileData then
-				db.sv.profiles[currentProfileKey] = sourceProfileData
+				db.sv.profiles[targetProfileKey] = sourceProfileData
 				-- Prevent setup wizard from showing after import
 				if type(sourceProfileData.SetupWizard) == 'table' then
 					sourceProfileData.SetupWizard.FirstLaunch = false
@@ -574,7 +609,8 @@ function ProfileManager:DoImport()
 	end
 
 	if importCount > 0 then
-		LibAT:Print('|cff00ff00Profile imported successfully!|r Imported ' .. importCount .. ' section(s) for ' .. addon.displayName)
+		local destMsg = ' to profile "' .. targetProfileKey .. '"'
+		LibAT:Print('|cff00ff00Profile imported successfully!|r Imported ' .. importCount .. ' section(s) for ' .. addon.displayName .. destMsg)
 		LibAT:Print('|cffff9900Please /reload to apply changes.|r')
 	else
 		LibAT:Print('|cffff0000No data was imported.|r')
