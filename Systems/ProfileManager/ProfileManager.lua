@@ -255,27 +255,24 @@ function ProfileManager:ShowSingleAddonExport(addonId, namespace)
 	ProfileManagerState.window.activeAddonId = addonId
 	ProfileManagerState.window.activeNamespace = namespace
 
-	-- Build navigation key — leaf categories (no namespaces) use the category key directly
-	local addon = ProfileManagerState.registeredAddons[addonId]
-	local hasNamespaces = addon and addon.namespaces and #addon.namespaces > 0
-	local navKey
-	if hasNamespaces or namespace then
-		navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
-	else
-		navKey = 'Addons.' .. addonId
-	end
-
-	-- Update navigation tree and auto-expand the addon's category (if it has subcategories)
+	-- Rebuild nav tree first so we can check the actual leaf state (respects expert mode)
 	if ProfileManagerState.window.NavTree then
-		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.ProfileManager.BuildNavigationTree()
 
-		-- Auto-expand the category so the selected item is visible (only for non-leaf)
+		-- Build navigation key based on actual tree state
 		local categories = ProfileManagerState.window.NavTree.config.categories
-		if categories[addonId] and not categories[addonId].isLeaf then
-			categories[addonId].expanded = true
-			LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
+		local navKey
+		if categories[addonId] and categories[addonId].isLeaf then
+			navKey = 'Addons.' .. addonId
+		else
+			navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
+			-- Auto-expand the category so the selected item is visible
+			if categories[addonId] then
+				categories[addonId].expanded = true
+			end
 		end
+		ProfileManagerState.window.NavTree.config.activeKey = navKey
+		LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
 	end
 
 	LibAT.ProfileManager.UpdateWindowForMode()
@@ -305,27 +302,24 @@ function ProfileManager:ShowImport(addonId, namespace)
 	ProfileManagerState.window.activeAddonId = addonId
 	ProfileManagerState.window.activeNamespace = namespace
 
-	-- Build navigation key — leaf categories (no namespaces) use the category key directly
-	local addon = ProfileManagerState.registeredAddons[addonId]
-	local hasNamespaces = addon and addon.namespaces and #addon.namespaces > 0
-	local navKey
-	if hasNamespaces or namespace then
-		navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
-	else
-		navKey = 'Addons.' .. addonId
-	end
-
-	-- Update navigation tree and auto-expand the addon's category (if it has subcategories)
+	-- Rebuild nav tree first so we can check the actual leaf state (respects expert mode)
 	if ProfileManagerState.window.NavTree then
-		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.ProfileManager.BuildNavigationTree()
 
-		-- Auto-expand the category so the selected item is visible (only for non-leaf)
+		-- Build navigation key based on actual tree state
 		local categories = ProfileManagerState.window.NavTree.config.categories
-		if categories[addonId] and not categories[addonId].isLeaf then
-			categories[addonId].expanded = true
-			LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
+		local navKey
+		if categories[addonId] and categories[addonId].isLeaf then
+			navKey = 'Addons.' .. addonId
+		else
+			navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
+			-- Auto-expand the category so the selected item is visible
+			if categories[addonId] then
+				categories[addonId].expanded = true
+			end
 		end
+		ProfileManagerState.window.NavTree.config.activeKey = navKey
+		LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
 	end
 
 	LibAT.ProfileManager.UpdateWindowForMode()
@@ -338,9 +332,11 @@ end
 ---Build navigation tree categories from registered addons
 ---Namespaces are listed directly under each addon (no Import/Export sub-nodes)
 ---Mode (import/export) is controlled by the "Switch Mode" button
+---Expert Mode controls namespace visibility — when off, all addons are leaf categories
 ---@return table categories Navigation tree category structure
 local function BuildAddonCategories()
 	local categories = {}
+	local expertMode = ProfileManagerState.window and ProfileManagerState.window.expertMode or false
 
 	-- Sort addon IDs for consistent display order
 	local sortedIds = {}
@@ -363,9 +359,11 @@ local function BuildAddonCategories()
 		local compositeId = ProfileManager:GetCompositeForAddon(addonId)
 		local hasComposite = compositeId and ProfileManager:GetComposite(compositeId) ~= nil
 
-		-- Simple addons (no namespaces, no composite) are leaf categories — clicking them
-		-- directly opens the export/import screen without needing to expand subcategories
-		if not hasNamespaces and not hasComposite then
+		-- In normal mode (expert off): ALL addons are leaf categories — click to export/import full DB
+		-- In expert mode: only truly simple addons (no namespaces, no composite) are leaves
+		local showAsLeaf = not expertMode or (not hasNamespaces and not hasComposite)
+
+		if showAsLeaf then
 			categories[addonId] = {
 				name = addon.displayName,
 				key = categoryKey,
@@ -383,7 +381,7 @@ local function BuildAddonCategories()
 				end,
 			}
 		else
-			-- Complex addons with namespaces or composites get full subcategory tree
+			-- Expert mode: complex addons with namespaces or composites get full subcategory tree
 			local subCategories = {}
 			local sortedKeys = {}
 
