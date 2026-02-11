@@ -109,6 +109,11 @@ function ErrorDisplay.Config:CreatePanel()
 					return true
 				end,
 				set = function(_, val)
+					-- Persist hide state to database
+					if ErrorDisplay.db.minimapIcon then
+						ErrorDisplay.db.minimapIcon.hide = not val
+					end
+					-- Update icon visibility
 					if ErrorDisplay.icon then
 						if val then
 							ErrorDisplay.icon:Show(MinimapIconName)
