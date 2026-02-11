@@ -265,6 +265,7 @@ function DevUI:OnEnable()
 	end
 
 	SLASH_LIBATDEVLUA1 = '/lua'
+	SLASH_LIBATDEVLUA2 = '/cli'
 	SlashCmdList['LIBATDEVLUA'] = function()
 		DevUI.ShowTab(2)
 	end

@@ -42,6 +42,100 @@ end
 -- Script Execution
 ----------------------------------------------------------------------------------------------------
 
+---Format a value for dump output (similar to WoW's /dump)
+---@param val any The value to format
+---@param indent string Current indentation
+---@param visited table Table of already-visited tables (cycle detection)
+---@return string formatted The formatted string
+local function FormatValue(val, indent, visited)
+	local valType = type(val)
+
+	if valType == 'string' then
+		return '|cff88ff88"' .. val .. '"|r'
+	elseif valType == 'number' then
+		return '|cffffcc00' .. tostring(val) .. '|r'
+	elseif valType == 'boolean' then
+		return '|cff44ddff' .. tostring(val) .. '|r'
+	elseif valType == 'nil' then
+		return '|cff888888nil|r'
+	elseif valType == 'function' then
+		return '|cffcc88ff<function>|r'
+	elseif valType == 'userdata' then
+		return '|cffcc88ff<userdata>|r'
+	elseif valType == 'table' then
+		if visited[val] then
+			return '|cffff8800<circular reference>|r'
+		end
+		visited[val] = true
+
+		local parts = {}
+		local nextIndent = indent .. '  '
+		local count = 0
+		local maxEntries = 200
+
+		-- Collect numeric keys first
+		for i = 1, #val do
+			if count >= maxEntries then
+				table.insert(parts, nextIndent .. '|cff888888... (truncated)|r')
+				break
+			end
+			table.insert(parts, nextIndent .. '|cffffcc00[' .. i .. ']|r=' .. FormatValue(val[i], nextIndent, visited))
+			count = count + 1
+		end
+
+		-- Then non-numeric keys
+		for k, v in pairs(val) do
+			if type(k) ~= 'number' or k < 1 or k > #val or k ~= math.floor(k) then
+				if count >= maxEntries then
+					table.insert(parts, nextIndent .. '|cff888888... (truncated)|r')
+					break
+				end
+				local keyStr
+				if type(k) == 'string' then
+					keyStr = k
+				else
+					keyStr = '[' .. tostring(k) .. ']'
+				end
+				table.insert(parts, nextIndent .. '|cffffcc00' .. keyStr .. '|r=' .. FormatValue(v, nextIndent, visited))
+				count = count + 1
+			end
+		end
+
+		visited[val] = nil
+
+		if #parts == 0 then
+			return '{}'
+		end
+		return '{\n' .. table.concat(parts, ',\n') .. '\n' .. indent .. '}'
+	end
+
+	return tostring(val)
+end
+
+---Dump multiple return values in a structured format (like WoW's /dump)
+---@param ... any Values to dump
+---@return string output Formatted dump output
+local function DumpValues(...)
+	local numArgs = select('#', ...)
+	if numArgs == 0 then
+		return '|cff888888nil|r'
+	end
+
+	-- Single return value — dump it directly
+	if numArgs == 1 then
+		local val = ...
+		return FormatValue(val, '', {})
+	end
+
+	-- Multiple return values — show indexed like WoW's /dump
+	local lines = {}
+	for i = 1, numArgs do
+		local val = select(i, ...)
+		table.insert(lines, '|cffffcc00[' .. i .. ']|r=' .. FormatValue(val, '', {}))
+	end
+	return table.concat(lines, ',\n')
+end
+
 ---Execute Lua code and capture output
 ---@param code string The Lua code to execute
 ---@return string output The captured output text
@@ -60,6 +154,34 @@ local function ExecuteCode(code)
 			parts[i] = tostring(select(i, ...))
 		end
 		table.insert(output, table.concat(parts, '\t'))
+	end
+
+	-- Strip common WoW slash command prefixes so copy-pasted commands just work
+	-- /run, /script execute Lua; /dump inspects values
+	local strippedCode = code:match('^%s*/?run%s+(.+)') or code:match('^%s*/?script%s+(.+)')
+	if strippedCode then
+		code = strippedCode
+	end
+
+	-- Support "dump expression" and "/dump expression" shorthand
+	local dumpExpr = code:match('^%s*/?dump%s+(.+)')
+	if dumpExpr then
+		-- Wrap in a function that captures all return values
+		local evalCode = 'return ' .. dumpExpr
+		local func, err = loadstring(evalCode)
+		if func then
+			local results = { pcall(func) }
+			local success = table.remove(results, 1)
+			if success then
+				table.insert(output, DumpValues(unpack(results)))
+			else
+				table.insert(output, '|cffff0000Runtime Error: ' .. tostring(results[1]) .. '|r')
+			end
+		else
+			table.insert(output, '|cffff0000Syntax Error: ' .. tostring(err) .. '|r')
+		end
+		print = oldPrint
+		return table.concat(output, '\n')
 	end
 
 	-- Support "= expression" shorthand (auto-print)

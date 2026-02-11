@@ -539,7 +539,8 @@ function LibAT.UI.CreateMultiLineBox(parent, width, height, text)
 	---Set the text content
 	---@param value string Text to set
 	function scrollFrame:SetValue(value)
-		editBox:SetText(value or '')
+		scrollFrame._readOnlyText = value or ''
+		editBox:SetText(scrollFrame._readOnlyText)
 	end
 
 	---Get the text content
@@ -548,14 +549,40 @@ function LibAT.UI.CreateMultiLineBox(parent, width, height, text)
 		return editBox:GetText()
 	end
 
-	---Set read-only mode
+	---Set read-only mode (text remains selectable and copyable)
 	---@param readonly boolean True to make read-only
 	function scrollFrame:SetReadOnly(readonly)
-		editBox:SetEnabled(not readonly)
+		scrollFrame._isReadOnly = readonly
 		if readonly then
 			editBox:SetTextColor(0.7, 0.7, 0.7)
+			-- Block typing but keep the EditBox enabled so text is selectable/copyable
+			editBox:SetScript('OnChar', function() end)
+			editBox:SetScript('OnKeyDown', function(self, key)
+				-- Allow Ctrl+A (select all) and Ctrl+C (copy)
+				if IsControlKeyDown() and (key == 'A' or key == 'C') then
+					return
+				end
+				-- Block Enter, Backspace, Delete
+				if key == 'ENTER' or key == 'BACKSPACE' or key == 'DELETE' then
+					self:SetPropagateKeyboardInput(false)
+				else
+					self:SetPropagateKeyboardInput(true)
+				end
+			end)
+			-- Guard against paste or other modifications
+			editBox:SetScript('OnTextChanged', function(self)
+				if scrollFrame._readOnlyText and self:GetText() ~= scrollFrame._readOnlyText then
+					self:SetText(scrollFrame._readOnlyText)
+				end
+				ScrollingEdit_OnTextChanged(self, self:GetParent())
+			end)
 		else
 			editBox:SetTextColor(1, 1, 1)
+			editBox:SetScript('OnChar', nil)
+			editBox:SetScript('OnKeyDown', nil)
+			editBox:SetScript('OnTextChanged', function(self)
+				ScrollingEdit_OnTextChanged(self, self:GetParent())
+			end)
 		end
 	end
 
