@@ -40,6 +40,86 @@ end
 -- Window Management Functions
 ----------------------------------------------------------------------------------------------------
 
+---Show export choice buttons in the right panel (addon-only vs full stack)
+function ProfileManager.ShowExportChoiceButtons()
+	local win = ProfileManagerState.window
+	if not win or not win.activeAddonId or not win.activeCompositeId then
+		return
+	end
+
+	local addon = ProfileManagerState.registeredAddons[win.activeAddonId]
+	local composite = ProfileManager:GetComposite(win.activeCompositeId)
+	if not addon or not composite then
+		return
+	end
+
+	-- Create choice buttons if they don't exist
+	if not win.ExportChoiceFrame then
+		win.ExportChoiceFrame = CreateFrame('Frame', nil, win.RightPanel)
+		win.ExportChoiceFrame:SetPoint('TOPLEFT', win.RightPanel, 'TOPLEFT', 20, -80)
+		win.ExportChoiceFrame:SetPoint('TOPRIGHT', win.RightPanel, 'TOPRIGHT', -20, -80)
+		win.ExportChoiceFrame:SetHeight(200)
+
+		-- Question text
+		win.ExportChoiceQuestion = win.ExportChoiceFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+		win.ExportChoiceQuestion:SetPoint('TOP', 0, -10)
+		win.ExportChoiceQuestion:SetText('What would you like to export?')
+
+		-- Button container
+		local buttonContainer = CreateFrame('Frame', nil, win.ExportChoiceFrame)
+		buttonContainer:SetPoint('TOP', win.ExportChoiceQuestion, 'BOTTOM', 0, -20)
+		buttonContainer:SetSize(480, 100)
+		win.ExportChoiceButtonContainer = buttonContainer
+
+		-- Single-addon button (left)
+		win.ExportSingleButton = LibAT.UI.CreateButton(buttonContainer, 230, 90, '')
+		win.ExportSingleButton:SetPoint('LEFT', 0, 0)
+
+		-- Composite button (right)
+		win.ExportCompositeButton = LibAT.UI.CreateButton(buttonContainer, 230, 90, '')
+		win.ExportCompositeButton:SetPoint('RIGHT', 0, 0)
+	end
+
+	-- Update button labels
+	win.ExportSingleButton:SetText(addon.displayName .. ' Only\n|cff888888(addon settings only)|r')
+	win.ExportSingleButton:SetScript('OnClick', function()
+		-- Export just the addon
+		win.activeCompositeId = nil
+		ProfileManager:DoExport()
+	end)
+
+	-- Build component list for composite button
+	local componentNames = {}
+	for _, component in ipairs(composite.components) do
+		if component.isAvailable() then
+			if component.id == 'bartender4' then
+				table.insert(componentNames, 'Bartender4')
+			elseif component.id == 'editmode' then
+				table.insert(componentNames, 'Edit Mode')
+			else
+				table.insert(componentNames, component.displayName)
+			end
+		end
+	end
+	local componentList = table.concat(componentNames, ', ')
+
+	win.ExportCompositeButton:SetText('Full ' .. addon.displayName .. ' Stack\n|cff888888(' .. addon.displayName .. ', ' .. componentList .. ')|r')
+	win.ExportCompositeButton:SetScript('OnClick', function()
+		-- Show composite export UI
+		ProfileManager:ShowCompositeExport(win.activeCompositeId)
+	end)
+
+	win.ExportChoiceFrame:Show()
+end
+
+---Hide export choice buttons
+function ProfileManager.HideExportChoiceButtons()
+	local win = ProfileManagerState.window
+	if win and win.ExportChoiceFrame then
+		win.ExportChoiceFrame:Hide()
+	end
+end
+
 ---Update the import destination dropdown with profiles from the selected addon
 local function UpdateImportDestDropdown()
 	local win = ProfileManagerState.window
@@ -144,27 +224,38 @@ function ProfileManager.UpdateWindowForMode()
 	if ProfileManagerState.window.mode == 'export' then
 		ProfileManagerState.window.ModeLabel:SetText('|cff00ff00Export Mode|r' .. addonInfo)
 
-		-- In export mode: show action button, hide text area initially
+		-- Hide composite panel when not in composite export mode
+		ProfileManager:HideCompositeExportPanel()
+
+		-- In export mode: check if we need to show choice buttons for composite
+		local showChoiceButtons = ProfileManagerState.window.activeAddonId and ProfileManagerState.window.activeCompositeId and not ProfileManagerState.window.activeNamespace
+
 		if ProfileManagerState.window.activeAddonId then
-			ProfileManagerState.window.Description:SetText('')
+			-- Hide default elements
 			ProfileManagerState.window.Description:Hide()
-
-			if ProfileManagerState.window.ExportActionButton then
-				if isComposite then
-					ProfileManagerState.window.ExportActionButton:SetText('Export Composite Profile')
-				else
-					ProfileManagerState.window.ExportActionButton:SetText('Export ' .. sectionName)
-				end
-				ProfileManagerState.window.ExportActionButton:Show()
-			end
-
-			-- Hide the text panel until export is generated
 			if ProfileManagerState.window.TextPanel then
 				ProfileManagerState.window.TextPanel:Hide()
 			end
+
+			if showChoiceButtons then
+				-- Show choice buttons for composite export
+				if ProfileManagerState.window.ExportActionButton then
+					ProfileManagerState.window.ExportActionButton:Hide()
+				end
+				ProfileManager.ShowExportChoiceButtons()
+			else
+				-- Show single export button
+				ProfileManager.HideExportChoiceButtons()
+				if ProfileManagerState.window.ExportActionButton then
+					ProfileManagerState.window.ExportActionButton:SetText('Export ' .. sectionName)
+					ProfileManagerState.window.ExportActionButton:Show()
+				end
+			end
 		else
+			-- No addon selected
 			ProfileManagerState.window.Description:SetText('Select a section from the left panel to export.')
 			ProfileManagerState.window.Description:Show()
+			ProfileManager.HideExportChoiceButtons()
 			if ProfileManagerState.window.ExportActionButton then
 				ProfileManagerState.window.ExportActionButton:Hide()
 			end
@@ -226,7 +317,7 @@ end
 -- Composite Export/Import UI
 ----------------------------------------------------------------------------------------------------
 
----Show composite export window with component selection checkboxes
+---Show composite export with side panel for component selection
 ---@param compositeId string The composite ID to export
 function ProfileManager:ShowCompositeExport(compositeId)
 	-- Get composite definition
@@ -236,75 +327,84 @@ function ProfileManager:ShowCompositeExport(compositeId)
 		return
 	end
 
-	-- Create window with component selection
-	local selectionWindow = LibAT.UI.CreateWindow({
-		name = 'LibAT_CompositeExportWindow',
-		title = 'Export ' .. composite.displayName,
-		width = 500,
-		height = 400,
-		layout = 'list',
-	})
-
-	-- Add description
-	local desc = selectionWindow:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-	desc:SetPoint('TOPLEFT', 15, -15)
-	desc:SetPoint('TOPRIGHT', -15, -15)
-	desc:SetJustifyH('LEFT')
-	desc:SetText('Select components to include in your profile export:')
-
-	-- Create scrollable frame for checkboxes
-	local scrollFrame = CreateFrame('ScrollFrame', nil, selectionWindow, 'UIPanelScrollFrameTemplate')
-	scrollFrame:SetPoint('TOPLEFT', desc, 'BOTTOMLEFT', 0, -10)
-	scrollFrame:SetPoint('BOTTOMRIGHT', -35, 50)
-
-	local contentFrame = CreateFrame('Frame', nil, scrollFrame)
-	contentFrame:SetSize(scrollFrame:GetWidth(), 1)
-	scrollFrame:SetScrollChild(contentFrame)
-
-	-- Track checkbox states
-	local checkboxes = {}
-	local yOffset = 0
-
-	-- Primary addon (always checked, disabled)
-	local primaryAddon = ProfileManagerState.registeredAddons[composite.primaryAddonId]
-	local primaryCheckbox = LibAT.UI.CreateCheckbox(contentFrame, primaryAddon.displayName .. ' (always included)')
-	primaryCheckbox:SetPoint('TOPLEFT', 5, yOffset)
-	primaryCheckbox:SetChecked(true)
-	primaryCheckbox:SetEnabled(false)
-	yOffset = yOffset - 30
-
-	-- Optional components
-	for _, component in ipairs(composite.components) do
-		local available = component.isAvailable()
-		local label = component.displayName
-		if not available then
-			label = label .. ' |cff888888(not available)|r'
-		end
-
-		local checkbox = LibAT.UI.CreateCheckbox(contentFrame, label)
-		checkbox:SetPoint('TOPLEFT', 5, yOffset)
-		checkbox:SetChecked(available)
-		checkbox:SetEnabled(available)
-		checkboxes[component.id] = checkbox
-		yOffset = yOffset - 30
+	local win = ProfileManagerState.window
+	if not win then
+		return
 	end
 
-	contentFrame:SetHeight(math.abs(yOffset))
+	-- Hide the choice buttons and question text
+	ProfileManager.HideExportChoiceButtons()
 
-	-- Export button
-	local exportButton = LibAT.UI.CreateButton(selectionWindow, 120, 30, 'Export Profile')
-	exportButton:SetPoint('BOTTOM', 0, 15)
-	exportButton:SetScript('OnClick', function()
+	-- Create side panel if it doesn't exist (using ButtonFrameTemplate like contributor list)
+	if not win.CompositePanel then
+		win.CompositePanel = CreateFrame('Frame', 'LibAT_CompositePanel', UIParent, 'ButtonFrameTemplate')
+		ButtonFrameTemplate_HidePortrait(win.CompositePanel)
+		ButtonFrameTemplate_HideButtonBar(win.CompositePanel)
+		win.CompositePanel.Inset:Hide()
+		win.CompositePanel:SetSize(250, 400)
+		win.CompositePanel:SetFrameStrata('MEDIUM')
+		win.CompositePanel:Hide()
+
+		-- Make movable
+		win.CompositePanel:SetMovable(true)
+		win.CompositePanel:EnableMouse(true)
+		win.CompositePanel:RegisterForDrag('LeftButton')
+		win.CompositePanel:SetScript('OnDragStart', win.CompositePanel.StartMoving)
+		win.CompositePanel:SetScript('OnDragStop', win.CompositePanel.StopMovingOrSizing)
+
+		-- Set title
+		win.CompositePanel:SetTitle('Include in Export')
+
+		-- Create main content area
+		win.CompositePanel.MainContent = CreateFrame('Frame', nil, win.CompositePanel)
+		win.CompositePanel.MainContent:SetPoint('TOPLEFT', win.CompositePanel, 'TOPLEFT', 18, -30)
+		win.CompositePanel.MainContent:SetPoint('BOTTOMRIGHT', win.CompositePanel, 'BOTTOMRIGHT', -25, 12)
+
+		-- Create scroll frame with MinimalScrollBar
+		win.CompositePanel.ScrollFrame = CreateFrame('ScrollFrame', nil, win.CompositePanel.MainContent)
+		win.CompositePanel.ScrollFrame:SetPoint('TOPLEFT', win.CompositePanel.MainContent, 'TOPLEFT', 6, -6)
+		win.CompositePanel.ScrollFrame:SetPoint('BOTTOMRIGHT', win.CompositePanel.MainContent, 'BOTTOMRIGHT', 0, 2)
+
+		-- Background texture (AuctionHouse style)
+		win.CompositePanel.ScrollFrame.Background = win.CompositePanel.ScrollFrame:CreateTexture(nil, 'BACKGROUND')
+		win.CompositePanel.ScrollFrame.Background:SetAtlas('auctionhouse-background-index', true)
+		win.CompositePanel.ScrollFrame.Background:SetPoint('TOPLEFT', win.CompositePanel.ScrollFrame, 'TOPLEFT', -6, 6)
+		win.CompositePanel.ScrollFrame.Background:SetPoint('BOTTOMRIGHT', win.CompositePanel.ScrollFrame, 'BOTTOMRIGHT', 0, -6)
+
+		-- Create minimal scrollbar
+		win.CompositePanel.ScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, win.CompositePanel.ScrollFrame, 'MinimalScrollBar')
+		win.CompositePanel.ScrollFrame.ScrollBar:SetPoint('TOPLEFT', win.CompositePanel.ScrollFrame, 'TOPRIGHT', 6, 0)
+		win.CompositePanel.ScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', win.CompositePanel.ScrollFrame, 'BOTTOMRIGHT', 6, 0)
+		ScrollUtil.InitScrollFrameWithScrollBar(win.CompositePanel.ScrollFrame, win.CompositePanel.ScrollFrame.ScrollBar)
+
+		-- Content frame for checkboxes
+		win.CompositePanel.Content = CreateFrame('Frame', nil, win.CompositePanel.ScrollFrame)
+		win.CompositePanel.Content:SetWidth(190)
+		win.CompositePanel.Content:SetHeight(1)
+		win.CompositePanel.ScrollFrame:SetScrollChild(win.CompositePanel.Content)
+
+		win.CompositePanel.Checkboxes = {}
+	end
+
+	-- Clear existing checkboxes
+	for _, checkbox in pairs(win.CompositePanel.Checkboxes) do
+		checkbox:Hide()
+		checkbox:SetParent(nil)
+	end
+	wipe(win.CompositePanel.Checkboxes)
+
+	-- Function to regenerate export based on current selections
+	local function RegenerateExport()
 		-- Collect selected components
 		local selectedComponents = {}
-		for componentId, checkbox in pairs(checkboxes) do
-			if checkbox:GetChecked() then
+		for componentId, checkbox in pairs(win.CompositePanel.Checkboxes) do
+			if componentId ~= 'primary' and checkbox:GetChecked() then
 				selectedComponents[componentId] = true
 			end
 		end
 
 		-- Create composite export
-		local exportData, err = self:CreateCompositeExport(compositeId, selectedComponents)
+		local exportData, err = ProfileManager:CreateCompositeExport(compositeId, selectedComponents)
 		if not exportData then
 			LibAT:Print('|cffff0000Export failed:|r ' .. tostring(err))
 			return
@@ -318,6 +418,7 @@ function ProfileManager:ShowCompositeExport(compositeId)
 		end
 
 		-- Build header
+		local primaryAddon = ProfileManagerState.registeredAddons[composite.primaryAddonId]
 		local header = '-- ' .. composite.displayName .. ' Export\n'
 		header = header .. '-- Generated: ' .. exportData.timestamp .. '\n'
 		header = header .. '-- Version: ' .. exportData.version .. ' (Composite Format)\n'
@@ -339,35 +440,70 @@ function ProfileManager:ShowCompositeExport(compositeId)
 
 		local exportString = header .. encoded
 
-		-- Show result window
-		local resultWindow = LibAT.UI.CreateWindow({
-			name = 'LibAT_CompositeExportResult',
-			title = 'Composite Export - ' .. composite.displayName,
-			width = 600,
-			height = 450,
-		})
+		-- Update text panel
+		win.TextPanel:Show()
+		win.EditBox:SetText(exportString)
+		win.EditBox:SetCursorPosition(0)
+		win.EditBox:HighlightText(0)
 
-		local resultPanel, resultEditBox = LibAT.UI.CreateScrollableTextDisplay(resultWindow)
-		resultPanel:SetPoint('TOPLEFT', resultWindow, 'TOPLEFT', 10, -10)
-		resultPanel:SetPoint('BOTTOMRIGHT', resultWindow, 'BOTTOMRIGHT', -10, 50)
+		LibAT:Print('|cff00ff00Export updated!|r Select all (Ctrl+A) and copy (Ctrl+C).')
+	end
 
-		resultEditBox:SetText(exportString)
-		resultEditBox:SetCursorPosition(0)
-		resultEditBox:HighlightText(0)
+	-- Build checkboxes
+	local yOffset = 0
 
-		local closeButton = LibAT.UI.CreateButton(resultWindow, 100, 30, 'Close')
-		closeButton:SetPoint('BOTTOM', 0, 15)
-		closeButton:SetScript('OnClick', function()
-			resultWindow:Hide()
+	-- Primary addon (always checked, disabled)
+	local primaryAddon = ProfileManagerState.registeredAddons[composite.primaryAddonId]
+	local primaryCheckbox = LibAT.UI.CreateCheckbox(win.CompositePanel.Content, primaryAddon.displayName .. '\n|cff888888(always included)|r')
+	primaryCheckbox:SetPoint('TOPLEFT', 5, yOffset)
+	primaryCheckbox:SetChecked(true)
+	primaryCheckbox:SetEnabled(false)
+	win.CompositePanel.Checkboxes['primary'] = primaryCheckbox
+	yOffset = yOffset - 40
+
+	-- Optional components
+	for _, component in ipairs(composite.components) do
+		local available = component.isAvailable()
+		local label = component.displayName
+		if not available then
+			label = label .. '\n|cff888888(not available)|r'
+		end
+
+		local checkbox = LibAT.UI.CreateCheckbox(win.CompositePanel.Content, label)
+		checkbox:SetPoint('TOPLEFT', 5, yOffset)
+		checkbox:SetChecked(available)
+		checkbox:SetEnabled(available)
+
+		-- Auto-update export when checkbox changes
+		checkbox.checkbox:SetScript('OnClick', function()
+			RegenerateExport()
 		end)
 
-		resultWindow:Show()
-		selectionWindow:Hide()
+		win.CompositePanel.Checkboxes[component.id] = checkbox
+		yOffset = yOffset - 40
+	end
 
-		LibAT:Print('|cff00ff00Composite profile exported!|r Select all (Ctrl+A) and copy (Ctrl+C).')
-	end)
+	win.CompositePanel.Content:SetHeight(math.abs(yOffset))
 
-	selectionWindow:Show()
+	-- Position panel attached to the right edge of ProfileManager window
+	win.CompositePanel:ClearAllPoints()
+	win.CompositePanel:SetPoint('TOPLEFT', win, 'TOPRIGHT', 0, 0)
+
+	-- Show panel and generate initial export
+	win.CompositePanel:Show()
+	RegenerateExport()
+end
+
+---Hide composite export panel
+function ProfileManager:HideCompositeExportPanel()
+	local win = ProfileManagerState.window
+	if win and win.CompositePanel then
+		win.CompositePanel:Hide()
+		-- Show choice buttons again if we're still in composite export mode
+		if win.mode == 'export' and win.activeAddonId and win.activeCompositeId and not win.activeNamespace then
+			ProfileManager.ShowExportChoiceButtons()
+		end
+	end
 end
 
 ---Show composite import window with confirmation dialog
@@ -616,6 +752,11 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.ExportButton:SetPoint('RIGHT', actionButtons[1], 'LEFT', -5, 0)
 	ProfileManagerState.window.ExportButton:SetScript('OnClick', function()
 		ProfileManager:DoExport()
+	end)
+
+	-- Hide composite panel when main window closes
+	ProfileManagerState.window:HookScript('OnHide', function()
+		ProfileManager:HideCompositeExportPanel()
 	end)
 
 	-- Hide window initially

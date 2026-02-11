@@ -121,119 +121,6 @@ function ProfileManager:ShowExport(addonId, namespace)
 		LibAT:Print('|cffff0000Error:|r Addon with ID "' .. addonId .. '" is not registered')
 		return
 	end
-
-	-- Check if this addon has a registered composite
-	local compositeId = self:GetCompositeForAddon(addonId)
-	if compositeId and not namespace then
-		-- Offer choice between single-addon and composite export
-		local composite = self:GetComposite(compositeId)
-		if composite then
-			-- Create choice dialog
-			local choiceWindow = LibAT.UI.CreateWindow({
-				name = 'LibAT_ExportChoice',
-				title = 'Export Options',
-				width = 450,
-				height = 200,
-			})
-
-			local question = choiceWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-			question:SetPoint('TOP', 0, -30)
-			question:SetText('What would you like to export?')
-
-			local buttonFrame = CreateFrame('Frame', nil, choiceWindow)
-			buttonFrame:SetPoint('CENTER', 0, -10)
-			buttonFrame:SetSize(400, 80)
-
-			-- Single-addon export button
-			local singleButton = LibAT.UI.CreateButton(buttonFrame, 180, 60, ProfileManagerState.registeredAddons[addonId].displayName .. '\n|cff888888(addon only)|r')
-			singleButton:SetPoint('LEFT', 0, 0)
-			singleButton:SetScript('OnClick', function()
-				choiceWindow:Hide()
-				self:ShowSingleAddonExport(addonId, namespace)
-			end)
-
-			-- Composite export button
-			local compositeButton = LibAT.UI.CreateButton(buttonFrame, 180, 60, composite.displayName .. '\n|cff888888(full profile)|r')
-			compositeButton:SetPoint('RIGHT', 0, 0)
-			compositeButton:SetScript('OnClick', function()
-				choiceWindow:Hide()
-				self:ShowCompositeExport(compositeId)
-			end)
-
-			choiceWindow:Show()
-			return
-		end
-	end
-
-	-- No composite or namespace specified - use single-addon export
-	self:ShowSingleAddonExport(addonId, namespace)
-end
-
----Show export choice dialog (addon-only vs full stack with dependencies)
----@param addonId string The addon ID
----@param compositeId string The composite ID
-function ProfileManager:ShowExportChoiceDialog(addonId, compositeId)
-	local addon = ProfileManagerState.registeredAddons[addonId]
-	local composite = self:GetComposite(compositeId)
-	if not addon or not composite then
-		return
-	end
-
-	-- Create choice dialog
-	local choiceWindow = LibAT.UI.CreateWindow({
-		name = 'LibAT_ExportChoice',
-		title = 'Export ' .. addon.displayName,
-		width = 500,
-		height = 250,
-	})
-
-	local question = choiceWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-	question:SetPoint('TOP', 0, -30)
-	question:SetText('What would you like to export?')
-
-	local buttonFrame = CreateFrame('Frame', nil, choiceWindow)
-	buttonFrame:SetPoint('CENTER', 0, -10)
-	buttonFrame:SetSize(460, 100)
-
-	-- Single-addon export button (left)
-	local singleButton = LibAT.UI.CreateButton(buttonFrame, 220, 80, addon.displayName .. ' Only\n|cff888888(addon settings only)|r')
-	singleButton:SetPoint('LEFT', 0, 0)
-	singleButton:SetScript('OnClick', function()
-		choiceWindow:Hide()
-		self:ShowSingleAddonExport(addonId, nil)
-	end)
-
-	-- Build component list for composite button label
-	local componentNames = {}
-	for _, component in ipairs(composite.components) do
-		if component.isAvailable() then
-			-- Use short names
-			if component.id == 'bartender4' then
-				table.insert(componentNames, 'Bartender4')
-			elseif component.id == 'editmode' then
-				table.insert(componentNames, 'Edit Mode')
-			else
-				table.insert(componentNames, component.displayName)
-			end
-		end
-	end
-	local componentList = table.concat(componentNames, ', ')
-
-	-- Composite export button (right)
-	local compositeButton = LibAT.UI.CreateButton(buttonFrame, 220, 80, 'Full ' .. addon.displayName .. ' Stack\n|cff888888(' .. addon.displayName .. ', ' .. componentList .. ')|r')
-	compositeButton:SetPoint('RIGHT', 0, 0)
-	compositeButton:SetScript('OnClick', function()
-		choiceWindow:Hide()
-		self:ShowCompositeExport(compositeId)
-	end)
-
-	choiceWindow:Show()
-end
-
----Navigate to a specific addon in single-addon export mode (internal)
----@param addonId string The unique ID of the addon
----@param namespace string|nil Optional specific namespace to export
-function ProfileManager:ShowSingleAddonExport(addonId, namespace)
 	if not ProfileManagerState.window then
 		local success, err = pcall(LibAT.ProfileManager.CreateWindow)
 		if not success then
@@ -254,6 +141,18 @@ function ProfileManager:ShowSingleAddonExport(addonId, namespace)
 	ProfileManagerState.window.mode = 'export'
 	ProfileManagerState.window.activeAddonId = addonId
 	ProfileManagerState.window.activeNamespace = namespace
+
+	-- Check if this addon has a composite and we're exporting "All" (no namespace)
+	if not namespace then
+		local compositeId = self:GetCompositeForAddon(addonId)
+		if compositeId then
+			ProfileManagerState.window.activeCompositeId = compositeId
+		else
+			ProfileManagerState.window.activeCompositeId = nil
+		end
+	else
+		ProfileManagerState.window.activeCompositeId = nil
+	end
 
 	-- Rebuild nav tree first so we can check the actual leaf state (respects expert mode)
 	if ProfileManagerState.window.NavTree then
@@ -376,7 +275,8 @@ local function BuildAddonCategories()
 				onSelect = function()
 					ProfileManagerState.window.activeAddonId = addonId
 					ProfileManagerState.window.activeNamespace = nil
-					ProfileManagerState.window.activeCompositeId = nil
+					-- Set compositeId if this addon has one (enables choice buttons in simple mode)
+					ProfileManagerState.window.activeCompositeId = hasComposite and compositeId or nil
 					LibAT.ProfileManager.UpdateWindowForMode()
 				end,
 			}
@@ -385,21 +285,15 @@ local function BuildAddonCategories()
 			local subCategories = {}
 			local sortedKeys = {}
 
-			-- "All" entry - if composite exists, show choice dialog; otherwise just export addon
+			-- "All" entry - sets up for full DB export/import
 			subCategories['ALL'] = {
 				name = 'All (Full DB)',
 				key = categoryKey .. '.ALL',
 				onSelect = function()
 					ProfileManagerState.window.activeAddonId = addonId
 					ProfileManagerState.window.activeNamespace = nil
-					ProfileManagerState.window.activeCompositeId = nil
-
-					-- If in export mode and composite exists, show choice dialog
-					if ProfileManagerState.window.mode == 'export' and hasComposite then
-						ProfileManager:ShowExportChoiceDialog(addonId, compositeId)
-					else
-						LibAT.ProfileManager.UpdateWindowForMode()
-					end
+					ProfileManagerState.window.activeCompositeId = hasComposite and compositeId or nil
+					LibAT.ProfileManager.UpdateWindowForMode()
 				end,
 			}
 			table.insert(sortedKeys, 'ALL')

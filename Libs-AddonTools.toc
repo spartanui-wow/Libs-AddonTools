@@ -65,6 +65,8 @@ Systems\Logger\LoggerOptions.lua
 Systems\ProfileManager\ProfileManagerUI.lua
 Systems\ProfileManager\Serialization.lua
 Systems\ProfileManager\ProfileManager.lua
+Systems\ProfileManager\BuiltInSystems.lua
+Systems\ProfileManager\Composite.lua
 Systems\ProfileManager\AddonDiscovery.lua
 
 # Setup Wizard System
