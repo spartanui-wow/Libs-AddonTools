@@ -32,6 +32,9 @@ local ProfileManagerState = {
 	nextAddonId = 1,
 }
 
+-- Expose state for other ProfileManager modules (Composite, UI, etc.)
+ProfileManager.ProfileManagerState = ProfileManagerState
+
 ----------------------------------------------------------------------------------------------------
 -- External API - LibAT.ProfileManager (for third-party addons)
 ----------------------------------------------------------------------------------------------------
@@ -119,6 +122,118 @@ function ProfileManager:ShowExport(addonId, namespace)
 		return
 	end
 
+	-- Check if this addon has a registered composite
+	local compositeId = self:GetCompositeForAddon(addonId)
+	if compositeId and not namespace then
+		-- Offer choice between single-addon and composite export
+		local composite = self:GetComposite(compositeId)
+		if composite then
+			-- Create choice dialog
+			local choiceWindow = LibAT.UI.CreateWindow({
+				name = 'LibAT_ExportChoice',
+				title = 'Export Options',
+				width = 450,
+				height = 200,
+			})
+
+			local question = choiceWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+			question:SetPoint('TOP', 0, -30)
+			question:SetText('What would you like to export?')
+
+			local buttonFrame = CreateFrame('Frame', nil, choiceWindow)
+			buttonFrame:SetPoint('CENTER', 0, -10)
+			buttonFrame:SetSize(400, 80)
+
+			-- Single-addon export button
+			local singleButton = LibAT.UI.CreateButton(buttonFrame, 180, 60, ProfileManagerState.registeredAddons[addonId].displayName .. '\n|cff888888(addon only)|r')
+			singleButton:SetPoint('LEFT', 0, 0)
+			singleButton:SetScript('OnClick', function()
+				choiceWindow:Hide()
+				self:ShowSingleAddonExport(addonId, namespace)
+			end)
+
+			-- Composite export button
+			local compositeButton = LibAT.UI.CreateButton(buttonFrame, 180, 60, composite.displayName .. '\n|cff888888(full profile)|r')
+			compositeButton:SetPoint('RIGHT', 0, 0)
+			compositeButton:SetScript('OnClick', function()
+				choiceWindow:Hide()
+				self:ShowCompositeExport(compositeId)
+			end)
+
+			choiceWindow:Show()
+			return
+		end
+	end
+
+	-- No composite or namespace specified - use single-addon export
+	self:ShowSingleAddonExport(addonId, namespace)
+end
+
+---Show export choice dialog (addon-only vs full stack with dependencies)
+---@param addonId string The addon ID
+---@param compositeId string The composite ID
+function ProfileManager:ShowExportChoiceDialog(addonId, compositeId)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	local composite = self:GetComposite(compositeId)
+	if not addon or not composite then
+		return
+	end
+
+	-- Create choice dialog
+	local choiceWindow = LibAT.UI.CreateWindow({
+		name = 'LibAT_ExportChoice',
+		title = 'Export ' .. addon.displayName,
+		width = 500,
+		height = 250,
+	})
+
+	local question = choiceWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+	question:SetPoint('TOP', 0, -30)
+	question:SetText('What would you like to export?')
+
+	local buttonFrame = CreateFrame('Frame', nil, choiceWindow)
+	buttonFrame:SetPoint('CENTER', 0, -10)
+	buttonFrame:SetSize(460, 100)
+
+	-- Single-addon export button (left)
+	local singleButton = LibAT.UI.CreateButton(buttonFrame, 220, 80, addon.displayName .. ' Only\n|cff888888(addon settings only)|r')
+	singleButton:SetPoint('LEFT', 0, 0)
+	singleButton:SetScript('OnClick', function()
+		choiceWindow:Hide()
+		self:ShowSingleAddonExport(addonId, nil)
+	end)
+
+	-- Build component list for composite button label
+	local componentNames = {}
+	for _, component in ipairs(composite.components) do
+		if component.isAvailable() then
+			-- Use short names
+			if component.id == 'bartender4' then
+				table.insert(componentNames, 'Bartender4')
+			elseif component.id == 'editmode' then
+				table.insert(componentNames, 'Edit Mode')
+			else
+				table.insert(componentNames, component.displayName)
+			end
+		end
+	end
+	local componentList = table.concat(componentNames, ', ')
+
+	-- Composite export button (right)
+	local compositeButton = LibAT.UI.CreateButton(buttonFrame, 220, 80, 'Full ' .. addon.displayName .. ' Stack\n|cff888888(' .. addon.displayName .. ', ' .. componentList .. ')|r')
+	compositeButton:SetPoint('RIGHT', 0, 0)
+	compositeButton:SetScript('OnClick', function()
+		choiceWindow:Hide()
+		self:ShowCompositeExport(compositeId)
+	end)
+
+	choiceWindow:Show()
+end
+
+---Navigate to a specific addon in single-addon export mode (internal)
+---@param addonId string The unique ID of the addon
+---@param namespace string|nil Optional specific namespace to export
+function ProfileManager:ShowSingleAddonExport(addonId, namespace)
 	if not ProfileManagerState.window then
 		local success, err = pcall(LibAT.ProfileManager.CreateWindow)
 		if not success then
@@ -140,17 +255,24 @@ function ProfileManager:ShowExport(addonId, namespace)
 	ProfileManagerState.window.activeAddonId = addonId
 	ProfileManagerState.window.activeNamespace = namespace
 
-	-- Build navigation key
-	local navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
+	-- Build navigation key — leaf categories (no namespaces) use the category key directly
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	local hasNamespaces = addon and addon.namespaces and #addon.namespaces > 0
+	local navKey
+	if hasNamespaces or namespace then
+		navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
+	else
+		navKey = 'Addons.' .. addonId
+	end
 
-	-- Update navigation tree and auto-expand the addon's category
+	-- Update navigation tree and auto-expand the addon's category (if it has subcategories)
 	if ProfileManagerState.window.NavTree then
 		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.ProfileManager.BuildNavigationTree()
 
-		-- Auto-expand the category so the selected item is visible
+		-- Auto-expand the category so the selected item is visible (only for non-leaf)
 		local categories = ProfileManagerState.window.NavTree.config.categories
-		if categories[addonId] then
+		if categories[addonId] and not categories[addonId].isLeaf then
 			categories[addonId].expanded = true
 			LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
 		end
@@ -183,17 +305,24 @@ function ProfileManager:ShowImport(addonId, namespace)
 	ProfileManagerState.window.activeAddonId = addonId
 	ProfileManagerState.window.activeNamespace = namespace
 
-	-- Build navigation key
-	local navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
+	-- Build navigation key — leaf categories (no namespaces) use the category key directly
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	local hasNamespaces = addon and addon.namespaces and #addon.namespaces > 0
+	local navKey
+	if hasNamespaces or namespace then
+		navKey = 'Addons.' .. addonId .. '.' .. (namespace or 'ALL')
+	else
+		navKey = 'Addons.' .. addonId
+	end
 
-	-- Update navigation tree and auto-expand the addon's category
+	-- Update navigation tree and auto-expand the addon's category (if it has subcategories)
 	if ProfileManagerState.window.NavTree then
 		ProfileManagerState.window.NavTree.config.activeKey = navKey
 		LibAT.ProfileManager.BuildNavigationTree()
 
-		-- Auto-expand the category so the selected item is visible
+		-- Auto-expand the category so the selected item is visible (only for non-leaf)
 		local categories = ProfileManagerState.window.NavTree.config.categories
-		if categories[addonId] then
+		if categories[addonId] and not categories[addonId].isLeaf then
 			categories[addonId].expanded = true
 			LibAT.UI.BuildNavigationTree(ProfileManagerState.window.NavTree)
 		end
@@ -230,65 +359,100 @@ local function BuildAddonCategories()
 		-- Check if addon has namespaces
 		local hasNamespaces = addon.namespaces and #addon.namespaces > 0
 
-		local subCategories = {}
-		local sortedKeys = {}
+		-- Check if addon has a registered composite
+		local compositeId = ProfileManager:GetCompositeForAddon(addonId)
+		local hasComposite = compositeId and ProfileManager:GetComposite(compositeId) ~= nil
 
-		-- "All" entry - full DB export/import
-		subCategories['ALL'] = {
-			name = 'All (Full DB)',
-			key = categoryKey .. '.ALL',
-			onSelect = function()
-				ProfileManagerState.window.activeAddonId = addonId
-				ProfileManagerState.window.activeNamespace = nil
-				LibAT.ProfileManager.UpdateWindowForMode()
-			end,
-		}
-		table.insert(sortedKeys, 'ALL')
+		-- Simple addons (no namespaces, no composite) are leaf categories — clicking them
+		-- directly opens the export/import screen without needing to expand subcategories
+		if not hasNamespaces and not hasComposite then
+			categories[addonId] = {
+				name = addon.displayName,
+				key = categoryKey,
+				expanded = false,
+				icon = addon.icon,
+				isToken = addon.autoDiscovered or false,
+				isLeaf = true,
+				subCategories = {},
+				sortedKeys = {},
+				onSelect = function()
+					ProfileManagerState.window.activeAddonId = addonId
+					ProfileManagerState.window.activeNamespace = nil
+					ProfileManagerState.window.activeCompositeId = nil
+					LibAT.ProfileManager.UpdateWindowForMode()
+				end,
+			}
+		else
+			-- Complex addons with namespaces or composites get full subcategory tree
+			local subCategories = {}
+			local sortedKeys = {}
 
-		-- "Core DB" entry - base profile data only
-		subCategories['__COREDB__'] = {
-			name = 'Core DB',
-			key = categoryKey .. '.__COREDB__',
-			onSelect = function()
-				ProfileManagerState.window.activeAddonId = addonId
-				ProfileManagerState.window.activeNamespace = '__COREDB__'
-				LibAT.ProfileManager.UpdateWindowForMode()
-			end,
-		}
-		table.insert(sortedKeys, '__COREDB__')
+			-- "All" entry - if composite exists, show choice dialog; otherwise just export addon
+			subCategories['ALL'] = {
+				name = 'All (Full DB)',
+				key = categoryKey .. '.ALL',
+				onSelect = function()
+					ProfileManagerState.window.activeAddonId = addonId
+					ProfileManagerState.window.activeNamespace = nil
+					ProfileManagerState.window.activeCompositeId = nil
 
-		-- Individual namespaces (sorted alphabetically)
-		if hasNamespaces then
-			local sortedNamespaces = {}
-			for _, ns in ipairs(addon.namespaces) do
-				table.insert(sortedNamespaces, ns)
-			end
-			table.sort(sortedNamespaces)
-
-			for _, ns in ipairs(sortedNamespaces) do
-				subCategories[ns] = {
-					name = ns,
-					key = categoryKey .. '.' .. ns,
-					onSelect = function()
-						ProfileManagerState.window.activeAddonId = addonId
-						ProfileManagerState.window.activeNamespace = ns
+					-- If in export mode and composite exists, show choice dialog
+					if ProfileManagerState.window.mode == 'export' and hasComposite then
+						ProfileManager:ShowExportChoiceDialog(addonId, compositeId)
+					else
 						LibAT.ProfileManager.UpdateWindowForMode()
-					end,
-				}
-				table.insert(sortedKeys, ns)
-			end
-		end
+					end
+				end,
+			}
+			table.insert(sortedKeys, 'ALL')
 
-		-- Create main category
-		categories[addonId] = {
-			name = addon.displayName,
-			key = categoryKey,
-			expanded = false,
-			icon = addon.icon,
-			isToken = addon.autoDiscovered or false,
-			subCategories = subCategories,
-			sortedKeys = sortedKeys,
-		}
+			-- "Core DB" entry - base profile data only
+			subCategories['__COREDB__'] = {
+				name = 'Core DB',
+				key = categoryKey .. '.__COREDB__',
+				onSelect = function()
+					ProfileManagerState.window.activeAddonId = addonId
+					ProfileManagerState.window.activeNamespace = '__COREDB__'
+					ProfileManagerState.window.activeCompositeId = nil
+					LibAT.ProfileManager.UpdateWindowForMode()
+				end,
+			}
+			table.insert(sortedKeys, '__COREDB__')
+
+			-- Individual namespaces (sorted alphabetically)
+			if hasNamespaces then
+				local sortedNamespaces = {}
+				for _, ns in ipairs(addon.namespaces) do
+					table.insert(sortedNamespaces, ns)
+				end
+				table.sort(sortedNamespaces)
+
+				for _, ns in ipairs(sortedNamespaces) do
+					subCategories[ns] = {
+						name = ns,
+						key = categoryKey .. '.' .. ns,
+						onSelect = function()
+							ProfileManagerState.window.activeAddonId = addonId
+							ProfileManagerState.window.activeNamespace = ns
+							ProfileManagerState.window.activeCompositeId = nil
+							LibAT.ProfileManager.UpdateWindowForMode()
+						end,
+					}
+					table.insert(sortedKeys, ns)
+				end
+			end
+
+			-- Create main category with subcategories
+			categories[addonId] = {
+				name = addon.displayName,
+				key = categoryKey,
+				expanded = false,
+				icon = addon.icon,
+				isToken = addon.autoDiscovered or false,
+				subCategories = subCategories,
+				sortedKeys = sortedKeys,
+			}
+		end
 	end
 
 	return categories
@@ -310,6 +474,12 @@ function ProfileManager:DoExport()
 	-- Check if an addon is selected
 	if not ProfileManagerState.window.activeAddonId or not ProfileManagerState.registeredAddons[ProfileManagerState.window.activeAddonId] then
 		LibAT:Print('|cffff0000Error:|r No addon selected for export')
+		return
+	end
+
+	-- Check if this is composite mode
+	if ProfileManagerState.window.activeNamespace == '__COMPOSITE__' and ProfileManagerState.window.activeCompositeId then
+		self:ShowCompositeExport(ProfileManagerState.window.activeCompositeId)
 		return
 	end
 
@@ -467,6 +637,13 @@ function ProfileManager:DoImport()
 
 	if not importData then
 		LibAT:Print('|cffff0000Invalid profile data:|r ' .. tostring(decodeErr))
+		return
+	end
+
+	-- Detect composite format
+	if importData.format == 'ProfileManager_Composite' then
+		-- Route to composite import
+		self:ShowCompositeImport(dataText)
 		return
 	end
 

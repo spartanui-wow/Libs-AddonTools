@@ -10,6 +10,7 @@ local LibAT = LibAT
 ---@field key string Unique category key
 ---@field expanded boolean Whether category is expanded
 ---@field isToken? boolean Use token/blue styling (for external addons)
+---@field isLeaf? boolean Leaf category with no subcategories — acts as direct selection
 ---@field subCategories table<string, NavSubCategory> Sub-categories
 ---@field sortedKeys string[] Sorted subcategory keys
 ---@field button? Frame Category button reference
@@ -134,68 +135,100 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 	-- Build tree structure
 	for _, categoryKey in ipairs(sortedCategoryKeys) do
 		local categoryData = categories[categoryKey]
-
-		-- Count total items in category
-		local subCategoryCount = 0
-		if categoryData.subCategories then
-			for _, subCategoryData in pairs(categoryData.subCategories) do
-				subCategoryCount = subCategoryCount + 1
-				if subCategoryData.subSubCategories then
-					for _, _ in pairs(subCategoryData.subSubCategories) do
-						subCategoryCount = subCategoryCount + 1
-					end
-				end
-			end
-		end
+		local isLeaf = categoryData.isLeaf
 
 		-- Create category button
 		local categoryButton = LibAT.UI.CreateFilterButton(treeContainer)
 		categoryButton:SetPoint('TOPLEFT', treeContainer, 'TOPLEFT', 3, yOffset)
 
-		-- Setup category button styling
-		local categoryInfo = {
-			type = 'category',
-			name = categoryData.name .. ' (' .. subCategoryCount .. ')',
-			categoryIndex = categoryKey,
-			isToken = categoryData.isToken or false,
-			selected = (config.activeKey == categoryKey),
-		}
-		LibAT.UI.SetupFilterButton(categoryButton, categoryInfo)
+		if isLeaf then
+			-- Leaf category: no subcategories, acts as a direct selection button
+			local categoryInfo = {
+				type = 'category',
+				name = categoryData.name,
+				categoryIndex = categoryKey,
+				isToken = categoryData.isToken or false,
+				selected = (config.activeKey == categoryData.key),
+			}
+			LibAT.UI.SetupFilterButton(categoryButton, categoryInfo)
 
-		-- Add expand/collapse indicator
-		categoryButton.indicator = categoryButton:CreateTexture(nil, 'OVERLAY')
-		categoryButton.indicator:SetSize(15, 15)
-		categoryButton.indicator:SetPoint('LEFT', categoryButton, 'LEFT', 2, 0)
-		if categoryData.expanded then
-			categoryButton.indicator:SetAtlas('uitools-icon-minimize')
+			-- Override text color for gold category headers
+			categoryButton.Text:SetTextColor(1, 0.82, 0)
+
+			-- Leaf category click handler — direct selection
+			categoryButton:SetScript('OnClick', function(self)
+				config.activeKey = categoryData.key
+
+				-- Call custom handler if provided
+				if categoryData.onSelect then
+					categoryData.onSelect(categoryKey, categoryData)
+				end
+				if config.onCategoryClick then
+					config.onCategoryClick(categoryKey, categoryData)
+				end
+
+				-- Rebuild tree to update selection highlighting
+				LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+			end)
 		else
-			categoryButton.indicator:SetAtlas('uitools-icon-plus')
-		end
+			-- Expandable category with subcategories
+			-- Count total items in category
+			local subCategoryCount = 0
+			if categoryData.subCategories then
+				for _, subCategoryData in pairs(categoryData.subCategories) do
+					subCategoryCount = subCategoryCount + 1
+					if subCategoryData.subSubCategories then
+						for _, _ in pairs(subCategoryData.subSubCategories) do
+							subCategoryCount = subCategoryCount + 1
+						end
+					end
+				end
+			end
 
-		-- Override text color for gold category headers
-		categoryButton.Text:SetTextColor(1, 0.82, 0)
+			local categoryInfo = {
+				type = 'category',
+				name = categoryData.name .. ' (' .. subCategoryCount .. ')',
+				categoryIndex = categoryKey,
+				isToken = categoryData.isToken or false,
+				selected = (config.activeKey == categoryKey),
+			}
+			LibAT.UI.SetupFilterButton(categoryButton, categoryInfo)
 
-		-- Category button click handler
-		categoryButton:SetScript('OnClick', function(self)
-			categoryData.expanded = not categoryData.expanded
-
+			-- Add expand/collapse indicator
+			categoryButton.indicator = categoryButton:CreateTexture(nil, 'OVERLAY')
+			categoryButton.indicator:SetSize(15, 15)
+			categoryButton.indicator:SetPoint('LEFT', categoryButton, 'LEFT', 2, 0)
 			if categoryData.expanded then
-				self.indicator:SetAtlas('uitools-icon-minimize')
+				categoryButton.indicator:SetAtlas('uitools-icon-minimize')
 			else
-				self.indicator:SetAtlas('uitools-icon-plus')
+				categoryButton.indicator:SetAtlas('uitools-icon-plus')
 			end
 
-			-- Call custom handler if provided
-			if categoryData.onSelect then
-				categoryData.onSelect(categoryKey, categoryData)
-			end
-			if config.onCategoryClick then
-				config.onCategoryClick(categoryKey, categoryData)
-			end
+			-- Override text color for gold category headers
+			categoryButton.Text:SetTextColor(1, 0.82, 0)
 
-			-- Rebuild tree
-			LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
-		end)
+			-- Expandable category click handler
+			categoryButton:SetScript('OnClick', function(self)
+				categoryData.expanded = not categoryData.expanded
+
+				if categoryData.expanded then
+					self.indicator:SetAtlas('uitools-icon-minimize')
+				else
+					self.indicator:SetAtlas('uitools-icon-plus')
+				end
+
+				-- Call custom handler if provided
+				if categoryData.onSelect then
+					categoryData.onSelect(categoryKey, categoryData)
+				end
+				if config.onCategoryClick then
+					config.onCategoryClick(categoryKey, categoryData)
+				end
+
+				-- Rebuild tree
+				LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
+			end)
+		end
 
 		-- Standard hover effects
 		categoryButton:SetScript('OnEnter', function(self)
@@ -209,8 +242,8 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 		table.insert(scrollFrame.categoryButtons, categoryButton)
 		yOffset = yOffset - (buttonHeight + 1)
 
-		-- Create subcategories if category is expanded
-		if categoryData.expanded and categoryData.sortedKeys then
+		-- Create subcategories if category is expanded (never for leaf categories)
+		if not isLeaf and categoryData.expanded and categoryData.sortedKeys then
 			yOffset = LibAT.UI.BuildSubCategories(scrollFrame, treeContainer, categoryData, yOffset, buttonHeight, config, sortedCategoryKeys)
 		end
 	end
