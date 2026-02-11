@@ -248,3 +248,224 @@ ProfileManager.RegisterDiscoveryAdapter('libs-databar', {
 		return ProfileManager.WrapAceDBSavedVariables('LibsDataBarDB')
 	end,
 })
+
+----------------------------------------------------------------------------------------------------
+-- Popular AceDB-Based Addon Discovery Adapters
+----------------------------------------------------------------------------------------------------
+
+-- Details! Damage Meter (custom profile system, not AceDB)
+-- SavedVariables: _detalhes_global (profiles stored in __profiles subtable)
+ProfileManager.RegisterDiscoveryAdapter('details', {
+	display = 'Details! Damage Meter',
+	isReady = function()
+		return type(_G._detalhes_global) == 'table' and type(_G._detalhes_global.__profiles) == 'table'
+	end,
+	getDatabase = function()
+		local sv = _G._detalhes_global
+		if type(sv) ~= 'table' or type(sv.__profiles) ~= 'table' then
+			return nil
+		end
+
+		-- Details stores profiles in _detalhes_global.__profiles[profileName]
+		-- Wrap into AceDB-compatible structure
+		local wrapper = {
+			sv = {
+				profiles = sv.__profiles,
+			},
+			keys = { profile = 'Default' },
+		}
+
+		return wrapper
+	end,
+})
+
+-- TomTom (waypoint navigation - AceDB)
+-- SavedVariables: TomTomDB
+ProfileManager.RegisterDiscoveryAdapter('tomtom', {
+	display = 'TomTom',
+	isReady = function()
+		return type(_G.TomTomDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('TomTomDB')
+	end,
+	getNamespaces = function()
+		local sv = _G.TomTomDB
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
+
+-- Mapster (world map enhancements - AceDB)
+-- SavedVariables: MapsterDB
+ProfileManager.RegisterDiscoveryAdapter('mapster', {
+	display = 'Mapster',
+	isReady = function()
+		return type(_G.MapsterDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('MapsterDB')
+	end,
+	getNamespaces = function()
+		local sv = _G.MapsterDB
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
+
+-- Angrier World Quests (world quest list - AceDB)
+-- SavedVariables: AngrierWorldQuestsDB
+ProfileManager.RegisterDiscoveryAdapter('angrierworldquests', {
+	display = 'Angrier World Quests',
+	isReady = function()
+		return type(_G.AngrierWorldQuestsDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('AngrierWorldQuestsDB')
+	end,
+})
+
+----------------------------------------------------------------------------------------------------
+-- Additional Popular AceDB-Based Addon Discovery Adapters
+----------------------------------------------------------------------------------------------------
+
+-- Plater Nameplates (nameplate addon)
+-- SavedVariables: PlaterDB
+ProfileManager.RegisterDiscoveryAdapter('plater', {
+	display = 'Plater Nameplates',
+	isReady = function()
+		return type(_G.PlaterDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('PlaterDB')
+	end,
+	getNamespaces = function()
+		local sv = _G.PlaterDB
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
+
+-- TidyPlates: Threat Plates (nameplate addon - AceDB)
+-- SavedVariables: TidyPlatesThreat
+ProfileManager.RegisterDiscoveryAdapter('tidyplates-threatplates', {
+	display = 'Threat Plates',
+	isReady = function()
+		return type(_G.TidyPlatesThreat) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('TidyPlatesThreat')
+	end,
+	getNamespaces = function()
+		local sv = _G.TidyPlatesThreat
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
+
+-- BigWigs (boss mod - AceDB)
+-- SavedVariables: BigWigs3DB
+ProfileManager.RegisterDiscoveryAdapter('bigwigs', {
+	display = 'BigWigs',
+	isReady = function()
+		return type(_G.BigWigs3DB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('BigWigs3DB')
+	end,
+	getNamespaces = function()
+		local sv = _G.BigWigs3DB
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
+
+-- Bazooka (data broker display - AceDB)
+-- SavedVariables: BazookaDB
+ProfileManager.RegisterDiscoveryAdapter('bazooka', {
+	display = 'Bazooka',
+	isReady = function()
+		return type(_G.BazookaDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('BazookaDB')
+	end,
+	getNamespaces = function()
+		local sv = _G.BazookaDB
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
+
+-- HandyNotes (map pins framework - AceDB)
+-- SavedVariables: HandyNotesDB
+ProfileManager.RegisterDiscoveryAdapter('handynotes', {
+	display = 'HandyNotes',
+	isReady = function()
+		return type(_G.HandyNotesDB) == 'table'
+	end,
+	getDatabase = function()
+		return ProfileManager.WrapAceDBSavedVariables('HandyNotesDB')
+	end,
+	getNamespaces = function()
+		local sv = _G.HandyNotesDB
+		if sv and sv.namespaces then
+			local ns = {}
+			for name in pairs(sv.namespaces) do
+				if name ~= 'LibDualSpec-1.0' then
+					table.insert(ns, name)
+				end
+			end
+			table.sort(ns)
+			return #ns > 0 and ns or nil
+		end
+	end,
+})
