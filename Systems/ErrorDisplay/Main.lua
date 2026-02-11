@@ -153,8 +153,27 @@ function ErrorDisplay:Initialize()
 	-- Register with LibDBIcon for minimap button
 	-- Ensure minimapIcon table exists in db
 	if not ErrorDisplay.db.minimapIcon then
-		ErrorDisplay.db.minimapIcon = { hide = false }
+		ErrorDisplay.db.minimapIcon = { mode = 'errors' }
 	end
+
+	-- Migrate old boolean hide field to new mode field
+	if ErrorDisplay.db.minimapIcon.mode == nil then
+		if ErrorDisplay.db.minimapIcon.hide then
+			ErrorDisplay.db.minimapIcon.mode = 'hide'
+		else
+			ErrorDisplay.db.minimapIcon.mode = 'errors'
+		end
+	end
+
+	-- Set initial hide state for LibDBIcon registration based on mode
+	-- 'errors' mode starts hidden (shown later by UpdateMinimapIcon if errors exist)
+	local mode = ErrorDisplay.db.minimapIcon.mode
+	if mode == 'hide' or mode == 'errors' then
+		ErrorDisplay.db.minimapIcon.hide = true
+	else
+		ErrorDisplay.db.minimapIcon.hide = false
+	end
+
 	icon:Register(MinimapIconName, ldbObject, ErrorDisplay.db.minimapIcon)
 
 	-- Create the options panel
@@ -193,10 +212,35 @@ ErrorDisplay.CloseErrorWindow = function()
 	ErrorDisplay.BugWindow:CloseErrorWindow()
 end
 
--- Add a function to update the minimap icon
+-- Apply minimap icon visibility based on current mode setting
+function ErrorDisplay:ApplyMinimapIconVisibility()
+	if not ErrorDisplay.icon or not ErrorDisplay.db.minimapIcon then
+		return
+	end
+
+	local mode = ErrorDisplay.db.minimapIcon.mode or 'errors'
+
+	if mode == 'hide' then
+		ErrorDisplay.db.minimapIcon.hide = true
+		ErrorDisplay.icon:Hide(MinimapIconName)
+	elseif mode == 'show' then
+		ErrorDisplay.db.minimapIcon.hide = false
+		ErrorDisplay.icon:Show(MinimapIconName)
+	elseif mode == 'errors' then
+		local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
+		local hasErrors = errorsCurrent and #errorsCurrent > 0
+		ErrorDisplay.db.minimapIcon.hide = not hasErrors
+		if hasErrors then
+			ErrorDisplay.icon:Show(MinimapIconName)
+		else
+			ErrorDisplay.icon:Hide(MinimapIconName)
+		end
+	end
+end
+
+-- Update the minimap icon state and visibility
 function ErrorDisplay:UpdateMinimapIcon()
 	local errorsCurrent = ErrorDisplay.ErrorHandler:GetErrors(ErrorDisplay.ErrorHandler:GetCurrentSession())
-	local errorsTotal = #ErrorDisplay.ErrorHandler:GetErrors()
 
 	-- Update LDB text with current session error count
 	if ldbObject then
@@ -211,6 +255,9 @@ function ErrorDisplay:UpdateMinimapIcon()
 			ldbObject.icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png'
 		end
 	end
+
+	-- Show/hide icon based on mode
+	ErrorDisplay:ApplyMinimapIconVisibility()
 end
 
 -- Initialize when all dependencies are ready

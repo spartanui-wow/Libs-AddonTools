@@ -238,7 +238,7 @@ function LibAT:OnInitialize()
 				autoPopup = false,
 				chatframe = true,
 				fontSize = 12,
-				minimapIcon = { hide = false, minimapPos = 97.66349921766368 },
+				minimapIcon = { mode = 'errors', minimapPos = 97.66349921766368 },
 				ignoredErrors = {}, -- Store signatures of errors to ignore
 			},
 			profileManager = {

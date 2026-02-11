@@ -98,29 +98,27 @@ function ErrorDisplay.Config:CreatePanel()
 				end,
 			},
 			minimapIcon = {
-				name = 'Show Minimap Icon',
-				desc = 'Show or hide the minimap icon for error display.',
-				type = 'toggle',
+				name = 'Minimap Icon',
+				desc = 'Controls when the minimap icon appears.\n\nShow: Always visible.\nShow on errors: Only appears when errors exist in the current session.\nHide: Never shown.',
+				type = 'select',
 				order = 4,
+				values = {
+					['show'] = 'Show',
+					['errors'] = 'Show on errors',
+					['hide'] = 'Hide',
+				},
+				sorting = { 'show', 'errors', 'hide' },
 				get = function()
-					if ErrorDisplay.icon and ErrorDisplay.db.minimapIcon then
-						return not ErrorDisplay.db.minimapIcon.hide
+					if ErrorDisplay.db.minimapIcon then
+						return ErrorDisplay.db.minimapIcon.mode or 'errors'
 					end
-					return true
+					return 'errors'
 				end,
 				set = function(_, val)
-					-- Persist hide state to database
 					if ErrorDisplay.db.minimapIcon then
-						ErrorDisplay.db.minimapIcon.hide = not val
+						ErrorDisplay.db.minimapIcon.mode = val
 					end
-					-- Update icon visibility
-					if ErrorDisplay.icon then
-						if val then
-							ErrorDisplay.icon:Show(MinimapIconName)
-						else
-							ErrorDisplay.icon:Hide(MinimapIconName)
-						end
-					end
+					ErrorDisplay:ApplyMinimapIconVisibility()
 				end,
 			},
 			resetDefaults = {
