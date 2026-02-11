@@ -2,6 +2,7 @@
 ## Title: Lib's - Addon Tools
 ## IconTexture: Interface/Addons/Libs-AddonTools/Logo-Icon
 ## Version: 1.0.0
+## X-Curse-Project-ID: 1460024
 ## Author: wutname1
 ## SavedVariables: LibsAddonToolsDB, LibATErrorDisplayDB
 ## Category: Libraries
