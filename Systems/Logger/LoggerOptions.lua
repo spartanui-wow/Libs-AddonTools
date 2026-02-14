@@ -31,7 +31,7 @@ local function ValidateAndPurgeModulesDB()
 
 	-- Remove invalid entries
 	if #invalidEntries > 0 then
-		LibAT.Log('Purging ' .. #invalidEntries .. ' invalid entries from logger modules database', 'Logger', 'warning')
+		LibAT.Log('Purging ' .. #invalidEntries .. ' invalid entries from logger modules database', 'Libs - Addon Tools.Logger', 'warning')
 		for _, key in ipairs(invalidEntries) do
 			logger.DB.modules[key] = nil
 			if LoggerState.LogMessages[key] then
@@ -55,7 +55,7 @@ local function ValidateAndPurgeModulesDB()
 	end
 
 	if #invalidEntries > 0 then
-		LibAT.Log('Purging ' .. #invalidEntries .. ' invalid entries from logger moduleLogLevels database', 'Logger', 'warning')
+		LibAT.Log('Purging ' .. #invalidEntries .. ' invalid entries from logger moduleLogLevels database', 'Libs - Addon Tools.Logger', 'warning')
 		for _, key in ipairs(invalidEntries) do
 			logger.DB.moduleLogLevels[key] = nil
 			if LoggerState.ModuleLogLevels[key] then

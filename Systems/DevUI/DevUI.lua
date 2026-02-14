@@ -23,6 +23,7 @@ local TAB_CONFIG = {
 	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\errors.png' },
 	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' },
 	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' }, -- TODO: Create addons.png icon
+	{ key = 'Performance', tooltipText = 'Performance', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' }, -- TODO: Create performance.png icon
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -257,6 +258,7 @@ function DevUI:OnInitialize()
 	LibAT.DevUI.InitErrors(DevUI, DevUIState)
 	LibAT.DevUI.InitMacros(DevUI, DevUIState)
 	LibAT.DevUI.InitAddonManager(DevUI, DevUIState)
+	LibAT.DevUI.InitPerformance(DevUI, DevUIState)
 end
 
 function DevUI:OnEnable()
@@ -287,4 +289,9 @@ function DevUI:OnEnable()
 		DevUI.ShowTab(5)
 	end
 
+	SLASH_LIBATDEVPERF1 = '/perf'
+	SLASH_LIBATDEVPERF2 = '/performance'
+	SlashCmdList['LIBATDEVPERF'] = function()
+		DevUI.ShowTab(6)
+	end
 end

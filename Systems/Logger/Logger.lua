@@ -96,14 +96,17 @@ local function ParseLogSource(sourceName)
 
 	-- Check if this is part of a registered addon category hierarchy
 	for addonName, categoryData in pairs(LoggerState.AddonCategories) do
+		-- Escape magic characters in addon name for pattern matching
+		local escapedName = addonName:gsub('[%^%$%(%)%%%.%[%]%*%+%-%?]', '%%%1')
+
 		-- Check for three-level pattern: "AddonName.subCategory.subSubCategory"
-		local subCategory, subSubCategory = sourceName:match('^' .. addonName .. '%.([^%.]+)%.(.+)')
+		local subCategory, subSubCategory = sourceName:match('^' .. escapedName .. '%.([^%.]+)%.(.+)')
 		if subCategory and subSubCategory then
 			return addonName, subCategory, subSubCategory, 'subSubCategory'
 		end
 
 		-- Check for two-level pattern: "AddonName.subCategory"
-		local subCategoryOnly = sourceName:match('^' .. addonName .. '%.(.+)')
+		local subCategoryOnly = sourceName:match('^' .. escapedName .. '%.(.+)')
 		if subCategoryOnly then
 			return addonName, subCategoryOnly, nil, 'subCategory'
 		end
