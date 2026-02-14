@@ -540,6 +540,8 @@ function logger:OnInitialize()
 
 	-- Register options during OnInitialize so they're in the master table before LibAT:OnEnable registers with Blizzard
 	LibAT.Logger.AddOptions()
+
+	LibAT.InternalLog = LibAT.Logger.RegisterAddon('Libs - Addon Tools')
 end
 
 function logger:OnEnable()

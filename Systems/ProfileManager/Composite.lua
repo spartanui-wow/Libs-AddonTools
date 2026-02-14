@@ -57,7 +57,7 @@ function ProfileManager:RegisterComposite(config)
 	if not config or type(config) ~= 'table' then
 		local err = 'RegisterComposite: config must be a table'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -65,7 +65,7 @@ function ProfileManager:RegisterComposite(config)
 	if not config.id or type(config.id) ~= 'string' then
 		local err = 'RegisterComposite: config.id is required and must be a string'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -73,7 +73,7 @@ function ProfileManager:RegisterComposite(config)
 	if not config.displayName or type(config.displayName) ~= 'string' then
 		local err = 'RegisterComposite: config.displayName is required and must be a string'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -81,7 +81,7 @@ function ProfileManager:RegisterComposite(config)
 	if not config.primaryAddonId or type(config.primaryAddonId) ~= 'string' then
 		local err = 'RegisterComposite: config.primaryAddonId is required and must be a string'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -90,7 +90,7 @@ function ProfileManager:RegisterComposite(config)
 	if not ProfileManagerState.registeredAddons[config.primaryAddonId] then
 		local err = 'RegisterComposite: primaryAddonId "' .. config.primaryAddonId .. '" is not registered with ProfileManager'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -104,7 +104,7 @@ function ProfileManager:RegisterComposite(config)
 				table.insert(normalizedComponents, normalized)
 			else
 				if LibAT.Log then
-					LibAT.Log('Skipping invalid component in composite "' .. config.id .. '"', 'ProfileManager.Composite', 'warning')
+					LibAT.Log('Skipping invalid component in composite "' .. config.id .. '"', 'Libs - Addon Tools.ProfileManager.Composite', 'warning')
 				end
 			end
 		end
@@ -120,7 +120,11 @@ function ProfileManager:RegisterComposite(config)
 	}
 
 	if LibAT.Log then
-		LibAT.Log('Registered composite "' .. config.displayName .. '" (ID: ' .. config.id .. ') with ' .. #normalizedComponents .. ' components', 'ProfileManager.Composite', 'debug')
+		LibAT.Log(
+			'Registered composite "' .. config.displayName .. '" (ID: ' .. config.id .. ') with ' .. #normalizedComponents .. ' components',
+			'Libs - Addon Tools.ProfileManager.Composite',
+			'debug'
+		)
 	end
 
 	return true
@@ -137,7 +141,7 @@ function ProfileManager:AddToComposite(compositeId, component)
 	if not ProfileManagerState.composites[compositeId] then
 		local err = 'AddToComposite: Composite "' .. compositeId .. '" is not registered'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -147,7 +151,7 @@ function ProfileManager:AddToComposite(compositeId, component)
 	if not normalized then
 		local err = 'AddToComposite: Invalid component'
 		if LibAT.Log then
-			LibAT.Log(err, 'ProfileManager.Composite', 'error')
+			LibAT.Log(err, 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 		end
 		return false, err
 	end
@@ -157,7 +161,7 @@ function ProfileManager:AddToComposite(compositeId, component)
 	for _, existing in ipairs(composite.components) do
 		if existing.id == normalized.id then
 			if LibAT.Log then
-				LibAT.Log('Component "' .. normalized.id .. '" already exists in composite "' .. compositeId .. '"', 'ProfileManager.Composite', 'warning')
+				LibAT.Log('Component "' .. normalized.id .. '" already exists in composite "' .. compositeId .. '"', 'Libs - Addon Tools.ProfileManager.Composite', 'warning')
 			end
 			return true -- Not an error, just a no-op
 		end
@@ -167,7 +171,7 @@ function ProfileManager:AddToComposite(compositeId, component)
 	table.insert(composite.components, normalized)
 
 	if LibAT.Log then
-		LibAT.Log('Added component "' .. normalized.displayName .. '" to composite "' .. compositeId .. '"', 'ProfileManager.Composite', 'debug')
+		LibAT.Log('Added component "' .. normalized.displayName .. '" to composite "' .. compositeId .. '"', 'Libs - Addon Tools.ProfileManager.Composite', 'debug')
 	end
 
 	return true
@@ -324,7 +328,7 @@ local function ImportComponent(component, data)
 	-- Check if component is available
 	if not component.isAvailable() then
 		if LibAT.Log then
-			LibAT.Log('Skipping unavailable component: ' .. component.displayName, 'ProfileManager.Composite', 'info')
+			LibAT.Log('Skipping unavailable component: ' .. component.displayName, 'Libs - Addon Tools.ProfileManager.Composite', 'info')
 		end
 		return true -- Not an error, just skip
 	end
@@ -391,7 +395,7 @@ function ProfileManager:CreateCompositeExport(compositeId, selectedComponents)
 				compositeExport.included[component.id] = true
 			else
 				if LibAT.Log then
-					LibAT.Log('Skipping component "' .. component.displayName .. '": ' .. tostring(componentErr), 'ProfileManager.Composite', 'warning')
+					LibAT.Log('Skipping component "' .. component.displayName .. '": ' .. tostring(componentErr), 'Libs - Addon Tools.ProfileManager.Composite', 'warning')
 				end
 			end
 		end
@@ -467,13 +471,13 @@ function ProfileManager:ImportComposite(compositeData, options)
 				results.errorCount = results.errorCount + 1
 				results.componentResults[componentId] = { success = false, error = err }
 				if LibAT.Log then
-					LibAT.Log('Failed to import component "' .. component.displayName .. '": ' .. tostring(err), 'ProfileManager.Composite', 'error')
+					LibAT.Log('Failed to import component "' .. component.displayName .. '": ' .. tostring(err), 'Libs - Addon Tools.ProfileManager.Composite', 'error')
 				end
 			end
 		else
 			results.skippedCount = results.skippedCount + 1
 			if LibAT.Log then
-				LibAT.Log('Skipping unknown component: ' .. componentId, 'ProfileManager.Composite', 'warning')
+				LibAT.Log('Skipping unknown component: ' .. componentId, 'Libs - Addon Tools.ProfileManager.Composite', 'warning')
 			end
 		end
 	end
@@ -548,5 +552,5 @@ function ProfileManager:AnalyzeComposite(compositeData)
 end
 
 if LibAT.Log then
-	LibAT.Log('Composite module loaded', 'ProfileManager.Composite', 'debug')
+	LibAT.Log('Composite module loaded', 'Libs - Addon Tools.ProfileManager.Composite', 'debug')
 end

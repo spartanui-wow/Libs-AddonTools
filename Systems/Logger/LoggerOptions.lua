@@ -240,8 +240,8 @@ local function AddOptions()
 
 	logger.options = options
 
-	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.info('Registering Logger options')
+	if LibAT.InternalLog then
+		LibAT.InternalLog.info('Registering Logger options')
 	end
 
 	LibAT.Options:AddOptions(options, 'Logging', 'Libs-AddonTools')

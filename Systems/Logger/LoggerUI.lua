@@ -719,14 +719,20 @@ local function ClearCurrentLogs()
 		for moduleName in pairs(LoggerState.LogMessages) do
 			LoggerState.LogMessages[moduleName] = {}
 		end
-		print('|cFF00FF00SpartanUI Logging:|r All logs cleared.')
+		if LibAT.InternalLog then
+			LibAT.InternalLog.info('All logs cleared.')
+		end
 	else
 		-- Clear current module logs
 		if LoggerState.ActiveModule and LoggerState.LogMessages[LoggerState.ActiveModule] then
 			LoggerState.LogMessages[LoggerState.ActiveModule] = {}
-			print('|cFF00FF00SpartanUI Logging:|r Logs cleared for module: ' .. LoggerState.ActiveModule)
+			if LibAT.InternalLog then
+				LibAT.InternalLog.info('Logs cleared for module: ' .. LoggerState.ActiveModule)
+			end
 		else
-			print('|cFFFFFF00SpartanUI Logging:|r No active module selected.')
+			if LibAT.InternalLog then
+				LibAT.InternalLog.warning('No active module selected.')
+			end
 		end
 	end
 
@@ -844,7 +850,9 @@ local function ExportCurrentLogs()
 	LoggerState.LogWindow.ExportFrame.EditBox:SetFocus()
 	LoggerState.LogWindow.ExportFrame.EditBox:HighlightText()
 
-	print('|cFF00FF00SpartanUI Logging:|r Logs exported. Use Ctrl+A and Ctrl+C to copy.')
+	if LibAT.InternalLog then
+		LibAT.InternalLog.info('Logs exported. Use Ctrl+A and Ctrl+C to copy.')
+	end
 end
 
 LibAT.Logger.ExportCurrentLogs = ExportCurrentLogs

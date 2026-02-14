@@ -129,8 +129,8 @@ function LibAT.Options:AddOptions(options, name, parent)
 		return
 	end
 
-	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.debug('AddOptions called for: ' .. tostring(name))
+	if LibAT.InternalLog then
+		LibAT.InternalLog.debug('AddOptions called for: ' .. tostring(name))
 	end
 
 	-- Ensure it has a type
@@ -184,14 +184,14 @@ function LibAT.Options:ToggleOptions(path)
 	self:Init()
 
 	if not self.dialog or not self.registry then
-		if LibAT.Logger and LibAT.Logger.logger then
-			LibAT.Logger.logger.error('AceConfig not available')
+		if LibAT.InternalLog then
+			LibAT.InternalLog.error('AceConfig not available')
 		end
 		return
 	end
 
-	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.debug('Opening options panel')
+	if LibAT.InternalLog then
+		LibAT.InternalLog.debug('Opening options panel')
 	end
 
 	-- Try to open in Blizzard Settings panel first (modern API)
@@ -199,8 +199,8 @@ function LibAT.Options:ToggleOptions(path)
 	-- so it cannot be used during combat lockdown — fall through to standalone dialog instead
 	if Settings and Settings.OpenToCategory and not InCombatLockdown() then
 		if self.categoryID then
-			if LibAT.Logger and LibAT.Logger.logger then
-				LibAT.Logger.logger.debug('Opening Blizzard Settings with category ID: ' .. tostring(self.categoryID))
+			if LibAT.InternalLog then
+				LibAT.InternalLog.debug('Opening Blizzard Settings with category ID: ' .. tostring(self.categoryID))
 			end
 			Settings.OpenToCategory(self.categoryID)
 			return
@@ -208,8 +208,8 @@ function LibAT.Options:ToggleOptions(path)
 	end
 
 	-- Fallback: Open the AceConfig standalone frame
-	if LibAT.Logger and LibAT.Logger.logger then
-		LibAT.Logger.logger.debug('Opening standalone AceConfig window')
+	if LibAT.InternalLog then
+		LibAT.InternalLog.debug('Opening standalone AceConfig window')
 	end
 	self.dialog:Open('Libs-AddonTools')
 end

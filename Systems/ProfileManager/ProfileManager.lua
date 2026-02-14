@@ -83,7 +83,7 @@ function ProfileManager:RegisterAddon(config)
 	end
 
 	if LibAT.Log then
-		LibAT.Log('Registered addon "' .. config.name .. '" (ID: ' .. addonId .. ')', 'ProfileManager', 'debug')
+		LibAT.Log('Registered addon "' .. config.name .. '" (ID: ' .. addonId .. ')', 'Libs - Addon Tools.ProfileManager', 'debug')
 	end
 	return addonId
 end
@@ -746,8 +746,9 @@ function ProfileManager:Initialize()
 		end)
 	end)
 
-	LibAT:Debug('Profile Manager initialized - Use /profiles to open')
-	LibAT:Debug('Addons can register with: LibAT.ProfileManager:RegisterAddon({name = "MyAddon", db = MyAddonDB})')
+	if ProfileManager.logger then
+		ProfileManager.logger.info('Profile Manager initialized - Use /profiles to open')
+	end
 end
 
 ----------------------------------------------------------------------------------------------------

@@ -255,7 +255,7 @@ function ProfileManager:NormalizeComponent(component)
 		local builtIn = BuiltInSystems[component]
 		if not builtIn then
 			if LibAT.Log then
-				LibAT.Log('Unknown built-in system: ' .. component, 'ProfileManager.BuiltInSystems', 'warning')
+				LibAT.Log('Unknown built-in system: ' .. component, 'Libs - Addon Tools.ProfileManager.BuiltInSystems', 'warning')
 			end
 			return nil
 		end
@@ -276,7 +276,7 @@ function ProfileManager:NormalizeComponent(component)
 	if type(component) == 'table' then
 		if not component.id or not component.displayName then
 			if LibAT.Log then
-				LibAT.Log('Invalid component definition: missing id or displayName', 'ProfileManager.BuiltInSystems', 'error')
+				LibAT.Log('Invalid component definition: missing id or displayName', 'Libs - Addon Tools.ProfileManager.BuiltInSystems', 'error')
 			end
 			return nil
 		end
@@ -298,7 +298,7 @@ function ProfileManager:NormalizeComponent(component)
 
 	-- Invalid component type
 	if LibAT.Log then
-		LibAT.Log('Invalid component type: ' .. type(component), 'ProfileManager.BuiltInSystems', 'error')
+		LibAT.Log('Invalid component type: ' .. type(component), 'Libs - Addon Tools.ProfileManager.BuiltInSystems', 'error')
 	end
 	return nil
 end
@@ -324,8 +324,4 @@ function ProfileManager:GetAvailableBuiltInSystems()
 		end
 	end
 	return available
-end
-
-if LibAT.Log then
-	LibAT.Log('BuiltInSystems module loaded (' .. #ProfileManager:GetAllBuiltInSystemIds() .. ' systems registered)', 'ProfileManager.BuiltInSystems', 'debug')
 end

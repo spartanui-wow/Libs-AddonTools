@@ -140,7 +140,7 @@ function ProfileManager.DiscoverViaRegistry()
 					count = count + 1
 
 					if LibAT.Log then
-						LibAT.Log('Auto-discovered addon via registry: ' .. displayName, 'ProfileManager', 'debug')
+						LibAT.Log('Auto-discovered addon via registry: ' .. displayName, 'Libs - Addon Tools.ProfileManager', 'debug')
 					end
 				end
 			end
@@ -195,7 +195,7 @@ function ProfileManager.DiscoverAddons()
 					count = count + 1
 
 					if LibAT.Log then
-						LibAT.Log('Auto-discovered addon: ' .. adapter.display, 'ProfileManager', 'debug')
+						LibAT.Log('Auto-discovered addon: ' .. adapter.display, 'Libs - Addon Tools.ProfileManager', 'debug')
 					end
 				end
 			end

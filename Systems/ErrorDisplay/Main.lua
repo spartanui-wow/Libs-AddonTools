@@ -200,7 +200,9 @@ function ErrorDisplay:Initialize()
 		end)
 	end
 
-	LibAT:Debug('Error Display system initialized')
+	if ErrorDisplay.logger then
+		ErrorDisplay.logger.info('Error Display system initialized')
+	end
 end
 
 -- Expose global functions for external access
