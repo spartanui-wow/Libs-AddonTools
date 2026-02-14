@@ -21,7 +21,8 @@ local TAB_CONFIG = {
 	{ key = 'Logs', tooltipText = 'Logs', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\logs.png' },
 	{ key = 'CLI', tooltipText = 'CLI', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\cli.png' },
 	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\errors.png' },
-	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\macros.png' },
+	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' },
+	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' }, -- TODO: Create addons.png icon
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -255,6 +256,7 @@ function DevUI:OnInitialize()
 	LibAT.DevUI.InitCLI(DevUI, DevUIState)
 	LibAT.DevUI.InitErrors(DevUI, DevUIState)
 	LibAT.DevUI.InitMacros(DevUI, DevUIState)
+	LibAT.DevUI.InitAddonManager(DevUI, DevUIState)
 end
 
 function DevUI:OnEnable()
@@ -279,4 +281,10 @@ function DevUI:OnEnable()
 	SlashCmdList['LIBATDEVMACROS'] = function()
 		DevUI.ShowTab(4)
 	end
+
+	SLASH_LIBATDEVADDONS1 = '/addons'
+	SlashCmdList['LIBATDEVADDONS'] = function()
+		DevUI.ShowTab(5)
+	end
+
 end
