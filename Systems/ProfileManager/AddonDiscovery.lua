@@ -45,11 +45,117 @@ function ProfileManager.RegisterDiscoveryAdapter(key, adapter)
 	discoveryAdapters[key] = adapter
 end
 
+---Detect duplicate addon display names across all registered addons
+---@return table<string, boolean> duplicateNames Map of addon names that appear more than once
+function ProfileManager.GetDuplicateAddons()
+	local addonNames = {}
+	local duplicateNames = {}
+	local registeredAddons = ProfileManager:GetRegisteredAddons()
+
+	-- Count how many times each display name appears
+	for addonId, addon in pairs(registeredAddons) do
+		local name = addon.displayName
+		if addonNames[name] then
+			duplicateNames[name] = true
+		else
+			addonNames[name] = true
+		end
+	end
+
+	return duplicateNames
+end
+
+---Scan AceDB.db_registry for addons not covered by manual adapters
+---@return number count Number of newly discovered addons via registry
+function ProfileManager.DiscoverViaRegistry()
+	local count = 0
+
+	-- Get AceDB library
+	local AceDB = LibStub and LibStub('AceDB-3.0', true)
+	if not AceDB or not AceDB.db_registry then
+		return 0
+	end
+
+	-- Track duplicate names for suffix appending
+	local duplicateNames = ProfileManager.GetDuplicateAddons()
+
+	-- Scan registry for unknown addons
+	for db, _ in pairs(AceDB.db_registry) do
+		-- Only process root databases (not child namespaces)
+		if not db.parent then
+			-- Use issecurevariable to extract addon name from SavedVariables
+			local _, addonName = issecurevariable(db, 'sv')
+			if addonName and type(addonName) == 'string' then
+				-- Generate unique ID for this addon
+				local addonId = 'registry_' .. addonName
+
+				-- Skip if already registered (either via adapter or previous registry scan)
+				local registeredAddons = ProfileManager:GetRegisteredAddons()
+				if not registeredAddons[addonId] and not discoveredAddons[addonName] then
+					-- Get addon title from TOC or use addon name
+					local _, title = C_AddOns.GetAddOnInfo(addonName)
+					local displayName = title or addonName
+
+					-- Append SavedVariables suffix if duplicate name detected
+					if duplicateNames[displayName] then
+						-- Find the global SavedVariables name
+						local svName = ProfileManager.FindGlobal(db.sv)
+						if svName then
+							displayName = displayName .. ' (' .. svName .. ')'
+						end
+					end
+
+					-- Extract namespaces if available
+					local namespaces
+					if db.sv and db.sv.namespaces then
+						namespaces = {}
+						for name in pairs(db.sv.namespaces) do
+							-- Skip blacklisted namespaces (e.g., LibDualSpec debug DBs)
+							if name ~= 'LibDualSpec-1.0' then
+								table.insert(namespaces, name)
+							end
+						end
+						table.sort(namespaces)
+						if #namespaces == 0 then
+							namespaces = nil
+						end
+					end
+
+					-- Register with ProfileManager
+					ProfileManager:RegisterAddon({
+						id = addonId,
+						name = displayName,
+						db = db,
+						namespaces = namespaces,
+						metadata = { autoDiscovered = true, discoverySource = 'registry', originalAddonName = addonName },
+					})
+
+					-- Mark as auto-discovered for UI styling
+					registeredAddons = ProfileManager:GetRegisteredAddons()
+					if registeredAddons[addonId] then
+						registeredAddons[addonId].autoDiscovered = true
+					end
+
+					discoveredAddons[addonName] = addonId
+					count = count + 1
+
+					if LibAT.Log then
+						LibAT.Log('Auto-discovered addon via registry: ' .. displayName, 'ProfileManager', 'debug')
+					end
+				end
+			end
+		end
+	end
+
+	return count
+end
+
 ---Scan all registered adapters and auto-register any that are ready
 ---@return number count Number of newly discovered addons
 function ProfileManager.DiscoverAddons()
 	local count = 0
 
+	-- First pass: run manual adapters (they have richer metadata)
 	for key, adapter in pairs(discoveryAdapters) do
 		-- Skip if already discovered
 		if not discoveredAddons[key] then
@@ -96,6 +202,10 @@ function ProfileManager.DiscoverAddons()
 		end
 	end
 
+	-- Second pass: scan AceDB registry for addons not covered by adapters
+	local registryCount = ProfileManager.DiscoverViaRegistry()
+	count = count + registryCount
+
 	return count
 end
 
@@ -103,6 +213,37 @@ end
 ---@return table<string, DiscoveryAdapter>
 function ProfileManager.GetDiscoveryAdapters()
 	return discoveryAdapters
+end
+
+----------------------------------------------------------------------------------------------------
+-- Helper: Find Global Variable Name
+----------------------------------------------------------------------------------------------------
+
+-- Cache for FindGlobal results to avoid repeated lookups
+local globalNameCache = {}
+
+---Find the global variable name for a given value
+---@param value any The value to find in global namespace
+---@return string|nil globalName The name of the global variable, or nil if not found
+function ProfileManager.FindGlobal(value)
+	if not value then
+		return nil
+	end
+
+	-- Check cache first
+	if globalNameCache[value] then
+		return globalNameCache[value]
+	end
+
+	-- Scan global namespace
+	for k, v in pairs(_G) do
+		if value == v and type(k) == 'string' then
+			globalNameCache[value] = k
+			return k
+		end
+	end
+
+	return nil
 end
 
 ----------------------------------------------------------------------------------------------------
