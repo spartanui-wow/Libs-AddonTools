@@ -78,7 +78,7 @@ Systems\SetupWizard\SetupWizardUI.lua
 # Developer Tools System
 Systems\DeveloperTools\DevTools.lua
 
-# Developer UI System (tabbed: Logs, CLI, Errors, Macros)
+# Developer UI System (tabbed: Logs, CLI, Errors, Macros, Addons)
 Systems\DevUI\DevUI.lua
 Systems\DevUI\Tabs\Logs.lua
 Systems\DevUI\Tabs\CLI.lua
@@ -86,3 +86,21 @@ Systems\DevUI\Tabs\Errors.lua
 Systems\DevUI\Tabs\MacroIconSelectorMixin.lua
 Systems\DevUI\Tabs\MacroIconSelector.xml
 Systems\DevUI\Tabs\Macros.lua
+Systems\DevUI\Tabs\AddonManager.lua
+Systems\DevUI\Tabs\Performance.lua
+
+# AddonManager System
+Systems\AddonManager\_AddonManager.Definition.lua
+Systems\AddonManager\AddonManager.lua
+Systems\AddonManager\Core.lua
+Systems\AddonManager\Data\SpecialCases.lua
+Systems\AddonManager\Data\Metadata.lua
+Systems\AddonManager\Features\Search.lua
+Systems\AddonManager\Features\Categories.lua
+Systems\AddonManager\Features\Profiles.lua
+Systems\AddonManager\Features\Dependencies.lua
+Systems\AddonManager\Features\Compatibility.lua
+
+# Performance System
+Systems\Performance\_Performance.Definition.lua
+Systems\Performance\Performance.lua
