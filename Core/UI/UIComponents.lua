@@ -286,11 +286,16 @@ end
 ---@class LibAT.CheckboxContainer : Frame
 ---@field checkbox CheckButton The actual checkbox button
 ---@field Label FontString The label font string (if label provided)
----@field SetChecked fun(self: LibAT.CheckboxContainer, checked: boolean) Set checked state
----@field GetChecked fun(self: LibAT.CheckboxContainer): boolean Get checked state
+---@field Desc FontString|nil Optional description text below label
+---@field disabled boolean Whether the checkbox is disabled
+---@field tristate boolean|nil Whether tri-state mode is enabled
+---@field SetChecked fun(self: LibAT.CheckboxContainer, checked: boolean|nil) Set checked state (nil = indeterminate in tri-state)
+---@field GetChecked fun(self: LibAT.CheckboxContainer): boolean|nil Get checked state
 ---@field SetText fun(self: LibAT.CheckboxContainer, text: string) Set label text
----@field GetText fun(self: LibAT.CheckboxContainer): string Get label text
+---@field GetText fun(self: LibAT.CheckboxContainer): string|nil Get label text
 ---@field SetEnabled fun(self: LibAT.CheckboxContainer, enabled: boolean) Enable/disable the checkbox
+---@field SetDescription fun(self: LibAT.CheckboxContainer, desc: string|nil) Set/clear description text below label
+---@field SetTriState fun(self: LibAT.CheckboxContainer, enabled: boolean) Enable/disable tri-state mode
 ---@field HookScript fun(self: LibAT.CheckboxContainer, event: string, handler: function) Hook script on the checkbox
 ---@field SetScript fun(self: LibAT.CheckboxContainer, event: string, handler: function) Set script on the checkbox
 
@@ -298,61 +303,158 @@ end
 ---@param parent Frame Parent frame
 ---@param label? string Optional label text
 ---@param width? number Optional total width (default auto-calculated or 150)
----@param height? number Optional height (default 20)
+---@param height? number Optional height (default 24)
 ---@return LibAT.CheckboxContainer container Container frame with checkbox and label
 function LibAT.UI.CreateCheckbox(parent, label, width, height)
-	height = height or 20
+	height = height or 24
 
 	-- Create container frame
 	---@type LibAT.CheckboxContainer
 	local container = CreateFrame('Frame', nil, parent)
+	container.disabled = false
+	container.tristate = false
 
-	-- Create the actual checkbox inside container
-	local checkbox = CreateFrame('CheckButton', nil, container, 'UICheckButtonTemplate')
-	checkbox:SetSize(18, 18)
+	-- Create the actual checkbox inside container using custom textures (like AceGUI)
+	local checkbox = CreateFrame('CheckButton', nil, container)
+	checkbox:SetSize(24, 24)
 	checkbox:SetPoint('LEFT', container, 'LEFT', 0, 0)
 	container.checkbox = checkbox
 
+	-- Background texture
+	local checkbg = checkbox:CreateTexture(nil, 'ARTWORK')
+	checkbg:SetAllPoints()
+	checkbg:SetTexture(130755) -- Interface\\Buttons\\UI-CheckBox-Up
+	container.checkbg = checkbg
+
+	-- Check mark texture
+	local check = checkbox:CreateTexture(nil, 'OVERLAY')
+	check:SetAllPoints()
+	check:SetTexture(130751) -- Interface\\Buttons\\UI-CheckBox-Check
+	check:Hide()
+	container.check = check
+
+	-- Highlight texture (hover glow on checkbox area)
+	local highlight = checkbox:CreateTexture(nil, 'HIGHLIGHT')
+	highlight:SetTexture(130753) -- Interface\\Buttons\\UI-CheckBox-Highlight
+	highlight:SetBlendMode('ADD')
+	highlight:SetAllPoints()
+
 	-- Create label if provided
 	if label then
-		local labelText = container:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+		local labelText = container:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
 		labelText:SetText(label)
-		labelText:SetPoint('LEFT', checkbox, 'RIGHT', 2, 0)
+		labelText:SetJustifyH('LEFT')
+		labelText:SetHeight(18)
+		labelText:SetPoint('LEFT', checkbox, 'RIGHT', 0, 0)
 		labelText:SetTextColor(1, 1, 1)
 		container.Label = labelText
 
 		-- Calculate width if not provided
 		if not width then
 			local labelWidth = labelText:GetStringWidth()
-			width = 18 + 2 + labelWidth + 4 -- checkbox + gap + label + padding
+			width = 24 + labelWidth + 4 -- checkbox + label + padding
 		end
 
 		-- Set label to fill remaining space
 		labelText:SetPoint('RIGHT', container, 'RIGHT', 0, 0)
 	else
-		width = width or 18
+		width = width or 24
 	end
 
 	container:SetSize(width, height)
 
-	-- Extend click detection to the entire container
+	-- Click handling on the entire container (label + checkbox area)
 	container:EnableMouse(true)
+
 	container:SetScript('OnMouseDown', function()
-		checkbox:Click()
+		if container.disabled then
+			return
+		end
+		-- Text press feedback: shift label down 1px
+		if container.Label then
+			container.Label:ClearAllPoints()
+			container.Label:SetPoint('LEFT', checkbox, 'RIGHT', 1, -1)
+			container.Label:SetPoint('RIGHT', container, 'RIGHT', 0, 0)
+		end
 	end)
+
+	container:SetScript('OnMouseUp', function()
+		if container.disabled then
+			return
+		end
+
+		-- Restore label position
+		if container.Label then
+			container.Label:ClearAllPoints()
+			container.Label:SetPoint('LEFT', checkbox, 'RIGHT', 0, 0)
+			container.Label:SetPoint('RIGHT', container, 'RIGHT', 0, 0)
+		end
+
+		-- Toggle state
+		if container.tristate then
+			local current = container:GetChecked()
+			if current then
+				container:SetChecked(nil)
+			elseif current == nil then
+				container:SetChecked(false)
+			else
+				container:SetChecked(true)
+			end
+		else
+			container:SetChecked(not container:GetChecked())
+		end
+
+		-- Sound
+		if container:GetChecked() then
+			PlaySound(856) -- SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON
+		else
+			PlaySound(857) -- SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF
+		end
+
+		-- Fire the OnClick handler
+		if container._onClickHandler then
+			container._onClickHandler(container)
+		end
+	end)
+
+	-- Also handle clicks directly on the checkbox button
+	checkbox:SetScript('OnClick', function()
+		-- The container OnMouseUp already handles everything, but if the
+		-- checkbox button itself is clicked directly (not the container),
+		-- we need to handle it. CheckButton fires OnClick, not OnMouseUp.
+		-- However, the click was already processed by container mouse scripts
+		-- since the checkbox is a child. So we just need sound + handler here
+		-- only if it wasn't already handled by the container.
+	end)
+	-- Disable the default CheckButton click behavior - we handle it ourselves
+	checkbox:SetScript('OnClick', nil)
+	checkbox:EnableMouse(false) -- Let clicks pass through to container
 
 	-- Passthrough methods to the container
 
 	---Set checked state
-	---@param checked boolean Whether the checkbox is checked
+	---@param checked boolean|nil Whether the checkbox is checked (nil = indeterminate in tri-state)
 	function container:SetChecked(checked)
-		self.checkbox:SetChecked(checked)
+		container._checked = checked
+		if checked then
+			check:Show()
+			SetDesaturation(check, false)
+		else
+			if container.tristate and checked == nil then
+				-- Indeterminate: show desaturated check
+				check:Show()
+				SetDesaturation(check, true)
+			else
+				check:Hide()
+				SetDesaturation(check, false)
+			end
+		end
 	end
 
 	---Get checked state
-	---@return boolean checked Whether the checkbox is checked
+	---@return boolean|nil checked Whether the checkbox is checked
 	function container:GetChecked()
-		return self.checkbox:GetChecked()
+		return container._checked
 	end
 
 	---Set the label text
@@ -375,44 +477,91 @@ function LibAT.UI.CreateCheckbox(parent, label, width, height)
 	---Enable or disable the checkbox
 	---@param enabled boolean Whether to enable
 	function container:SetEnabled(enabled)
+		container.disabled = not enabled
 		if enabled then
-			self.checkbox:Enable()
 			if self.Label then
 				self.Label:SetTextColor(1, 1, 1)
 			end
+			if self.Desc then
+				self.Desc:SetTextColor(1, 1, 1)
+			end
+			SetDesaturation(check, container.tristate and container._checked == nil)
 		else
-			self.checkbox:Disable()
 			if self.Label then
 				self.Label:SetTextColor(0.5, 0.5, 0.5)
 			end
+			if self.Desc then
+				self.Desc:SetTextColor(0.5, 0.5, 0.5)
+			end
+			SetDesaturation(check, true)
 		end
+	end
+
+	---Set optional description text below the label
+	---@param desc string|nil Description text or nil to clear
+	function container:SetDescription(desc)
+		if desc then
+			if not self.Desc then
+				local f = container:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+				f:SetPoint('TOPLEFT', checkbox, 'TOPRIGHT', 5, -21)
+				f:SetPoint('RIGHT', container, 'RIGHT', -4, 0)
+				f:SetJustifyH('LEFT')
+				f:SetJustifyV('TOP')
+				self.Desc = f
+			end
+			self.Desc:Show()
+			self.Desc:SetText(desc)
+			self.Desc:SetTextColor(container.disabled and 0.5 or 1, container.disabled and 0.5 or 1, container.disabled and 0.5 or 1)
+			container:SetHeight(28 + self.Desc:GetStringHeight())
+		else
+			if self.Desc then
+				self.Desc:SetText('')
+				self.Desc:Hide()
+			end
+			container:SetHeight(24)
+		end
+	end
+
+	---Enable or disable tri-state mode (cycles: true -> nil -> false)
+	---@param enabled boolean Whether to enable tri-state
+	function container:SetTriState(enabled)
+		container.tristate = enabled
+		container:SetChecked(container:GetChecked())
 	end
 
 	---Hook a script on the checkbox
 	---@param event string Script event name
 	---@param handler function Script handler
 	function container:HookScript(event, handler)
-		-- Wrap handler to pass container as self instead of the inner checkbox
-		self.checkbox:HookScript(event, function(_, ...)
-			handler(container, ...)
-		end)
+		if event == 'OnClick' then
+			local prev = container._onClickHandler
+			container._onClickHandler = function(self)
+				if prev then
+					prev(self)
+				end
+				handler(self)
+			end
+		else
+			-- For other events, hook on the container frame
+			getmetatable(self).__index.HookScript(self, event, function(_, ...)
+				handler(container, ...)
+			end)
+		end
 	end
 
 	---Set a script on the checkbox
 	---@param event string Script event name
 	---@param handler function|nil Script handler
 	function container:SetScript(event, handler)
-		-- For OnClick and similar events, delegate to checkbox
-		-- For frame events, keep on container
-		if event == 'OnClick' or event == 'OnEnter' or event == 'OnLeave' then
-			if handler then
-				-- Wrap handler to pass container as self instead of the inner checkbox
-				self.checkbox:SetScript(event, function(_, ...)
-					handler(container, ...)
-				end)
-			else
-				self.checkbox:SetScript(event, nil)
-			end
+		if event == 'OnClick' then
+			container._onClickHandler = handler and function(self)
+				handler(self)
+			end or nil
+		elseif event == 'OnEnter' or event == 'OnLeave' then
+			-- These go on the container frame directly
+			getmetatable(self).__index.SetScript(self, event, handler and function(_, ...)
+				handler(container, ...)
+			end or nil)
 		else
 			-- Call the original Frame SetScript for container events
 			getmetatable(self).__index.SetScript(self, event, handler)
