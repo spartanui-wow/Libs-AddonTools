@@ -190,7 +190,7 @@ function SetupWizard:CreateWindow()
 		title = '|cffffffffLib|cffe21f1fAT|r Setup Wizard',
 		width = 800,
 		height = 538,
-		portrait = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon',
+		portrait = 'Interface\\AddOns\\libsaddontools\\Logo-Icon',
 	})
 
 	-- Create control frame (top bar)

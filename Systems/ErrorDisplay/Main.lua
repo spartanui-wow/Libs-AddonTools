@@ -29,7 +29,7 @@ ErrorDisplay.icon = icon
 local ldbObject = LDB:NewDataObject('Libs Error Display', {
 	type = 'data source',
 	text = '0',
-	icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png',
+	icon = 'Interface\\AddOns\\libsaddontools\\Images\\old_error.png',
 	OnClick = function(self, button)
 		if button == 'RightButton' then
 			-- Open settings via LibAT options
@@ -251,10 +251,10 @@ function ErrorDisplay:UpdateMinimapIcon()
 		-- Update icon based on error state
 		if errorsCurrent and #errorsCurrent > 0 then
 			-- New errors in current session - use red icon
-			ldbObject.icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\error.png'
+			ldbObject.icon = 'Interface\\AddOns\\libsaddontools\\Images\\error.png'
 		else
 			-- No new errors - use gray icon
-			ldbObject.icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\old_error.png'
+			ldbObject.icon = 'Interface\\AddOns\\libsaddontools\\Images\\old_error.png'
 		end
 	end
 

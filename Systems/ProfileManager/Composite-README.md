@@ -30,13 +30,16 @@ LibAT.ProfileManager:RegisterComposite({
 The following systems are pre-configured and only require string IDs:
 
 **Action Bars:**
+
 - `'bartender4'` - Bartender4 Action Bars
 - `'dominos'` - Dominos Action Bars
 
 **Blizzard Systems:**
+
 - `'editmode'` - Edit Mode Layout (Retail only)
 
 **Popular Addons:**
+
 - `'weakauras'` - WeakAuras
 - `'plater'` - Plater Nameplates
 - `'details'` - Details! Damage Meter
@@ -129,6 +132,7 @@ LibAT.ProfileManager:RegisterComposite(config)
 ```
 
 **Parameters:**
+
 - `id` (string) - Unique composite ID
 - `displayName` (string) - User-friendly name
 - `description` (string) - Optional description
@@ -136,6 +140,7 @@ LibAT.ProfileManager:RegisterComposite(config)
 - `components` (table) - Array of component IDs or definitions
 
 **Component Formats:**
+
 - String: `'bartender4'` (uses built-in system)
 - Table: `{ id, displayName, isAvailable, export, import }` (custom)
 
@@ -146,6 +151,7 @@ LibAT.ProfileManager:AddToComposite(compositeId, component)
 ```
 
 **Parameters:**
+
 - `compositeId` (string) - The composite ID to add to
 - `component` (string|table) - Component ID or definition
 
@@ -253,6 +259,7 @@ newsystem = {
 ## Examples
 
 See:
+
 - **SpartanUI:** `C:\code\SpartanUI\Core\Handlers\Profiles.lua` (lines 60-75)
-- **Built-in systems:** `C:\code\Libs-AddonTools\Systems\ProfileManager\BuiltInSystems.lua`
-- **Core logic:** `C:\code\Libs-AddonTools\Systems\ProfileManager\Composite.lua`
+- **Built-in systems:** `C:\code\libsaddontools\Systems\ProfileManager\BuiltInSystems.lua`
+- **Core logic:** `C:\code\libsaddontools\Systems\ProfileManager\Composite.lua`

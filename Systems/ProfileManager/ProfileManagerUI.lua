@@ -933,7 +933,7 @@ function ProfileManager.CreateWindow()
 		title = '|cffffffffLib|cffe21f1fAT|r Profile Manager',
 		width = 800,
 		height = 538,
-		portrait = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon',
+		portrait = 'Interface\\AddOns\\libsaddontools\\Logo-Icon',
 	})
 
 	ProfileManagerState.window.mode = 'import'

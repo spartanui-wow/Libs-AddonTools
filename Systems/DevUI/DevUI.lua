@@ -18,12 +18,12 @@ local DevUIState = {
 
 -- Tab definitions
 local TAB_CONFIG = {
-	{ key = 'Logs', tooltipText = 'Logs', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\logs.png' },
-	{ key = 'CLI', tooltipText = 'CLI', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\cli.png' },
-	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\errors.png' },
-	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' },
-	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' }, -- TODO: Create addons.png icon
-	{ key = 'Performance', tooltipText = 'Performance', icon = 'Interface\\AddOns\\Libs-AddonTools\\Images\\Macros.png' }, -- TODO: Create performance.png icon
+	{ key = 'Logs', tooltipText = 'Logs', icon = 'Interface\\AddOns\\libsaddontools\\Images\\logs.png' },
+	{ key = 'CLI', tooltipText = 'CLI', icon = 'Interface\\AddOns\\libsaddontools\\Images\\cli.png' },
+	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\libsaddontools\\Images\\errors.png' },
+	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' },
+	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' }, -- TODO: Create addons.png icon
+	{ key = 'Performance', tooltipText = 'Performance', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' }, -- TODO: Create performance.png icon
 }
 
 ----------------------------------------------------------------------------------------------------
@@ -247,7 +247,7 @@ function DevUI:OnInitialize()
 
 	-- Create monospace font object
 	local monoFont = CreateFont('LibAT_MonoFont')
-	monoFont:SetFont('Interface\\AddOns\\Libs-AddonTools\\Fonts\\VeraMono.ttf', 12, '')
+	monoFont:SetFont('Interface\\AddOns\\libsaddontools\\Fonts\\VeraMono.ttf', 12, '')
 	monoFont:SetTextColor(1, 1, 1)
 	DevUIState.MonoFont = monoFont
 

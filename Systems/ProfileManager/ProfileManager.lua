@@ -1024,7 +1024,7 @@ function ProfileManager:OnInitialize()
 			id = 'libat',
 			name = 'LibAT Core',
 			db = LibAT.Database,
-			icon = 'Interface\\AddOns\\Libs-AddonTools\\Logo-Icon',
+			icon = 'Interface\\AddOns\\libsaddontools\\Logo-Icon',
 		})
 	end
 
