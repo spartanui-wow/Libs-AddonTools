@@ -89,9 +89,38 @@ function ProfileManager.DiscoverViaRegistry()
 				-- Generate unique ID for this addon
 				local addonId = 'registry_' .. addonName
 
-				-- Skip if already registered (either via adapter or previous registry scan)
+				-- Check if this addon should be skipped (already registered)
+				local shouldSkip = false
+
+				-- Skip if already discovered by manual adapters
+				if discoveredAddons[addonName] then
+					shouldSkip = true
+				end
+
+				-- Skip if already registered via registry (previous scan)
 				local registeredAddons = ProfileManager:GetRegisteredAddons()
-				if not registeredAddons[addonId] and not discoveredAddons[addonName] then
+				if not shouldSkip and registeredAddons[addonId] then
+					shouldSkip = true
+				end
+
+				-- Check if any registered addon is using this same SavedVariables global
+				-- (prevents duplicates when manual adapter and registry both find same addon)
+				if not shouldSkip then
+					local svName = ProfileManager.FindGlobal(db.sv)
+					if svName then
+						for _, registeredAddon in pairs(registeredAddons) do
+							local registeredSvName = ProfileManager.FindGlobal(registeredAddon.db.sv)
+							if registeredSvName == svName then
+								-- Same SavedVariables global already registered, skip
+								shouldSkip = true
+								break
+							end
+						end
+					end
+				end
+
+				-- Only register if passed all checks
+				if not shouldSkip then
 					-- Get addon title from TOC or use addon name
 					local _, title = C_AddOns.GetAddOnInfo(addonName)
 					local displayName = title or addonName

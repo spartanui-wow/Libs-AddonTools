@@ -30,6 +30,14 @@ local ProfileManagerState = {
 	-- Registered addons storage
 	registeredAddons = {},
 	nextAddonId = 1,
+
+	-- Visibility filter settings (stored in LibAT.Database.profile.ProfileManager.filters)
+	filters = {
+		hideAddonsSetToDefault = false,
+		hideAddonsWithAllAltsUsingSameProfile = false,
+		hideAddonsWithAllAltsUsingCharProfile = true,
+		hideAltsMatchingCurrentCharacter = false,
+	},
 }
 
 -- Expose state for other ProfileManager modules (Composite, UI, etc.)
@@ -112,6 +120,242 @@ end
 function ProfileManager:GetRegisteredAddons()
 	return ProfileManagerState.registeredAddons
 end
+
+----------------------------------------------------------------------------------------------------
+-- Alt Character Profile Management
+----------------------------------------------------------------------------------------------------
+
+---Get the current character name in "Name - Realm" format
+---@return string characterName The current character's full name
+function ProfileManager:GetCurrentCharacterName()
+	return UnitName('player') .. ' - ' .. GetRealmName()
+end
+
+---Get the profile key assigned to a specific character for an addon
+---@param addonId string The addon ID
+---@param characterName string Character name in "Name - Realm" format
+---@return string|nil profileKey The profile key, or nil if not set
+function ProfileManager:GetCharacterProfile(addonId, characterName)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv then
+		return nil
+	end
+
+	-- AceDB stores character profile assignments in db.sv.profileKeys
+	if addon.db.sv.profileKeys and addon.db.sv.profileKeys[characterName] then
+		return addon.db.sv.profileKeys[characterName]
+	end
+
+	return nil
+end
+
+---Set the profile for a specific character
+---@param addonId string The addon ID
+---@param characterName string Character name in "Name - Realm" format
+---@param profileKey string The profile key to assign
+function ProfileManager:SetCharacterProfile(addonId, characterName, profileKey)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv then
+		LibAT:Print('|cffff0000Error:|r Invalid addon or database for ID: ' .. addonId)
+		return
+	end
+
+	-- Initialize profileKeys if not present
+	if not addon.db.sv.profileKeys then
+		addon.db.sv.profileKeys = {}
+	end
+
+	-- Set the profile for this character
+	addon.db.sv.profileKeys[characterName] = profileKey
+
+	if LibAT.Log then
+		LibAT.Log(string.format('Set profile "%s" for character "%s" in addon "%s"', profileKey, characterName, addon.displayName), 'Libs - Addon Tools.ProfileManager', 'debug')
+	end
+end
+
+---Set the same profile for all characters except the current one
+---@param addonId string The addon ID
+---@param profileKey string The profile key to assign to all alts
+---@return number count Number of characters updated
+function ProfileManager:SetAllCharacterProfiles(addonId, profileKey)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv then
+		LibAT:Print('|cffff0000Error:|r Invalid addon or database for ID: ' .. addonId)
+		return 0
+	end
+
+	-- Initialize profileKeys if not present
+	if not addon.db.sv.profileKeys then
+		addon.db.sv.profileKeys = {}
+	end
+
+	local currentCharacter = self:GetCurrentCharacterName()
+	local count = 0
+
+	-- Apply to all characters except current
+	for characterName, _ in pairs(addon.db.sv.profileKeys) do
+		if characterName ~= currentCharacter then
+			addon.db.sv.profileKeys[characterName] = profileKey
+			count = count + 1
+		end
+	end
+
+	if LibAT.Log then
+		LibAT.Log(string.format('Set profile "%s" for %d alt character(s) in addon "%s"', profileKey, count, addon.displayName), 'Libs - Addon Tools.ProfileManager', 'debug')
+	end
+
+	return count
+end
+
+---Get list of all characters with profile assignments for an addon
+---@param addonId string The addon ID
+---@return table<string, string> characterProfiles Map of characterName -> profileKey
+function ProfileManager:GetAllCharacterProfiles(addonId)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv or not addon.db.sv.profileKeys then
+		return {}
+	end
+
+	return addon.db.sv.profileKeys
+end
+
+---Get list of all available profiles for an addon
+---@param addonId string The addon ID
+---@return table<string, boolean> profiles Map of profile names
+function ProfileManager:GetAvailableProfiles(addonId)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv or not addon.db.sv.profiles then
+		return {}
+	end
+
+	local profiles = {}
+	for profileName in pairs(addon.db.sv.profiles) do
+		profiles[profileName] = true
+	end
+
+	-- Add "Default" if not present
+	if not profiles['Default'] then
+		profiles['Default'] = true
+	end
+
+	return profiles
+end
+
+----------------------------------------------------------------------------------------------------
+-- Profile Pruning
+----------------------------------------------------------------------------------------------------
+
+---Get list of unused profiles (not assigned to any character)
+---@param addonId string The addon ID
+---@return string[] unusedProfiles Array of profile names not assigned to any character
+function ProfileManager:GetUnusedProfiles(addonId)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv then
+		return {}
+	end
+
+	-- Get all available profiles
+	local allProfiles = {}
+	if addon.db.sv.profiles then
+		for profileName in pairs(addon.db.sv.profiles) do
+			allProfiles[profileName] = true
+		end
+	end
+
+	-- Mark profiles that are in use by any character
+	local usedProfiles = {}
+	if addon.db.sv.profileKeys then
+		for _, profileName in pairs(addon.db.sv.profileKeys) do
+			usedProfiles[profileName] = true
+		end
+	end
+
+	-- Collect unused profiles
+	local unusedProfiles = {}
+	for profileName in pairs(allProfiles) do
+		if not usedProfiles[profileName] then
+			table.insert(unusedProfiles, profileName)
+		end
+	end
+	table.sort(unusedProfiles)
+
+	return unusedProfiles
+end
+
+---Delete specified profiles from an addon's database
+---@param addonId string The addon ID
+---@param profileNames string[] Array of profile names to delete
+---@return number count Number of profiles deleted
+function ProfileManager:PruneProfiles(addonId, profileNames)
+	local addon = ProfileManagerState.registeredAddons[addonId]
+	if not addon or not addon.db or not addon.db.sv then
+		LibAT:Print('|cffff0000Error:|r Invalid addon or database for ID: ' .. addonId)
+		return 0
+	end
+
+	local count = 0
+
+	-- Delete from main profiles
+	if addon.db.sv.profiles then
+		for _, profileName in ipairs(profileNames) do
+			if addon.db.sv.profiles[profileName] then
+				addon.db.sv.profiles[profileName] = nil
+				count = count + 1
+			end
+		end
+	end
+
+	-- Delete from all namespaces
+	if addon.db.sv.namespaces then
+		for namespaceName, namespaceData in pairs(addon.db.sv.namespaces) do
+			if namespaceData.profiles then
+				for _, profileName in ipairs(profileNames) do
+					if namespaceData.profiles[profileName] then
+						namespaceData.profiles[profileName] = nil
+					end
+				end
+			end
+		end
+	end
+
+	if LibAT.Log then
+		LibAT.Log(string.format('Pruned %d profile(s) from addon "%s"', count, addon.displayName), 'Libs - Addon Tools.ProfileManager', 'info')
+	end
+
+	return count
+end
+
+----------------------------------------------------------------------------------------------------
+-- Visibility Filtering
+----------------------------------------------------------------------------------------------------
+
+---Get a filter setting value
+---@param filterName string The filter name
+---@return boolean value The filter value
+function ProfileManager:GetFilter(filterName)
+	return ProfileManagerState.filters[filterName] or false
+end
+
+---Set a filter setting value and persist to database
+---@param filterName string The filter name
+---@param value boolean The new value
+function ProfileManager:SetFilter(filterName, value)
+	ProfileManagerState.filters[filterName] = value
+
+	-- Persist to database
+	if LibAT.Database and LibAT.Database.profile and LibAT.Database.profile.ProfileManager then
+		LibAT.Database.profile.ProfileManager.filters[filterName] = value
+	end
+
+	-- Rebuild navigation tree if window exists
+	if ProfileManagerState.window and ProfileManagerState.window.NavTree then
+		LibAT.ProfileManager.BuildNavigationTree()
+	end
+end
+
+----------------------------------------------------------------------------------------------------
+-- Navigation API
+----------------------------------------------------------------------------------------------------
 
 ---Navigate to a specific addon in export mode
 ---@param addonId string The unique ID of the addon
@@ -246,104 +490,159 @@ local function BuildAddonCategories()
 		return ProfileManagerState.registeredAddons[a].displayName < ProfileManagerState.registeredAddons[b].displayName
 	end)
 
+	-- Get current character for filtering
+	local currentCharacter = ProfileManager:GetCurrentCharacterName()
+
 	-- Build category for each registered addon
 	for _, addonId in ipairs(sortedIds) do
 		local addon = ProfileManagerState.registeredAddons[addonId]
 		local categoryKey = 'Addons.' .. addonId
 
-		-- Check if addon has namespaces
-		local hasNamespaces = addon.namespaces and #addon.namespaces > 0
+		-- Apply visibility filters
+		local shouldHide = false
 
-		-- Check if addon has a registered composite
-		local compositeId = ProfileManager:GetCompositeForAddon(addonId)
-		local hasComposite = compositeId and ProfileManager:GetComposite(compositeId) ~= nil
+		-- Filter: Hide addons set to Default profile
+		if ProfileManagerState.filters.hideAddonsSetToDefault then
+			local currentProfile = addon.db and addon.db.keys and addon.db.keys.profile or 'Default'
+			if currentProfile == 'Default' then
+				shouldHide = true
+			end
+		end
 
-		-- In normal mode (expert off): ALL addons are leaf categories — click to export/import full DB
-		-- In expert mode: only truly simple addons (no namespaces, no composite) are leaves
-		local showAsLeaf = not expertMode or (not hasNamespaces and not hasComposite)
-
-		if showAsLeaf then
-			categories[addonId] = {
-				name = addon.displayName,
-				key = categoryKey,
-				expanded = false,
-				icon = addon.icon,
-				isToken = addon.autoDiscovered or false,
-				isLeaf = true,
-				subCategories = {},
-				sortedKeys = {},
-				onSelect = function()
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = nil
-					-- Set compositeId if this addon has one (enables choice buttons in simple mode)
-					ProfileManagerState.window.activeCompositeId = hasComposite and compositeId or nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
-		else
-			-- Expert mode: complex addons with namespaces or composites get full subcategory tree
-			local subCategories = {}
-			local sortedKeys = {}
-
-			-- "All" entry - sets up for full DB export/import
-			subCategories['ALL'] = {
-				name = 'All (Full DB)',
-				key = categoryKey .. '.ALL',
-				onSelect = function()
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = nil
-					ProfileManagerState.window.activeCompositeId = hasComposite and compositeId or nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
-			table.insert(sortedKeys, 'ALL')
-
-			-- "Core DB" entry - base profile data only
-			subCategories['__COREDB__'] = {
-				name = 'Core DB',
-				key = categoryKey .. '.__COREDB__',
-				onSelect = function()
-					ProfileManagerState.window.activeAddonId = addonId
-					ProfileManagerState.window.activeNamespace = '__COREDB__'
-					ProfileManagerState.window.activeCompositeId = nil
-					LibAT.ProfileManager.UpdateWindowForMode()
-				end,
-			}
-			table.insert(sortedKeys, '__COREDB__')
-
-			-- Individual namespaces (sorted alphabetically)
-			if hasNamespaces then
-				local sortedNamespaces = {}
-				for _, ns in ipairs(addon.namespaces) do
-					table.insert(sortedNamespaces, ns)
+		-- Filter: Hide addons where all alts use the same profile
+		if not shouldHide and ProfileManagerState.filters.hideAddonsWithAllAltsUsingSameProfile then
+			if addon.db and addon.db.sv and addon.db.sv.profileKeys then
+				local profileKeys = addon.db.sv.profileKeys
+				local firstProfile = nil
+				local allSame = true
+				for _, profileName in pairs(profileKeys) do
+					if not firstProfile then
+						firstProfile = profileName
+					elseif firstProfile ~= profileName then
+						allSame = false
+						break
+					end
 				end
-				table.sort(sortedNamespaces)
-
-				for _, ns in ipairs(sortedNamespaces) do
-					subCategories[ns] = {
-						name = ns,
-						key = categoryKey .. '.' .. ns,
-						onSelect = function()
-							ProfileManagerState.window.activeAddonId = addonId
-							ProfileManagerState.window.activeNamespace = ns
-							ProfileManagerState.window.activeCompositeId = nil
-							LibAT.ProfileManager.UpdateWindowForMode()
-						end,
-					}
-					table.insert(sortedKeys, ns)
+				if allSame and next(profileKeys) then
+					shouldHide = true
 				end
 			end
+		end
 
-			-- Create main category with subcategories
-			categories[addonId] = {
-				name = addon.displayName,
-				key = categoryKey,
-				expanded = false,
-				icon = addon.icon,
-				isToken = addon.autoDiscovered or false,
-				subCategories = subCategories,
-				sortedKeys = sortedKeys,
-			}
+		-- Filter: Hide addons where all alts use character-specific profiles
+		if not shouldHide and ProfileManagerState.filters.hideAddonsWithAllAltsUsingCharProfile then
+			if addon.db and addon.db.sv and addon.db.sv.profileKeys then
+				local profileKeys = addon.db.sv.profileKeys
+				local allCharSpecific = true
+				for characterName, profileName in pairs(profileKeys) do
+					-- Profile is NOT character-specific if it doesn't match the character name
+					if profileName ~= characterName and profileName ~= characterName:match('^([^%-]+)') then
+						allCharSpecific = false
+						break
+					end
+				end
+				if allCharSpecific and next(profileKeys) then
+					shouldHide = true
+				end
+			end
+		end
+
+		-- Process addon if it should be shown
+		if not shouldHide then
+			-- Check if addon has namespaces
+			local hasNamespaces = addon.namespaces and #addon.namespaces > 0
+
+			-- Check if addon has a registered composite
+			local compositeId = ProfileManager:GetCompositeForAddon(addonId)
+			local hasComposite = compositeId and ProfileManager:GetComposite(compositeId) ~= nil
+
+			-- In normal mode (expert off): ALL addons are leaf categories — click to export/import full DB
+			-- In expert mode: only truly simple addons (no namespaces, no composite) are leaves
+			local showAsLeaf = not expertMode or (not hasNamespaces and not hasComposite)
+
+			if showAsLeaf then
+				categories[addonId] = {
+					name = addon.displayName,
+					key = categoryKey,
+					expanded = false,
+					icon = addon.icon,
+					isToken = addon.autoDiscovered or false,
+					isLeaf = true,
+					subCategories = {},
+					sortedKeys = {},
+					onSelect = function()
+						ProfileManagerState.window.activeAddonId = addonId
+						ProfileManagerState.window.activeNamespace = nil
+						-- Set compositeId if this addon has one (enables choice buttons in simple mode)
+						ProfileManagerState.window.activeCompositeId = hasComposite and compositeId or nil
+						LibAT.ProfileManager.UpdateWindowForMode()
+					end,
+				}
+			else
+				-- Expert mode: complex addons with namespaces or composites get full subcategory tree
+				local subCategories = {}
+				local sortedKeys = {}
+
+				-- "All" entry - sets up for full DB export/import
+				subCategories['ALL'] = {
+					name = 'All (Full DB)',
+					key = categoryKey .. '.ALL',
+					onSelect = function()
+						ProfileManagerState.window.activeAddonId = addonId
+						ProfileManagerState.window.activeNamespace = nil
+						ProfileManagerState.window.activeCompositeId = hasComposite and compositeId or nil
+						LibAT.ProfileManager.UpdateWindowForMode()
+					end,
+				}
+				table.insert(sortedKeys, 'ALL')
+
+				-- "Core DB" entry - base profile data only
+				subCategories['__COREDB__'] = {
+					name = 'Core DB',
+					key = categoryKey .. '.__COREDB__',
+					onSelect = function()
+						ProfileManagerState.window.activeAddonId = addonId
+						ProfileManagerState.window.activeNamespace = '__COREDB__'
+						ProfileManagerState.window.activeCompositeId = nil
+						LibAT.ProfileManager.UpdateWindowForMode()
+					end,
+				}
+				table.insert(sortedKeys, '__COREDB__')
+
+				-- Individual namespaces (sorted alphabetically)
+				if hasNamespaces then
+					local sortedNamespaces = {}
+					for _, ns in ipairs(addon.namespaces) do
+						table.insert(sortedNamespaces, ns)
+					end
+					table.sort(sortedNamespaces)
+
+					for _, ns in ipairs(sortedNamespaces) do
+						subCategories[ns] = {
+							name = ns,
+							key = categoryKey .. '.' .. ns,
+							onSelect = function()
+								ProfileManagerState.window.activeAddonId = addonId
+								ProfileManagerState.window.activeNamespace = ns
+								ProfileManagerState.window.activeCompositeId = nil
+								LibAT.ProfileManager.UpdateWindowForMode()
+							end,
+						}
+						table.insert(sortedKeys, ns)
+					end
+				end
+
+				-- Create main category with subcategories
+				categories[addonId] = {
+					name = addon.displayName,
+					key = categoryKey,
+					expanded = false,
+					icon = addon.icon,
+					isToken = addon.autoDiscovered or false,
+					subCategories = subCategories,
+					sortedKeys = sortedKeys,
+				}
+			end
 		end
 	end
 
@@ -691,14 +990,30 @@ end
 ----------------------------------------------------------------------------------------------------
 
 -- Initialize ProfileManager system
-function ProfileManager:Initialize()
-	-- Initialize logger (now that Logger has finished loading)
-	if LibAT.Logger and LibAT.Logger.RegisterAddon then
-		ProfileManagerState.logger = LibAT.Logger.RegisterAddon('ProfileManager')
+function ProfileManager:OnInitialize()
+	-- Initialize logger
+	if LibAT.logger then
+		ProfileManager.logger = LibAT.logger:RegisterCategory('ProfileManager')
 	end
 
-	-- Register with LibAT
-	LibAT:RegisterSystem('ProfileManager', self)
+	-- Load filter settings from database
+	if LibAT.Database and LibAT.Database.profile then
+		if not LibAT.Database.profile.ProfileManager then
+			LibAT.Database.profile.ProfileManager = {}
+		end
+		if not LibAT.Database.profile.ProfileManager.filters then
+			LibAT.Database.profile.ProfileManager.filters = {}
+		end
+
+		-- Load saved filters or use defaults
+		for filterName, defaultValue in pairs(ProfileManagerState.filters) do
+			if LibAT.Database.profile.ProfileManager.filters[filterName] ~= nil then
+				ProfileManagerState.filters[filterName] = LibAT.Database.profile.ProfileManager.filters[filterName]
+			else
+				LibAT.Database.profile.ProfileManager.filters[filterName] = defaultValue
+			end
+		end
+	end
 
 	-- Initialize UI module
 	LibAT.ProfileManager.InitUI(ProfileManagerState)
@@ -781,9 +1096,6 @@ function ProfileManager:ToggleWindow()
 		LibAT.ProfileManager.UpdateWindowForMode()
 	end
 end
-
--- Auto-initialize when loaded
-ProfileManager:Initialize()
 
 --[[
 	REGISTRATION EXAMPLE FOR EXTERNAL ADDONS:

@@ -186,6 +186,275 @@ local function UpdateImportDestDropdown()
 	end
 end
 
+----------------------------------------------------------------------------------------------------
+-- Alt Character Profile Management UI
+----------------------------------------------------------------------------------------------------
+
+---Update alt profile panel with current addon's character assignments
+local function UpdateAltProfilePanel()
+	local win = ProfileManagerState.window
+	if not win or not win.AltProfilePanel or not win.AltProfileScrollChild or not win.activeAddonId then
+		return
+	end
+
+	-- Get addon and character profiles
+	local characterProfiles = ProfileManager:GetAllCharacterProfiles(win.activeAddonId)
+	local availableProfiles = ProfileManager:GetAvailableProfiles(win.activeAddonId)
+	local currentCharacter = ProfileManager:GetCurrentCharacterName()
+
+	-- Clear existing widgets
+	if win.AltProfileWidgets then
+		for _, widget in pairs(win.AltProfileWidgets) do
+			if widget.Hide then
+				widget:Hide()
+			end
+		end
+	end
+	win.AltProfileWidgets = {}
+
+	-- If no characters besides current, hide panel
+	local hasAlts = false
+	for characterName in pairs(characterProfiles) do
+		if characterName ~= currentCharacter then
+			hasAlts = true
+			break
+		end
+	end
+
+	if not hasAlts then
+		win.AltProfilePanel:Hide()
+		return
+	end
+
+	win.AltProfilePanel:Show()
+
+	-- Use scroll child as parent for all widgets
+	local parent = win.AltProfileScrollChild
+
+	-- Build sorted character list (exclude current character)
+	local sortedCharacters = {}
+	for characterName in pairs(characterProfiles) do
+		if characterName ~= currentCharacter then
+			table.insert(sortedCharacters, characterName)
+		end
+	end
+	table.sort(sortedCharacters)
+
+	-- Create "Apply to All Alts" dropdown at top
+	local yOffset = -10
+	if not win.AltProfileAllAltsLabel then
+		win.AltProfileAllAltsLabel = parent:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+		win.AltProfileAllAltsLabel:SetPoint('TOPLEFT', parent, 'TOPLEFT', 10, yOffset)
+		win.AltProfileAllAltsLabel:SetText('Apply to All Alts:')
+		win.AltProfileAllAltsLabel:SetTextColor(0, 1, 0.5)
+	end
+	win.AltProfileAllAltsLabel:Show()
+
+	if not win.AltProfileAllAltsDropdown then
+		win.AltProfileAllAltsDropdown = LibAT.UI.CreateDropdown(parent, 'Select Profile...', 180, 22)
+		win.AltProfileAllAltsDropdown:SetPoint('LEFT', win.AltProfileAllAltsLabel, 'RIGHT', 8, 0)
+	end
+	win.AltProfileAllAltsDropdown:Show()
+
+	-- Track selected profile for apply button
+	win.selectedApplyToAllProfile = nil
+
+	-- Setup all-alts dropdown menu
+	local sortedProfiles = {}
+	for profileName in pairs(availableProfiles) do
+		table.insert(sortedProfiles, profileName)
+	end
+	table.sort(sortedProfiles)
+
+	if win.AltProfileAllAltsDropdown.SetupMenu then
+		win.AltProfileAllAltsDropdown:SetupMenu(function(owner, rootDescription)
+			for _, profileName in ipairs(sortedProfiles) do
+				rootDescription:CreateButton(profileName, function()
+					-- Store selection, don't apply yet
+					win.selectedApplyToAllProfile = profileName
+					win.AltProfileAllAltsDropdown:SetText(profileName)
+					-- Enable apply button
+					if win.AltProfileApplyButton then
+						win.AltProfileApplyButton:Enable()
+					end
+				end)
+			end
+		end)
+	end
+
+	table.insert(win.AltProfileWidgets, win.AltProfileAllAltsLabel)
+	table.insert(win.AltProfileWidgets, win.AltProfileAllAltsDropdown)
+
+	-- Add Apply button next to dropdown
+	if not win.AltProfileApplyButton then
+		win.AltProfileApplyButton = LibAT.UI.CreateButton(parent, 70, 22, 'Apply')
+	end
+	win.AltProfileApplyButton:SetPoint('LEFT', win.AltProfileAllAltsDropdown, 'RIGHT', 8, 0)
+	win.AltProfileApplyButton:SetEnabled(false) -- Disabled until profile selected
+	win.AltProfileApplyButton:SetScript('OnClick', function()
+		if win.selectedApplyToAllProfile then
+			local count = ProfileManager:SetAllCharacterProfiles(win.activeAddonId, win.selectedApplyToAllProfile)
+			LibAT:Print(string.format('Applied profile "%s" to %d alt character(s)', win.selectedApplyToAllProfile, count))
+			-- Reset selection
+			win.selectedApplyToAllProfile = nil
+			win.AltProfileAllAltsDropdown:SetText('Select Profile...')
+			win.AltProfileApplyButton:Disable()
+			-- Refresh panel
+			UpdateAltProfilePanel()
+		end
+	end)
+	win.AltProfileApplyButton:Show()
+	table.insert(win.AltProfileWidgets, win.AltProfileApplyButton)
+
+	-- Add prune button next to apply button
+	local unusedProfiles = ProfileManager:GetUnusedProfiles(win.activeAddonId)
+	local unusedCount = #unusedProfiles
+
+	if not win.AltProfilePruneButton then
+		win.AltProfilePruneButton = LibAT.UI.CreateButton(parent, 140, 22, 'Delete Unused Profiles')
+	end
+	win.AltProfilePruneButton:SetPoint('LEFT', win.AltProfileApplyButton, 'RIGHT', 10, 0)
+
+	-- Update button text and state based on unused profiles
+	if unusedCount > 0 then
+		win.AltProfilePruneButton:SetText(string.format('Delete Unused (%d)', unusedCount))
+		win.AltProfilePruneButton:Enable()
+
+		-- Add tooltip explaining what prune does
+		win.AltProfilePruneButton:SetScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+			GameTooltip:SetText('Delete Unused Profiles', 1, 1, 1)
+			GameTooltip:AddLine('Removes profiles that are not assigned to any character.', nil, nil, nil, true)
+			GameTooltip:AddLine(' ', nil, nil, nil, true)
+			GameTooltip:AddLine('This helps reduce database size by cleaning up old profiles you are no longer using.', 0.8, 0.8, 0.8, true)
+			GameTooltip:Show()
+		end)
+		win.AltProfilePruneButton:SetScript('OnLeave', function()
+			GameTooltip:Hide()
+		end)
+
+		win.AltProfilePruneButton:SetScript('OnClick', function()
+			-- Show confirmation dialog
+			StaticPopupDialogs['LIBAT_PRUNE_PROFILES'] = {
+				text = string.format('Delete %d unused profile(s)?\n\nThese profiles are not assigned to any character:\n\n%s', unusedCount, table.concat(unusedProfiles, '\n')),
+				button1 = 'Delete',
+				button2 = 'Cancel',
+				OnAccept = function()
+					local deleted = ProfileManager:PruneProfiles(win.activeAddonId, unusedProfiles)
+					LibAT:Print(string.format('|cff00ff00Deleted %d unused profile(s)|r', deleted))
+					-- Refresh panel
+					UpdateAltProfilePanel()
+				end,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+			StaticPopup_Show('LIBAT_PRUNE_PROFILES')
+		end)
+	else
+		win.AltProfilePruneButton:SetText('No Unused Profiles')
+		win.AltProfilePruneButton:Disable()
+
+		-- Tooltip for disabled state
+		win.AltProfilePruneButton:SetScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+			GameTooltip:SetText('No Unused Profiles', 1, 1, 1)
+			GameTooltip:AddLine('All profiles are currently assigned to at least one character.', nil, nil, nil, true)
+			GameTooltip:Show()
+		end)
+		win.AltProfilePruneButton:SetScript('OnLeave', function()
+			GameTooltip:Hide()
+		end)
+	end
+	win.AltProfilePruneButton:Show()
+	table.insert(win.AltProfileWidgets, win.AltProfilePruneButton)
+
+	yOffset = yOffset - 35
+
+	-- Create divider
+	if not win.AltProfileDivider then
+		win.AltProfileDivider = parent:CreateTexture(nil, 'ARTWORK')
+		win.AltProfileDivider:SetColorTexture(0.3, 0.3, 0.3, 0.8)
+		win.AltProfileDivider:SetHeight(1)
+	end
+	win.AltProfileDivider:SetPoint('TOPLEFT', parent, 'TOPLEFT', 10, yOffset)
+	win.AltProfileDivider:SetPoint('TOPRIGHT', parent, 'TOPRIGHT', -10, yOffset)
+	win.AltProfileDivider:Show()
+	table.insert(win.AltProfileWidgets, win.AltProfileDivider)
+
+	yOffset = yOffset - 15
+
+	-- Create per-character dropdowns
+	for i, characterName in ipairs(sortedCharacters) do
+		local currentProfile = characterProfiles[characterName] or 'Default'
+
+		-- Character label
+		local label = parent:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+		label:SetPoint('TOPLEFT', parent, 'TOPLEFT', 10, yOffset)
+		label:SetText(characterName .. ':')
+		label:SetTextColor(1, 0.82, 0)
+		table.insert(win.AltProfileWidgets, label)
+
+		-- Profile dropdown
+		local dropdown = LibAT.UI.CreateDropdown(parent, currentProfile, 180, 22)
+		dropdown:SetPoint('LEFT', label, 'RIGHT', 8, 0)
+
+		-- Setup dropdown menu
+		if dropdown.SetupMenu then
+			dropdown:SetupMenu(function(owner, rootDescription)
+				for _, profileName in ipairs(sortedProfiles) do
+					rootDescription:CreateButton(profileName, function()
+						ProfileManager:SetCharacterProfile(win.activeAddonId, characterName, profileName)
+						dropdown:SetText(profileName)
+						LibAT:Print(string.format('Set "%s" to use profile "%s"', characterName, profileName))
+					end)
+				end
+			end)
+		end
+
+		table.insert(win.AltProfileWidgets, dropdown)
+
+		yOffset = yOffset - 28
+	end
+
+	-- Adjust scroll child height based on content
+	local contentHeight = math.abs(yOffset) + 15
+	win.AltProfileScrollChild:SetHeight(contentHeight)
+end
+
+---Create the alt profile panel (called once during window creation)
+function ProfileManager.CreateAltProfilePanel()
+	local win = ProfileManagerState.window
+	if not win then
+		return
+	end
+
+	-- Create scroll frame directly in RightPanel (matching Logger UI pattern)
+	-- Position below ImportDestFrame, fill available space to bottom
+	local scrollFrame = CreateFrame('ScrollFrame', nil, win.RightPanel)
+	scrollFrame:SetPoint('TOPLEFT', win.ImportDestFrame, 'BOTTOMLEFT', 6, -16)
+	scrollFrame:SetPoint('BOTTOMRIGHT', win.RightPanel, 'BOTTOMRIGHT', 0, 2)
+	scrollFrame:Hide()
+
+	-- Create minimal scrollbar (black style like Logger UI)
+	scrollFrame.ScrollBar = CreateFrame('EventFrame', nil, scrollFrame, 'MinimalScrollBar')
+	scrollFrame.ScrollBar:SetPoint('TOPLEFT', scrollFrame, 'TOPRIGHT', 6, 0)
+	scrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', scrollFrame, 'BOTTOMRIGHT', 6, 0)
+	ScrollUtil.InitScrollFrameWithScrollBar(scrollFrame, scrollFrame.ScrollBar)
+
+	-- Create scroll child (content container)
+	local scrollChild = CreateFrame('Frame', nil, scrollFrame)
+	scrollChild:SetWidth(scrollFrame:GetWidth() - 20) -- Account for scrollbar
+	scrollChild:SetHeight(1) -- Will grow dynamically
+	scrollFrame:SetScrollChild(scrollChild)
+
+	win.AltProfilePanel = scrollFrame
+	win.AltProfileScrollFrame = scrollFrame
+	win.AltProfileScrollChild = scrollChild
+	win.AltProfileWidgets = {}
+end
+
 function ProfileManager.UpdateWindowForMode()
 	if not ProfileManagerState.window then
 		return
@@ -220,7 +489,47 @@ function ProfileManager.UpdateWindowForMode()
 		end
 	end
 
-	-- Update mode display
+	-- Highlight active mode button (only Import/Export - Alt Manager disabled)
+	if ProfileManagerState.window.ImportModeButton then
+		if ProfileManagerState.window.mode == 'import' then
+			ProfileManagerState.window.ImportModeButton:Disable()
+			ProfileManagerState.window.ExportModeButton:Enable()
+		elseif ProfileManagerState.window.mode == 'export' then
+			ProfileManagerState.window.ImportModeButton:Enable()
+			ProfileManagerState.window.ExportModeButton:Disable()
+		end
+	end
+
+	-- Update mode display based on current mode
+	-- DISABLED: Alt Manager mode (not ready for production)
+	-- if ProfileManagerState.window.mode == 'altmanager' then
+	-- 	ProfileManagerState.window.ModeLabel:SetText('|cff00ff00Alt Manager|r' .. addonInfo)
+	-- 	-- Hide all import/export UI elements
+	-- 	ProfileManagerState.window.Description:Hide()
+	-- 	if ProfileManagerState.window.TextPanel then
+	-- 		ProfileManagerState.window.TextPanel:Hide()
+	-- 	end
+	-- 	if ProfileManagerState.window.ExportActionButton then
+	-- 		ProfileManagerState.window.ExportActionButton:Hide()
+	-- 	end
+	-- 	if ProfileManagerState.window.ImportDestFrame then
+	-- 		ProfileManagerState.window.ImportDestFrame:Hide()
+	-- 	end
+	-- 	ProfileManager.HideExportChoiceButtons()
+	-- 	ProfileManagerState.window.ExportButton:Hide()
+	-- 	ProfileManagerState.window.ImportButton:Hide()
+	-- 	-- Show alt profile panel
+	-- 	if ProfileManagerState.window.AltProfilePanel then
+	-- 		if ProfileManagerState.window.activeAddonId then
+	-- 			UpdateAltProfilePanel()
+	-- 		else
+	-- 			ProfileManagerState.window.AltProfilePanel:Hide()
+	-- 			ProfileManagerState.window.Description:SetText('Select an addon from the left panel to manage alt character profiles.')
+	-- 			ProfileManagerState.window.Description:Show()
+	-- 		end
+	-- 	end
+	-- elseif ProfileManagerState.window.mode == 'export' then
+
 	if ProfileManagerState.window.mode == 'export' then
 		ProfileManagerState.window.ModeLabel:SetText('|cff00ff00Export Mode|r' .. addonInfo)
 
@@ -266,6 +575,11 @@ function ProfileManager.UpdateWindowForMode()
 			ProfileManagerState.window.ImportDestFrame:Hide()
 		end
 
+		-- Hide alt profile panel in export mode
+		if ProfileManagerState.window.AltProfilePanel then
+			ProfileManagerState.window.AltProfilePanel:Hide()
+		end
+
 		-- Hide bottom action bar import/export buttons (action is on the centered button now)
 		ProfileManagerState.window.ExportButton:Hide()
 		ProfileManagerState.window.ImportButton:Hide()
@@ -293,6 +607,11 @@ function ProfileManager.UpdateWindowForMode()
 
 		ProfileManagerState.window.ExportButton:Hide()
 		ProfileManagerState.window.ImportButton:Show()
+
+		-- Hide alt profile panel in import mode
+		if ProfileManagerState.window.AltProfilePanel then
+			ProfileManagerState.window.AltProfilePanel:Hide()
+		end
 	end
 
 	-- Update navigation tree to highlight current selection
@@ -320,10 +639,16 @@ end
 ---Show composite export with side panel for component selection
 ---@param compositeId string The composite ID to export
 function ProfileManager:ShowCompositeExport(compositeId)
+	-- Validate compositeId
+	if not compositeId then
+		LibAT:Print('|cffff0000Error:|r No composite ID provided')
+		return
+	end
+
 	-- Get composite definition
 	local composite = self:GetComposite(compositeId)
 	if not composite then
-		LibAT:Print('|cffff0000Error:|r Composite "' .. compositeId .. '" is not registered')
+		LibAT:Print('|cffff0000Error:|r Composite "' .. tostring(compositeId) .. '" is not registered')
 		return
 	end
 
@@ -619,14 +944,34 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.ControlFrame = LibAT.UI.CreateControlFrame(ProfileManagerState.window)
 
 	-- Add mode label (shows current mode)
-	ProfileManagerState.window.ModeLabel = LibAT.UI.CreateHeader(ProfileManagerState.window.ControlFrame, 'Import Mode')
+	ProfileManagerState.window.ModeLabel = LibAT.UI.CreateHeader(ProfileManagerState.window.ControlFrame, 'Alt Manager')
 	ProfileManagerState.window.ModeLabel:SetPoint('LEFT', ProfileManagerState.window.ControlFrame, 'LEFT', 10, 0)
 
-	-- Add switch mode button (centered, 20% larger than original 100px)
-	ProfileManagerState.window.SwitchModeButton = LibAT.UI.CreateButton(ProfileManagerState.window.ControlFrame, 120, 22, 'Switch Mode')
-	ProfileManagerState.window.SwitchModeButton:SetPoint('CENTER', ProfileManagerState.window.ControlFrame, 'CENTER', 0, 0)
-	ProfileManagerState.window.SwitchModeButton:SetScript('OnClick', function()
-		ProfileManagerState.window.mode = ProfileManagerState.window.mode == 'import' and 'export' or 'import'
+	-- Create mode button container (centered)
+	local modeButtonContainer = CreateFrame('Frame', nil, ProfileManagerState.window.ControlFrame)
+	modeButtonContainer:SetSize(200, 22) -- Reduced from 300 to 200 (2 buttons instead of 3)
+	modeButtonContainer:SetPoint('CENTER', ProfileManagerState.window.ControlFrame, 'CENTER', 0, 0)
+
+	-- DISABLED: Alt Manager mode button (not ready for production)
+	-- ProfileManagerState.window.AltManagerModeButton = LibAT.UI.CreateButton(modeButtonContainer, 95, 22, 'Alt Manager')
+	-- ProfileManagerState.window.AltManagerModeButton:SetPoint('LEFT', 0, 0)
+	-- ProfileManagerState.window.AltManagerModeButton:SetScript('OnClick', function()
+	-- 	ProfileManagerState.window.mode = 'altmanager'
+	-- 	ProfileManager.UpdateWindowForMode()
+	-- end)
+
+	-- Add two mode buttons (Import, Export)
+	ProfileManagerState.window.ImportModeButton = LibAT.UI.CreateButton(modeButtonContainer, 95, 22, 'Import')
+	ProfileManagerState.window.ImportModeButton:SetPoint('LEFT', 0, 0) -- Changed from AltManagerModeButton anchor
+	ProfileManagerState.window.ImportModeButton:SetScript('OnClick', function()
+		ProfileManagerState.window.mode = 'import'
+		ProfileManager.UpdateWindowForMode()
+	end)
+
+	ProfileManagerState.window.ExportModeButton = LibAT.UI.CreateButton(modeButtonContainer, 95, 22, 'Export')
+	ProfileManagerState.window.ExportModeButton:SetPoint('LEFT', ProfileManagerState.window.ImportModeButton, 'RIGHT', 5, 0)
+	ProfileManagerState.window.ExportModeButton:SetScript('OnClick', function()
+		ProfileManagerState.window.mode = 'export'
 		ProfileManager.UpdateWindowForMode()
 	end)
 
@@ -635,10 +980,52 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.ExpertModeCheckbox = LibAT.UI.CreateCheckbox(ProfileManagerState.window.ControlFrame, 'Expert Mode')
 	ProfileManagerState.window.ExpertModeCheckbox:SetPoint('RIGHT', ProfileManagerState.window.ControlFrame, 'RIGHT', -10, 0)
 	ProfileManagerState.window.ExpertModeCheckbox:SetChecked(false)
-	ProfileManagerState.window.ExpertModeCheckbox.checkbox:SetScript('OnClick', function(self)
+	ProfileManagerState.window.ExpertModeCheckbox:SetScript('OnClick', function(self)
 		ProfileManagerState.window.expertMode = self:GetChecked()
-		-- Rebuild navigation tree to show/hide namespace subcategories
 		ProfileManager.BuildNavigationTree()
+	end)
+
+	-- Add Visibility Filter button (opens filter menu)
+	ProfileManagerState.window.FilterButton = LibAT.UI.CreateButton(ProfileManagerState.window.ControlFrame, 80, 22, 'Filters')
+	ProfileManagerState.window.FilterButton:SetPoint('RIGHT', ProfileManagerState.window.ExpertModeCheckbox, 'LEFT', -10, 0)
+	ProfileManagerState.window.FilterButton:SetScript('OnClick', function()
+		MenuUtil.CreateContextMenu(ProfileManagerState.window.FilterButton, function(owner, rootDescription)
+			-- Header
+			rootDescription:CreateTitle('Visibility Filters')
+
+			-- Filter: Hide addons set to Default
+			rootDescription:CreateCheckbox('Hide Addons Set to Default', function()
+				return ProfileManager:GetFilter('hideAddonsSetToDefault')
+			end, function()
+				local current = ProfileManager:GetFilter('hideAddonsSetToDefault')
+				ProfileManager:SetFilter('hideAddonsSetToDefault', not current)
+			end)
+
+			-- Filter: Hide addons where all alts use same profile
+			rootDescription:CreateCheckbox('Hide Addons Where All Alts Use Same Profile', function()
+				return ProfileManager:GetFilter('hideAddonsWithAllAltsUsingSameProfile')
+			end, function()
+				local current = ProfileManager:GetFilter('hideAddonsWithAllAltsUsingSameProfile')
+				ProfileManager:SetFilter('hideAddonsWithAllAltsUsingSameProfile', not current)
+			end)
+
+			-- Filter: Hide addons where all alts use char-specific profiles
+			rootDescription:CreateCheckbox('Hide Addons Where All Alts Use Character Profiles', function()
+				return ProfileManager:GetFilter('hideAddonsWithAllAltsUsingCharProfile')
+			end, function()
+				local current = ProfileManager:GetFilter('hideAddonsWithAllAltsUsingCharProfile')
+				ProfileManager:SetFilter('hideAddonsWithAllAltsUsingCharProfile', not current)
+			end)
+
+			rootDescription:CreateDivider()
+
+			-- Reset all filters
+			rootDescription:CreateButton('Reset All Filters', function()
+				ProfileManager:SetFilter('hideAddonsSetToDefault', false)
+				ProfileManager:SetFilter('hideAddonsWithAllAltsUsingSameProfile', false)
+				ProfileManager:SetFilter('hideAddonsWithAllAltsUsingCharProfile', true)
+			end)
+		end)
 	end)
 
 	-- Create main content area
