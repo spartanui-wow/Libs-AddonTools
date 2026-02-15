@@ -824,7 +824,8 @@ function ProfileManager:DoExport()
 			-- Get namespace defaults from AceDB
 			local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[activeNS]
 			local strippedData = StripDefaults(db.sv.namespaces[activeNS], nsDefaults)
-			local pruned = PruneEmptyTables(strippedData)
+			-- Pass namespace as path prefix for blacklist checking
+			local pruned = PruneEmptyTables(strippedData, activeNS)
 			if pruned then
 				exportData.data[activeNS] = pruned
 			end
@@ -841,7 +842,8 @@ function ProfileManager:DoExport()
 					-- Get namespace defaults from AceDB
 					local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[namespace]
 					local strippedData = StripDefaults(nsData, nsDefaults)
-					local pruned = PruneEmptyTables(strippedData)
+					-- Pass namespace as path prefix for blacklist checking
+					local pruned = PruneEmptyTables(strippedData, namespace)
 					if pruned then
 						exportData.data[namespace] = pruned
 					end
