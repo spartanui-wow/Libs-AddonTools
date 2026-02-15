@@ -310,12 +310,9 @@ local function ExportRegisteredAddon(addonId)
 		return nil, 'Invalid AceDB object for ' .. addon.displayName
 	end
 
-	-- Build export data (same structure as ProfileManager:DoExport)
+	-- Build export data (minimal metadata to reduce size)
 	local exportData = {
 		version = '3.0.0',
-		timestamp = date('%Y-%m-%d %H:%M:%S'),
-		addon = addon.displayName,
-		addonId = addon.id,
 		data = {},
 	}
 
@@ -475,10 +472,9 @@ function ProfileManager:CreateCompositeExport(compositeId, selectedComponents)
 		return nil, 'Composite "' .. compositeId .. '" is not registered'
 	end
 
-	-- Build composite export structure
+	-- Build composite export structure (minimal metadata)
 	local compositeExport = {
 		version = '4.0.0',
-		timestamp = date('%Y-%m-%d %H:%M:%S'),
 		format = 'ProfileManager_Composite',
 		compositeId = compositeId,
 		components = {},

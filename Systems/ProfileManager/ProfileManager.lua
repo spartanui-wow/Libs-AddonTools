@@ -787,11 +787,10 @@ function ProfileManager:DoExport()
 	end
 
 	-- Build export data
+	-- Metadata is minimal: version, data, and optional profile/namespace markers
+	-- (addon, timestamp, etc. are in the comment header to avoid duplication)
 	local exportData = {
 		version = '3.0.0',
-		timestamp = date('%Y-%m-%d %H:%M:%S'),
-		addon = addon.displayName,
-		addonId = addon.id,
 		data = {},
 	}
 
@@ -874,9 +873,10 @@ function ProfileManager:DoExport()
 		return
 	end
 
-	-- Build comment header
+	-- Build comment header with metadata
 	local header = '-- ' .. addon.displayName .. ' Profile Export\n'
-	header = header .. '-- Generated: ' .. exportData.timestamp .. '\n'
+	header = header .. '-- Addon: ' .. addon.displayName .. ' (ID: ' .. addon.id .. ')\n'
+	header = header .. '-- Generated: ' .. date('%Y-%m-%d %H:%M:%S') .. '\n'
 	header = header .. '-- Version: ' .. exportData.version .. '\n'
 	if activeNS == '__COREDB__' then
 		header = header .. '-- Section: Core DB\n'
