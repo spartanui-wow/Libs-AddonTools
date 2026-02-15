@@ -709,8 +709,12 @@ local function StripDefaults(data, defaults)
 	local result = {}
 	local hasChanges = false
 
+	-- Check if defaults has a wildcard pattern (['**']) for AceDB defaults
+	local wildcardDefault = defaults and defaults['**']
+
 	for key, value in pairs(data) do
-		local defaultValue = defaults and defaults[key]
+		-- Use wildcard default if no specific key default exists
+		local defaultValue = defaults and (defaults[key] or wildcardDefault)
 		local stripped = StripDefaults(value, defaultValue)
 
 		if stripped ~= nil then
