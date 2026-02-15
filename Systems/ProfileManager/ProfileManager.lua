@@ -657,20 +657,58 @@ ProfileManagerState.BuildAddonCategories = BuildAddonCategories
 ----------------------------------------------------------------------------------------------------
 
 -- Export function - Works with registered addons
----Remove empty tables from a data structure (deep copy with pruning)
+---Export blacklist: paths that should never be exported (transient/runtime data)
+---Format: "namespace.path.to.key" or "path.to.key" for profile-level data
+---Supports wildcards: "*.chatLog.history" matches any namespace
+---
+---Addons can register additional blacklist patterns via ProfileManager:RegisterExportBlacklist()
+---Stored in shared state so Composite.lua can access it
+ProfileManagerState.exportBlacklist = ProfileManagerState.exportBlacklist or {
+	-- Default blacklist patterns (can be extended by addons)
+	-- Examples:
+	-- 'Chatbox.chatLog.history',  -- SpartanUI chat log history
+	-- '*.cache',                   -- All cache tables (wildcard)
+}
+local EXPORT_BLACKLIST = ProfileManagerState.exportBlacklist
+
+---Check if a path matches any blacklist pattern
+---@param path string The current path being checked (e.g., "Chatbox.chatLog.history")
+---@return boolean matches True if the path should be excluded from export
+local function IsPathBlacklisted(path)
+	for _, pattern in ipairs(EXPORT_BLACKLIST) do
+		-- Convert wildcard pattern to Lua pattern
+		local luaPattern = '^' .. pattern:gsub('%*', '.-') .. '$'
+		if path:match(luaPattern) then
+			return true
+		end
+	end
+	return false
+end
+
+---Remove empty tables and blacklisted paths from a data structure (deep copy with pruning)
 ---@param data table The table to prune
+---@param currentPath? string Internal: current path for blacklist checking
 ---@return table|nil prunedData The pruned table, or nil if the entire table is empty
-local function PruneEmptyTables(data)
+local function PruneEmptyTables(data, currentPath)
 	if type(data) ~= 'table' then
 		return data
 	end
 
+	currentPath = currentPath or ''
 	local result = {}
 	local hasContent = false
 
 	for key, value in pairs(data) do
-		if type(value) == 'table' then
-			local pruned = PruneEmptyTables(value)
+		local keyPath = currentPath ~= '' and (currentPath .. '.' .. key) or key
+
+		-- Skip blacklisted paths
+		if IsPathBlacklisted(keyPath) then
+			-- Skip this key entirely (don't include in export)
+			if LibAT.Log then
+				LibAT.Log('Excluding blacklisted path from export: ' .. keyPath, 'Libs - Addon Tools.ProfileManager', 'debug')
+			end
+		elseif type(value) == 'table' then
+			local pruned = PruneEmptyTables(value, keyPath)
 			if pruned ~= nil then
 				result[key] = pruned
 				hasContent = true
@@ -1126,6 +1164,50 @@ function ProfileManager:ExportUI()
 	LibAT.ProfileManager.UpdateWindowForMode()
 end
 
+---Register export blacklist patterns to exclude specific paths from profile exports
+---@param patterns string|table A single pattern string or array of pattern strings
+---
+---Patterns use dot notation for paths:
+---  - "Chatbox.chatLog.history" - Exclude specific nested path
+---  - "*.cache" - Wildcard: exclude all 'cache' keys at any level
+---  - "UnitFrames.*.portrait.cache" - Complex wildcard pattern
+---
+---@usage
+---  -- Single pattern
+---  LibAT.ProfileManager:RegisterExportBlacklist('Chatbox.chatLog.history')
+---
+---  -- Multiple patterns
+---  LibAT.ProfileManager:RegisterExportBlacklist({
+---    'Chatbox.chatLog.history',
+---    '*.cache',
+---    '*.tempData'
+---  })
+function ProfileManager:RegisterExportBlacklist(patterns)
+	if type(patterns) == 'string' then
+		-- Single pattern
+		if not tContains(EXPORT_BLACKLIST, patterns) then
+			table.insert(EXPORT_BLACKLIST, patterns)
+			if LibAT.Log then
+				LibAT.Log('Registered export blacklist pattern: ' .. patterns, 'Libs - Addon Tools.ProfileManager', 'debug')
+			end
+		end
+	elseif type(patterns) == 'table' then
+		-- Array of patterns
+		for _, pattern in ipairs(patterns) do
+			if type(pattern) == 'string' and not tContains(EXPORT_BLACKLIST, pattern) then
+				table.insert(EXPORT_BLACKLIST, pattern)
+				if LibAT.Log then
+					LibAT.Log('Registered export blacklist pattern: ' .. pattern, 'Libs - Addon Tools.ProfileManager', 'debug')
+				end
+			end
+		end
+	else
+		if LibAT.Log then
+			LibAT.Log('RegisterExportBlacklist: Invalid argument type (expected string or table)', 'Libs - Addon Tools.ProfileManager', 'warning')
+		end
+	end
+end
+
 function ProfileManager:ToggleWindow()
 	if not ProfileManagerState.window then
 		LibAT.ProfileManager.CreateWindow()
@@ -1162,4 +1244,10 @@ end
 
 	-- Unregister when addon unloads (optional)
 	LibAT.ProfileManager:UnregisterAddon("spartanui")
+
+	-- Register export blacklist patterns (exclude transient data from exports)
+	LibAT.ProfileManager:RegisterExportBlacklist({
+		'Chatbox.chatLog.history',  -- Chat log history (transient chat data)
+		'*.cache',                   -- Any cache tables (wildcard pattern)
+	})
 ]]

@@ -55,8 +55,9 @@ function ProfileManager.EncodeData(data)
 		return nil, 'Serialization failed'
 	end
 
-	-- Step 2: Compress with LibCompress
-	local compressed, compressErr = LibCompress:Compress(serialized)
+	-- Step 2: Compress with LibCompress (force LZW for web decoder compatibility)
+	-- Use CompressLZW instead of Compress to ensure consistent codec for web-based decoding
+	local compressed, compressErr = LibCompress:CompressLZW(serialized)
 	if not compressed then
 		return nil, 'Compression failed: ' .. tostring(compressErr)
 	end

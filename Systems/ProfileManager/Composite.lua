@@ -7,20 +7,46 @@ local ProfileManager = LibAT.ProfileManager
 -- Utility Functions
 ----------------------------------------------------------------------------------------------------
 
----Remove empty tables from a data structure (deep copy with pruning)
+---Check if a path matches any blacklist pattern
+---Uses shared blacklist from ProfileManagerState (registered via ProfileManager:RegisterExportBlacklist)
+---@param path string The current path being checked (e.g., "Chatbox.chatLog.history")
+---@return boolean matches True if the path should be excluded from export
+local function IsPathBlacklisted(path)
+	local blacklist = ProfileManagerState.exportBlacklist or {}
+	for _, pattern in ipairs(blacklist) do
+		-- Convert wildcard pattern to Lua pattern
+		local luaPattern = '^' .. pattern:gsub('%*', '.-') .. '$'
+		if path:match(luaPattern) then
+			return true
+		end
+	end
+	return false
+end
+
+---Remove empty tables and blacklisted paths from a data structure (deep copy with pruning)
 ---@param data table The table to prune
+---@param currentPath? string Internal: current path for blacklist checking
 ---@return table|nil prunedData The pruned table, or nil if the entire table is empty
-local function PruneEmptyTables(data)
+local function PruneEmptyTables(data, currentPath)
 	if type(data) ~= 'table' then
 		return data
 	end
 
+	currentPath = currentPath or ''
 	local result = {}
 	local hasContent = false
 
 	for key, value in pairs(data) do
-		if type(value) == 'table' then
-			local pruned = PruneEmptyTables(value)
+		local keyPath = currentPath ~= '' and (currentPath .. '.' .. key) or key
+
+		-- Skip blacklisted paths
+		if IsPathBlacklisted(keyPath) then
+			-- Skip this key entirely (don't include in export)
+			if LibAT.Log then
+				LibAT.Log('Excluding blacklisted path from export: ' .. keyPath, 'Libs - Addon Tools.ProfileManager.Composite', 'debug')
+			end
+		elseif type(value) == 'table' then
+			local pruned = PruneEmptyTables(value, keyPath)
 			if pruned ~= nil then
 				result[key] = pruned
 				hasContent = true
