@@ -762,9 +762,16 @@ function ProfileManager:DoExport()
 			end
 		end
 
-		-- Also export profile data if available
+		-- Export only the ACTIVE profile (not all profiles)
+		-- This prevents bloat from exporting unused character profiles
 		if db.sv.profiles then
-			exportData.profiles = PruneEmptyTables(db.sv.profiles) or {}
+			local currentProfileKey = db.keys and db.keys.profile or 'Default'
+			if db.sv.profiles[currentProfileKey] then
+				local pruned = PruneEmptyTables(db.sv.profiles[currentProfileKey])
+				if pruned then
+					exportData.profiles = { [currentProfileKey] = pruned }
+				end
+			end
 		end
 
 		-- Record which profile was active at export time (for targeted import)

@@ -4,6 +4,37 @@ local LibAT = LibAT
 local ProfileManager = LibAT.ProfileManager
 
 ----------------------------------------------------------------------------------------------------
+-- Utility Functions
+----------------------------------------------------------------------------------------------------
+
+---Remove empty tables from a data structure (deep copy with pruning)
+---@param data table The table to prune
+---@return table|nil prunedData The pruned table, or nil if the entire table is empty
+local function PruneEmptyTables(data)
+	if type(data) ~= 'table' then
+		return data
+	end
+
+	local result = {}
+	local hasContent = false
+
+	for key, value in pairs(data) do
+		if type(value) == 'table' then
+			local pruned = PruneEmptyTables(value)
+			if pruned ~= nil then
+				result[key] = pruned
+				hasContent = true
+			end
+		else
+			result[key] = value
+			hasContent = true
+		end
+	end
+
+	return hasContent and result or nil
+end
+
+----------------------------------------------------------------------------------------------------
 -- Type Definitions
 ----------------------------------------------------------------------------------------------------
 
@@ -228,14 +259,24 @@ local function ExportRegisteredAddon(addonId)
 	if db.sv.namespaces then
 		for namespace, nsData in pairs(db.sv.namespaces) do
 			if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-				exportData.data[namespace] = nsData
+				local pruned = PruneEmptyTables(nsData)
+				if pruned then
+					exportData.data[namespace] = pruned
+				end
 			end
 		end
 	end
 
-	-- Also export profile data if available
+	-- Export only the ACTIVE profile (not all profiles)
+	-- This prevents bloat from exporting unused character profiles
 	if db.sv.profiles then
-		exportData.profiles = db.sv.profiles
+		local currentProfileKey = db.keys and db.keys.profile or 'Default'
+		if db.sv.profiles[currentProfileKey] then
+			local pruned = PruneEmptyTables(db.sv.profiles[currentProfileKey])
+			if pruned then
+				exportData.profiles = { [currentProfileKey] = pruned }
+			end
+		end
 	end
 
 	-- Record which profile was active at export time
