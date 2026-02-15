@@ -685,6 +685,44 @@ local function IsPathBlacklisted(path)
 	return false
 end
 
+---Strip default values from data by comparing against defaults table
+---Only exports values that differ from defaults (Configuration Override Pattern)
+---@param data table The data to check (user's merged data)
+---@param defaults table|nil The default values to compare against
+---@return table|nil strippedData The data with defaults removed, or nil if everything is default
+local function StripDefaults(data, defaults)
+	if type(data) ~= 'table' then
+		-- If not a table, compare directly with default
+		if defaults == nil then
+			-- No default exists, export the value
+			return data
+		elseif data == defaults then
+			-- Value matches default, don't export
+			return nil
+		else
+			-- Value differs from default, export it
+			return data
+		end
+	end
+
+	-- Both are tables, compare recursively
+	local result = {}
+	local hasChanges = false
+
+	for key, value in pairs(data) do
+		local defaultValue = defaults and defaults[key]
+		local stripped = StripDefaults(value, defaultValue)
+
+		if stripped ~= nil then
+			result[key] = stripped
+			hasChanges = true
+		end
+	end
+
+	-- Only return the table if it has changes from defaults
+	return hasChanges and result or nil
+end
+
 ---Remove empty tables and blacklisted paths from a data structure (deep copy with pruning)
 ---@param data table The table to prune
 ---@param currentPath? string Internal: current path for blacklist checking
@@ -760,6 +798,9 @@ function ProfileManager:DoExport()
 	-- Determine which profile to export (from dropdown or current)
 	local exportProfileKey = ProfileManagerState.window.exportSourceProfile or (db.keys and db.keys.profile) or 'Default'
 
+	-- Get defaults from AceDB for stripping (Configuration Override Pattern)
+	local profileDefaults = db.defaults and db.defaults.profile
+
 	-- Export based on namespace selection
 	local activeNS = ProfileManagerState.window.activeNamespace
 	if activeNS == '__COREDB__' then
@@ -767,7 +808,9 @@ function ProfileManager:DoExport()
 		exportData.namespace = '__COREDB__'
 		if db.sv.profiles then
 			if db.sv.profiles[exportProfileKey] then
-				exportData.data = PruneEmptyTables(db.sv.profiles[exportProfileKey]) or {}
+				-- Strip defaults first, then prune empty tables
+				local strippedData = StripDefaults(db.sv.profiles[exportProfileKey], profileDefaults)
+				exportData.data = PruneEmptyTables(strippedData) or {}
 			else
 				LibAT:Print('|cffff0000Error:|r Profile "' .. exportProfileKey .. '" not found in database')
 				return
@@ -779,7 +822,10 @@ function ProfileManager:DoExport()
 	elseif activeNS then
 		-- Export single namespace
 		if db.sv.namespaces and db.sv.namespaces[activeNS] then
-			local pruned = PruneEmptyTables(db.sv.namespaces[activeNS])
+			-- Get namespace defaults from AceDB
+			local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[activeNS]
+			local strippedData = StripDefaults(db.sv.namespaces[activeNS], nsDefaults)
+			local pruned = PruneEmptyTables(strippedData)
 			if pruned then
 				exportData.data[activeNS] = pruned
 			end
@@ -793,7 +839,10 @@ function ProfileManager:DoExport()
 		if db.sv.namespaces then
 			for namespace, nsData in pairs(db.sv.namespaces) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					local pruned = PruneEmptyTables(nsData)
+					-- Get namespace defaults from AceDB
+					local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[namespace]
+					local strippedData = StripDefaults(nsData, nsDefaults)
+					local pruned = PruneEmptyTables(strippedData)
 					if pruned then
 						exportData.data[namespace] = pruned
 					end
@@ -805,7 +854,9 @@ function ProfileManager:DoExport()
 		-- This prevents bloat from exporting unused character profiles
 		if db.sv.profiles then
 			if db.sv.profiles[exportProfileKey] then
-				local pruned = PruneEmptyTables(db.sv.profiles[exportProfileKey])
+				-- Strip defaults first, then prune empty tables
+				local strippedData = StripDefaults(db.sv.profiles[exportProfileKey], profileDefaults)
+				local pruned = PruneEmptyTables(strippedData)
 				if pruned then
 					exportData.profiles = { [exportProfileKey] = pruned }
 				end
