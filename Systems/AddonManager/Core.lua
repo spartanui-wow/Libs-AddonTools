@@ -287,7 +287,7 @@ end
 -- Dependency Helpers
 ----------------------------------------------------------------------------------------------------
 
----Check if an addon is a child addon (has X-Part-Of set)
+---Check if an addon is a child addon (has X-Part-Of, RequiredDeps, or is part of known family)
 ---@param addon table Addon metadata
 ---@return boolean isChild Whether addon is a child
 ---@return string|nil parentName Name of parent addon if child
@@ -296,26 +296,66 @@ function Core.IsChildAddon(addon)
 		return false, nil
 	end
 
-	-- Only use X-Part-Of for parent-child relationships
-	-- Dependencies don't make an addon a "child" for UI purposes
+	-- Check X-Part-Of first (explicit parent declaration)
 	if addon.partOf then
 		return true, addon.partOf
+	end
+
+	-- Special case for known addon families (DBM, etc.) due to ordering issues
+	if AddonManager.SpecialCases then
+		local family = AddonManager.SpecialCases.GetAddonFamily(addon.name)
+		if family then
+			-- Check if this is a child addon (not the core addon itself)
+			if not AddonManager.SpecialCases.IsCoreAddon(addon.name) then
+				-- For DBM and other known families, find the core addon
+				for _, otherAddon in pairs(Core.AddonCache) do
+					if AddonManager.SpecialCases.IsCoreAddon(otherAddon.name) then
+						local otherFamily = AddonManager.SpecialCases.GetAddonFamily(otherAddon.name)
+						if otherFamily == family then
+							return true, otherAddon.name
+						end
+					end
+				end
+			end
+		end
+	end
+
+	-- Dynamic detection: Check if this addon has RequiredDeps (dependencies)
+	-- If it does, the first dependency is considered the parent
+	if addon.dependencies and #addon.dependencies > 0 then
+		-- Return first dependency as parent
+		return true, addon.dependencies[1]
 	end
 
 	return false, nil
 end
 
----Get all addons that are part of this addon family (children via X-Part-Of)
+---Get all addons that are part of this addon family (children via X-Part-Of or known families)
 ---@param addonName string Addon name
 ---@return table dependents List of addon names that are part of this addon family
 function Core.GetDependents(addonName)
 	local dependents = {}
 
 	for _, addon in pairs(Core.AddonCache) do
-		-- Only use X-Part-Of for family relationships
-		-- Don't use Dependencies list (that's for loading order, not UI grouping)
+		-- Check X-Part-Of first
 		if addon.partOf == addonName then
 			table.insert(dependents, addon.name)
+		end
+
+		-- Check if this addon is a child of addonName via known families
+		local isChild, parentName = Core.IsChildAddon(addon)
+		if isChild and parentName == addonName then
+			-- Only add if not already added via partOf
+			local alreadyAdded = false
+			for _, depName in ipairs(dependents) do
+				if depName == addon.name then
+					alreadyAdded = true
+					break
+				end
+			end
+			if not alreadyAdded then
+				table.insert(dependents, addon.name)
+			end
 		end
 	end
 
