@@ -133,7 +133,7 @@ function BuildContent(contentFrame)
 	-- Background for metrics area
 	local metricsBg = CreateFrame('Frame', nil, contentFrame, 'BackdropTemplate')
 	metricsBg:SetPoint('TOPLEFT', controlBar, 'BOTTOMLEFT', 0, -8)
-	metricsBg:SetPoint('BOTTOMRIGHT', contentFrame, 'BOTTOMRIGHT', -4, 40) -- Leave space for footer
+	metricsBg:SetPoint('BOTTOMRIGHT', contentFrame, 'BOTTOMRIGHT', -20, 40) -- Leave space for footer
 	metricsBg:SetBackdrop({
 		bgFile = 'Interface\\Buttons\\WHITE8x8',
 		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',

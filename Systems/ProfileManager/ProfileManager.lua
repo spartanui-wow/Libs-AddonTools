@@ -663,12 +663,13 @@ ProfileManagerState.BuildAddonCategories = BuildAddonCategories
 ---
 ---Addons can register additional blacklist patterns via ProfileManager:RegisterExportBlacklist()
 ---Stored in shared state so Composite.lua can access it
-ProfileManagerState.exportBlacklist = ProfileManagerState.exportBlacklist or {
-	-- Default blacklist patterns (can be extended by addons)
-	-- Examples:
-	-- 'Chatbox.chatLog.history',  -- SpartanUI chat log history
-	-- '*.cache',                   -- All cache tables (wildcard)
-}
+ProfileManagerState.exportBlacklist = ProfileManagerState.exportBlacklist
+	or {
+		-- Default blacklist patterns (can be extended by addons)
+		-- Examples:
+		-- 'Chatbox.chatLog.history',  -- SpartanUI chat log history
+		-- '*.cache',                   -- All cache tables (wildcard)
+	}
 local EXPORT_BLACKLIST = ProfileManagerState.exportBlacklist
 
 ---Check if a path matches any blacklist pattern
