@@ -40,8 +40,8 @@ end
 -- Window Management Functions
 ----------------------------------------------------------------------------------------------------
 
----Show export choice buttons in the right panel (addon-only vs full stack)
-function ProfileManager.ShowExportChoiceButtons()
+---Show composite export button next to normal export button
+function ProfileManager.ShowCompositeExportButton()
 	local win = ProfileManagerState.window
 	if not win or not win.activeAddonId or not win.activeCompositeId then
 		return
@@ -53,42 +53,12 @@ function ProfileManager.ShowExportChoiceButtons()
 		return
 	end
 
-	-- Create choice buttons if they don't exist
-	if not win.ExportChoiceFrame then
-		win.ExportChoiceFrame = CreateFrame('Frame', nil, win.RightPanel)
-		win.ExportChoiceFrame:SetPoint('TOPLEFT', win.RightPanel, 'TOPLEFT', 20, -80)
-		win.ExportChoiceFrame:SetPoint('TOPRIGHT', win.RightPanel, 'TOPRIGHT', -20, -80)
-		win.ExportChoiceFrame:SetHeight(200)
-
-		-- Question text
-		win.ExportChoiceQuestion = win.ExportChoiceFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-		win.ExportChoiceQuestion:SetPoint('TOP', 0, -10)
-		win.ExportChoiceQuestion:SetText('What would you like to export?')
-
-		-- Button container
-		local buttonContainer = CreateFrame('Frame', nil, win.ExportChoiceFrame)
-		buttonContainer:SetPoint('TOP', win.ExportChoiceQuestion, 'BOTTOM', 0, -20)
-		buttonContainer:SetSize(480, 100)
-		win.ExportChoiceButtonContainer = buttonContainer
-
-		-- Single-addon button (left)
-		win.ExportSingleButton = LibAT.UI.CreateButton(buttonContainer, 230, 90, '')
-		win.ExportSingleButton:SetPoint('LEFT', 0, 0)
-
-		-- Composite button (right)
-		win.ExportCompositeButton = LibAT.UI.CreateButton(buttonContainer, 230, 90, '')
-		win.ExportCompositeButton:SetPoint('RIGHT', 0, 0)
+	-- Create composite button if it doesn't exist
+	if not win.ExportCompositeButton then
+		win.ExportCompositeButton = LibAT.UI.CreateButton(win.RightPanel, 150, 20, 'Composite Export', true)
 	end
 
-	-- Update button labels
-	win.ExportSingleButton:SetText(addon.displayName .. ' Only\n|cff888888(addon settings only)|r')
-	win.ExportSingleButton:SetScript('OnClick', function()
-		-- Export just the addon
-		win.activeCompositeId = nil
-		ProfileManager:DoExport()
-	end)
-
-	-- Build component list for composite button
+	-- Build component list for tooltip
 	local componentNames = {}
 	for _, component in ipairs(composite.components) do
 		if component.isAvailable() then
@@ -103,20 +73,67 @@ function ProfileManager.ShowExportChoiceButtons()
 	end
 	local componentList = table.concat(componentNames, ', ')
 
-	win.ExportCompositeButton:SetText('Full ' .. addon.displayName .. ' Stack\n|cff888888(' .. addon.displayName .. ', ' .. componentList .. ')|r')
 	win.ExportCompositeButton:SetScript('OnClick', function()
 		-- Show composite export UI
 		ProfileManager:ShowCompositeExport(win.activeCompositeId)
 	end)
 
-	win.ExportChoiceFrame:Show()
+	-- Create info icons using LibAT.UI (create once, update tooltips each call since text is dynamic)
+	if not win.ExportActionInfoIcon then
+		win.ExportActionInfoIcon = LibAT.UI.CreateInfoButton(win.RightPanel, '', '', 16)
+	end
+	if not win.ExportCompositeInfoIcon then
+		win.ExportCompositeInfoIcon = LibAT.UI.CreateInfoButton(win.RightPanel, '', '', 16)
+	end
+
+	-- Update tooltips with current addon info (dynamic text changes per addon)
+	win.ExportActionInfoIcon:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText('Standard Export', 1, 1, 1)
+		GameTooltip:AddLine('Exports only ' .. addon.displayName .. ' settings.\n\nUse this if you want to share just your ' .. addon.displayName .. ' configuration without other addons.', nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	win.ExportActionInfoIcon:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+	end)
+
+	win.ExportCompositeInfoIcon:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText('Composite Export', 1, 1, 1)
+		GameTooltip:AddLine('Exports the full addon stack: ' .. addon.displayName .. ', ' .. componentList .. '\n\nUse this if you want to share your complete UI setup with all related addons and settings.', nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	win.ExportCompositeInfoIcon:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+	end)
+
+	-- Position info icon to the right of normal export button
+	win.ExportActionInfoIcon:ClearAllPoints()
+	win.ExportActionInfoIcon:SetPoint('LEFT', win.ExportActionButton, 'RIGHT', 4, 0)
+	win.ExportActionInfoIcon:Show()
+
+	-- Position composite button to the right of normal export info icon
+	win.ExportCompositeButton:ClearAllPoints()
+	win.ExportCompositeButton:SetPoint('LEFT', win.ExportActionInfoIcon, 'RIGHT', 4, 0)
+	win.ExportCompositeButton:Show()
+
+	-- Position composite info icon to the right of composite button
+	win.ExportCompositeInfoIcon:ClearAllPoints()
+	win.ExportCompositeInfoIcon:SetPoint('LEFT', win.ExportCompositeButton, 'RIGHT', 4, 0)
+	win.ExportCompositeInfoIcon:Show()
 end
 
----Hide export choice buttons
-function ProfileManager.HideExportChoiceButtons()
+---Hide composite export button and info icons
+function ProfileManager.HideCompositeExportButton()
 	local win = ProfileManagerState.window
-	if win and win.ExportChoiceFrame then
-		win.ExportChoiceFrame:Hide()
+	if win and win.ExportCompositeButton then
+		win.ExportCompositeButton:Hide()
+	end
+	if win and win.ExportActionInfoIcon then
+		win.ExportActionInfoIcon:Hide()
+	end
+	if win and win.ExportCompositeInfoIcon then
+		win.ExportCompositeInfoIcon:Hide()
 	end
 end
 
@@ -589,8 +606,8 @@ function ProfileManager.UpdateWindowForMode()
 		-- Hide composite panel when not in composite export mode
 		ProfileManager:HideCompositeExportPanel()
 
-		-- In export mode: check if we need to show choice buttons for composite
-		local showChoiceButtons = ProfileManagerState.window.activeAddonId and ProfileManagerState.window.activeCompositeId and not ProfileManagerState.window.activeNamespace
+		-- Check if composite export is available
+		local hasComposite = ProfileManagerState.window.activeAddonId and ProfileManagerState.window.activeCompositeId and not ProfileManagerState.window.activeNamespace
 
 		if ProfileManagerState.window.activeAddonId then
 			-- Hide default elements
@@ -608,28 +625,23 @@ function ProfileManager.UpdateWindowForMode()
 				ProfileManagerState.window.ExportSourceFrame:Hide()
 			end
 
-			if showChoiceButtons then
-				-- Show choice buttons for composite export
-				if ProfileManagerState.window.ExportActionButton then
-					ProfileManagerState.window.ExportActionButton:Hide()
-				end
-				if ProfileManagerState.window.ExportSourceFrame then
-					ProfileManagerState.window.ExportSourceFrame:Hide()
-				end
-				ProfileManager.ShowExportChoiceButtons()
+			-- Always show export button
+			if ProfileManagerState.window.ExportActionButton then
+				ProfileManagerState.window.ExportActionButton:SetText('Export ' .. sectionName)
+				ProfileManagerState.window.ExportActionButton:Show()
+			end
+
+			-- Show composite button if composite is available
+			if hasComposite then
+				ProfileManager.ShowCompositeExportButton()
 			else
-				-- Show single export button
-				ProfileManager.HideExportChoiceButtons()
-				if ProfileManagerState.window.ExportActionButton then
-					ProfileManagerState.window.ExportActionButton:SetText('Export ' .. sectionName)
-					ProfileManagerState.window.ExportActionButton:Show()
-				end
+				ProfileManager.HideCompositeExportButton()
 			end
 		else
 			-- No addon selected
 			ProfileManagerState.window.Description:SetText('Select a section from the left panel to export.')
 			ProfileManagerState.window.Description:Show()
-			ProfileManager.HideExportChoiceButtons()
+			ProfileManager.HideCompositeExportButton()
 			if ProfileManagerState.window.ExportActionButton then
 				ProfileManagerState.window.ExportActionButton:Hide()
 			end
@@ -663,7 +675,7 @@ function ProfileManager.UpdateWindowForMode()
 		if ProfileManagerState.window.ExportSourceFrame then
 			ProfileManagerState.window.ExportSourceFrame:Hide()
 		end
-		ProfileManager.HideExportChoiceButtons()
+		ProfileManager.HideCompositeExportButton()
 		if ProfileManagerState.window.TextPanel then
 			ProfileManagerState.window.TextPanel:Show()
 		end
@@ -896,10 +908,6 @@ function ProfileManager:HideCompositeExportPanel()
 	local win = ProfileManagerState.window
 	if win and win.CompositePanel then
 		win.CompositePanel:Hide()
-		-- Show choice buttons again if we're still in composite export mode
-		if win.mode == 'export' and win.activeAddonId and win.activeCompositeId and not win.activeNamespace then
-			ProfileManager.ShowExportChoiceButtons()
-		end
 	end
 end
 
@@ -1137,23 +1145,23 @@ function ProfileManager.CreateWindow()
 
 	-- Create export source container (label + dropdown, shown in export mode only)
 	local exportSourceFrame = CreateFrame('Frame', nil, ProfileManagerState.window.RightPanel)
-	exportSourceFrame:SetSize(500, 40)
+	exportSourceFrame:SetSize(500, 30)
 	exportSourceFrame:SetPoint('TOPLEFT', ProfileManagerState.window.Description, 'BOTTOMLEFT', 0, -4)
 	ProfileManagerState.window.ExportSourceFrame = exportSourceFrame
 	exportSourceFrame:Hide()
 
 	local sourceLabel = exportSourceFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 	sourceLabel:SetPoint('LEFT', exportSourceFrame, 'LEFT', 0, 0)
-	sourceLabel:SetText('Export profile:')
+	sourceLabel:SetText('Export:')
 	sourceLabel:SetTextColor(1, 0.82, 0)
 
 	ProfileManagerState.window.ExportSourceDropdown = LibAT.UI.CreateDropdown(exportSourceFrame, 'Current Profile', 220, 22)
-	ProfileManagerState.window.ExportSourceDropdown:SetPoint('LEFT', sourceLabel, 'RIGHT', 8, 0)
+	ProfileManagerState.window.ExportSourceDropdown:SetPoint('LEFT', sourceLabel, 'RIGHT', 5, 0)
 	ProfileManagerState.window.exportSourceProfile = nil -- nil = current profile
 
 	-- Create export action button (positioned below source dropdown)
-	ProfileManagerState.window.ExportActionButton = LibAT.UI.CreateButton(ProfileManagerState.window.RightPanel, 250, 40, 'Export')
-	ProfileManagerState.window.ExportActionButton:SetPoint('TOP', exportSourceFrame, 'BOTTOM', 0, -16)
+	ProfileManagerState.window.ExportActionButton = LibAT.UI.CreateButton(ProfileManagerState.window.ExportSourceDropdown, 200, 20, 'Export', true)
+	ProfileManagerState.window.ExportActionButton:SetPoint('LEFT', exportSourceFrame, 'LEFT', 5, 0)
 	ProfileManagerState.window.ExportActionButton:SetScript('OnClick', function()
 		ProfileManager:DoExport()
 	end)

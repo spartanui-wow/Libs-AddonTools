@@ -838,12 +838,7 @@ function ProfileManager:DoExport()
 
 	local exportString = header .. encoded
 
-	-- Show the export action button area if it exists, hide it
-	if ProfileManagerState.window.ExportActionButton then
-		ProfileManagerState.window.ExportActionButton:Hide()
-	end
-
-	-- Show TextPanel and fill EditBox
+	-- Show TextPanel and fill EditBox (keep export button visible for multiple exports)
 	if ProfileManagerState.window.TextPanel then
 		ProfileManagerState.window.TextPanel:Show()
 	end
