@@ -719,18 +719,19 @@ function ProfileManager:DoExport()
 		data = {},
 	}
 
+	-- Determine which profile to export (from dropdown or current)
+	local exportProfileKey = ProfileManagerState.window.exportSourceProfile or (db.keys and db.keys.profile) or 'Default'
+
 	-- Export based on namespace selection
 	local activeNS = ProfileManagerState.window.activeNamespace
 	if activeNS == '__COREDB__' then
-		-- Export only the current active profile (core DB)
+		-- Export the selected profile (core DB)
 		exportData.namespace = '__COREDB__'
 		if db.sv.profiles then
-			-- Find the current profile key
-			local currentProfileKey = db.keys and db.keys.profile or 'Default'
-			if db.sv.profiles[currentProfileKey] then
-				exportData.data = PruneEmptyTables(db.sv.profiles[currentProfileKey]) or {}
+			if db.sv.profiles[exportProfileKey] then
+				exportData.data = PruneEmptyTables(db.sv.profiles[exportProfileKey]) or {}
 			else
-				LibAT:Print('|cffff0000Error:|r Current profile "' .. currentProfileKey .. '" not found in database')
+				LibAT:Print('|cffff0000Error:|r Profile "' .. exportProfileKey .. '" not found in database')
 				return
 			end
 		else
@@ -762,20 +763,19 @@ function ProfileManager:DoExport()
 			end
 		end
 
-		-- Export only the ACTIVE profile (not all profiles)
+		-- Export only the SELECTED profile (from dropdown)
 		-- This prevents bloat from exporting unused character profiles
 		if db.sv.profiles then
-			local currentProfileKey = db.keys and db.keys.profile or 'Default'
-			if db.sv.profiles[currentProfileKey] then
-				local pruned = PruneEmptyTables(db.sv.profiles[currentProfileKey])
+			if db.sv.profiles[exportProfileKey] then
+				local pruned = PruneEmptyTables(db.sv.profiles[exportProfileKey])
 				if pruned then
-					exportData.profiles = { [currentProfileKey] = pruned }
+					exportData.profiles = { [exportProfileKey] = pruned }
 				end
 			end
 		end
 
-		-- Record which profile was active at export time (for targeted import)
-		exportData.activeProfile = db.keys and db.keys.profile or 'Default'
+		-- Record which profile was exported
+		exportData.activeProfile = exportProfileKey
 	end
 
 	-- Encode using base64 pipeline

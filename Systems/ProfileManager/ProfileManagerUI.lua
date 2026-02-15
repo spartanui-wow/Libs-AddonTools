@@ -121,6 +121,59 @@ function ProfileManager.HideExportChoiceButtons()
 end
 
 ---Update the import destination dropdown with profiles from the selected addon
+local function UpdateExportSourceDropdown()
+	local win = ProfileManagerState.window
+	if not win or not win.ExportSourceDropdown then
+		return
+	end
+
+	-- Reset source to current profile
+	win.exportSourceProfile = nil
+
+	-- Get the current profile key for display
+	local currentProfileKey = 'Default'
+	if win.activeAddonId and ProfileManagerState.registeredAddons[win.activeAddonId] then
+		local addon = ProfileManagerState.registeredAddons[win.activeAddonId]
+		if addon.db and addon.db.keys and addon.db.keys.profile then
+			currentProfileKey = addon.db.keys.profile
+		end
+	end
+
+	win.ExportSourceDropdown:SetText('Current Profile (' .. currentProfileKey .. ')')
+
+	-- Setup the menu with profile choices
+	if win.ExportSourceDropdown.SetupMenu then
+		win.ExportSourceDropdown:SetupMenu(function(owner, rootDescription)
+			-- Current profile option
+			rootDescription:CreateButton('Current Profile (' .. currentProfileKey .. ')', function()
+				win.exportSourceProfile = nil
+				win.ExportSourceDropdown:SetText('Current Profile (' .. currentProfileKey .. ')')
+			end)
+
+			-- Existing profiles from the addon's DB
+			if win.activeAddonId and ProfileManagerState.registeredAddons[win.activeAddonId] then
+				local addon = ProfileManagerState.registeredAddons[win.activeAddonId]
+				if addon.db and addon.db.sv and addon.db.sv.profiles then
+					local sortedProfiles = {}
+					for profileName in pairs(addon.db.sv.profiles) do
+						if profileName ~= currentProfileKey then
+							table.insert(sortedProfiles, profileName)
+						end
+					end
+					table.sort(sortedProfiles)
+
+					for _, profileName in ipairs(sortedProfiles) do
+						rootDescription:CreateButton(profileName, function()
+							win.exportSourceProfile = profileName
+							win.ExportSourceDropdown:SetText(profileName)
+						end)
+					end
+				end
+			end
+		end)
+	end
+end
+
 local function UpdateImportDestDropdown()
 	local win = ProfileManagerState.window
 	if not win or not win.ImportDestDropdown then
@@ -546,10 +599,22 @@ function ProfileManager.UpdateWindowForMode()
 				ProfileManagerState.window.TextPanel:Hide()
 			end
 
+			-- Show export source dropdown only when exporting profile-level data (Core DB or All Namespaces)
+			local activeNS = ProfileManagerState.window.activeNamespace
+			if ProfileManagerState.window.ExportSourceFrame and (activeNS == '__COREDB__' or activeNS == nil) then
+				ProfileManagerState.window.ExportSourceFrame:Show()
+				UpdateExportSourceDropdown()
+			elseif ProfileManagerState.window.ExportSourceFrame then
+				ProfileManagerState.window.ExportSourceFrame:Hide()
+			end
+
 			if showChoiceButtons then
 				-- Show choice buttons for composite export
 				if ProfileManagerState.window.ExportActionButton then
 					ProfileManagerState.window.ExportActionButton:Hide()
+				end
+				if ProfileManagerState.window.ExportSourceFrame then
+					ProfileManagerState.window.ExportSourceFrame:Hide()
 				end
 				ProfileManager.ShowExportChoiceButtons()
 			else
@@ -567,6 +632,9 @@ function ProfileManager.UpdateWindowForMode()
 			ProfileManager.HideExportChoiceButtons()
 			if ProfileManagerState.window.ExportActionButton then
 				ProfileManagerState.window.ExportActionButton:Hide()
+			end
+			if ProfileManagerState.window.ExportSourceFrame then
+				ProfileManagerState.window.ExportSourceFrame:Hide()
 			end
 		end
 
@@ -588,10 +656,14 @@ function ProfileManager.UpdateWindowForMode()
 		ProfileManagerState.window.Description:SetText('Paste profile data below, then click Import to apply changes.')
 		ProfileManagerState.window.Description:Show()
 
-		-- In import mode: hide export action button, show text area
+		-- In import mode: hide export elements, show text area
 		if ProfileManagerState.window.ExportActionButton then
 			ProfileManagerState.window.ExportActionButton:Hide()
 		end
+		if ProfileManagerState.window.ExportSourceFrame then
+			ProfileManagerState.window.ExportSourceFrame:Hide()
+		end
+		ProfileManager.HideExportChoiceButtons()
 		if ProfileManagerState.window.TextPanel then
 			ProfileManagerState.window.TextPanel:Show()
 		end
@@ -1063,9 +1135,25 @@ function ProfileManager.CreateWindow()
 	ProfileManagerState.window.Description:SetJustifyH('CENTER')
 	ProfileManagerState.window.Description:SetWordWrap(true)
 
-	-- Create export action button (centered, shown in export mode)
+	-- Create export source container (label + dropdown, shown in export mode only)
+	local exportSourceFrame = CreateFrame('Frame', nil, ProfileManagerState.window.RightPanel)
+	exportSourceFrame:SetSize(500, 40)
+	exportSourceFrame:SetPoint('TOPLEFT', ProfileManagerState.window.Description, 'BOTTOMLEFT', 0, -4)
+	ProfileManagerState.window.ExportSourceFrame = exportSourceFrame
+	exportSourceFrame:Hide()
+
+	local sourceLabel = exportSourceFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	sourceLabel:SetPoint('LEFT', exportSourceFrame, 'LEFT', 0, 0)
+	sourceLabel:SetText('Export profile:')
+	sourceLabel:SetTextColor(1, 0.82, 0)
+
+	ProfileManagerState.window.ExportSourceDropdown = LibAT.UI.CreateDropdown(exportSourceFrame, 'Current Profile', 220, 22)
+	ProfileManagerState.window.ExportSourceDropdown:SetPoint('LEFT', sourceLabel, 'RIGHT', 8, 0)
+	ProfileManagerState.window.exportSourceProfile = nil -- nil = current profile
+
+	-- Create export action button (positioned below source dropdown)
 	ProfileManagerState.window.ExportActionButton = LibAT.UI.CreateButton(ProfileManagerState.window.RightPanel, 250, 40, 'Export')
-	ProfileManagerState.window.ExportActionButton:SetPoint('CENTER', ProfileManagerState.window.RightPanel, 'CENTER', 0, 0)
+	ProfileManagerState.window.ExportActionButton:SetPoint('TOP', exportSourceFrame, 'BOTTOM', 0, -16)
 	ProfileManagerState.window.ExportActionButton:SetScript('OnClick', function()
 		ProfileManager:DoExport()
 	end)
