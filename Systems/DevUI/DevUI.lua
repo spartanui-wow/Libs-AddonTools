@@ -22,8 +22,8 @@ local TAB_CONFIG = {
 	{ key = 'CLI', tooltipText = 'CLI', icon = 'Interface\\AddOns\\libsaddontools\\Images\\cli.png' },
 	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\libsaddontools\\Images\\errors.png' },
 	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' },
-	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' }, -- TODO: Create addons.png icon
-	{ key = 'Performance', tooltipText = 'Performance', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' }, -- TODO: Create performance.png icon
+	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Addons.png' },
+	{ key = 'Performance', tooltipText = 'Performance', icon = 'Interface\\AddOns\\libsaddontools\\Images\\performance.png' },
 }
 
 ----------------------------------------------------------------------------------------------------
