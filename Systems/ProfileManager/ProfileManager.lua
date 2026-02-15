@@ -657,6 +657,33 @@ ProfileManagerState.BuildAddonCategories = BuildAddonCategories
 ----------------------------------------------------------------------------------------------------
 
 -- Export function - Works with registered addons
+---Remove empty tables from a data structure (deep copy with pruning)
+---@param data table The table to prune
+---@return table|nil prunedData The pruned table, or nil if the entire table is empty
+local function PruneEmptyTables(data)
+	if type(data) ~= 'table' then
+		return data
+	end
+
+	local result = {}
+	local hasContent = false
+
+	for key, value in pairs(data) do
+		if type(value) == 'table' then
+			local pruned = PruneEmptyTables(value)
+			if pruned ~= nil then
+				result[key] = pruned
+				hasContent = true
+			end
+		else
+			result[key] = value
+			hasContent = true
+		end
+	end
+
+	return hasContent and result or nil
+end
+
 function ProfileManager:DoExport()
 	if not ProfileManagerState.window then
 		return
@@ -701,7 +728,7 @@ function ProfileManager:DoExport()
 			-- Find the current profile key
 			local currentProfileKey = db.keys and db.keys.profile or 'Default'
 			if db.sv.profiles[currentProfileKey] then
-				exportData.data = db.sv.profiles[currentProfileKey]
+				exportData.data = PruneEmptyTables(db.sv.profiles[currentProfileKey]) or {}
 			else
 				LibAT:Print('|cffff0000Error:|r Current profile "' .. currentProfileKey .. '" not found in database')
 				return
@@ -713,7 +740,10 @@ function ProfileManager:DoExport()
 	elseif activeNS then
 		-- Export single namespace
 		if db.sv.namespaces and db.sv.namespaces[activeNS] then
-			exportData.data[activeNS] = db.sv.namespaces[activeNS]
+			local pruned = PruneEmptyTables(db.sv.namespaces[activeNS])
+			if pruned then
+				exportData.data[activeNS] = pruned
+			end
 			exportData.namespace = activeNS
 		else
 			LibAT:Print('|cffff0000Error:|r Namespace "' .. activeNS .. '" not found')
@@ -724,14 +754,17 @@ function ProfileManager:DoExport()
 		if db.sv.namespaces then
 			for namespace, nsData in pairs(db.sv.namespaces) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					exportData.data[namespace] = nsData
+					local pruned = PruneEmptyTables(nsData)
+					if pruned then
+						exportData.data[namespace] = pruned
+					end
 				end
 			end
 		end
 
 		-- Also export profile data if available
 		if db.sv.profiles then
-			exportData.profiles = db.sv.profiles
+			exportData.profiles = PruneEmptyTables(db.sv.profiles) or {}
 		end
 
 		-- Record which profile was active at export time (for targeted import)
