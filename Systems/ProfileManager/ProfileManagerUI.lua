@@ -90,7 +90,13 @@ function ProfileManager.ShowCompositeExportButton()
 	win.ExportActionInfoIcon:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
 		GameTooltip:SetText('Standard Export', 1, 1, 1)
-		GameTooltip:AddLine('Exports only ' .. addon.displayName .. ' settings.\n\nUse this if you want to share just your ' .. addon.displayName .. ' configuration without other addons.', nil, nil, nil, true)
+		GameTooltip:AddLine(
+			'Exports only ' .. addon.displayName .. ' settings.\n\nUse this if you want to share just your ' .. addon.displayName .. ' configuration without other addons.',
+			nil,
+			nil,
+			nil,
+			true
+		)
 		GameTooltip:Show()
 	end)
 	win.ExportActionInfoIcon:SetScript('OnLeave', function()
@@ -100,7 +106,13 @@ function ProfileManager.ShowCompositeExportButton()
 	win.ExportCompositeInfoIcon:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
 		GameTooltip:SetText('Composite Export', 1, 1, 1)
-		GameTooltip:AddLine('Exports the full addon stack: ' .. addon.displayName .. ', ' .. componentList .. '\n\nUse this if you want to share your complete UI setup with all related addons and settings.', nil, nil, nil, true)
+		GameTooltip:AddLine(
+			'Exports the full addon stack: ' .. addon.displayName .. ', ' .. componentList .. '\n\nUse this if you want to share your complete UI setup with all related addons and settings.',
+			nil,
+			nil,
+			nil,
+			true
+		)
 		GameTooltip:Show()
 	end)
 	win.ExportCompositeInfoIcon:SetScript('OnLeave', function()
@@ -109,17 +121,17 @@ function ProfileManager.ShowCompositeExportButton()
 
 	-- Position info icon to the right of normal export button
 	win.ExportActionInfoIcon:ClearAllPoints()
-	win.ExportActionInfoIcon:SetPoint('LEFT', win.ExportActionButton, 'RIGHT', 4, 0)
+	win.ExportActionInfoIcon:SetPoint('RIGHT', win.ExportActionButton, 'LEFT', -4, 0)
 	win.ExportActionInfoIcon:Show()
 
 	-- Position composite button to the right of normal export info icon
 	win.ExportCompositeButton:ClearAllPoints()
-	win.ExportCompositeButton:SetPoint('LEFT', win.ExportActionInfoIcon, 'RIGHT', 4, 0)
+	win.ExportCompositeButton:SetPoint('TOP', win.ExportActionButton, 'BOTTOM', 0, -5)
 	win.ExportCompositeButton:Show()
 
 	-- Position composite info icon to the right of composite button
 	win.ExportCompositeInfoIcon:ClearAllPoints()
-	win.ExportCompositeInfoIcon:SetPoint('LEFT', win.ExportCompositeButton, 'RIGHT', 4, 0)
+	win.ExportCompositeInfoIcon:SetPoint('RIGHT', win.ExportCompositeButton, 'LEFT', -4, 0)
 	win.ExportCompositeInfoIcon:Show()
 end
 
@@ -627,7 +639,6 @@ function ProfileManager.UpdateWindowForMode()
 
 			-- Always show export button
 			if ProfileManagerState.window.ExportActionButton then
-				ProfileManagerState.window.ExportActionButton:SetText('Export ' .. sectionName)
 				ProfileManagerState.window.ExportActionButton:Show()
 			end
 
@@ -1145,23 +1156,23 @@ function ProfileManager.CreateWindow()
 
 	-- Create export source container (label + dropdown, shown in export mode only)
 	local exportSourceFrame = CreateFrame('Frame', nil, ProfileManagerState.window.RightPanel)
-	exportSourceFrame:SetSize(500, 30)
-	exportSourceFrame:SetPoint('TOPLEFT', ProfileManagerState.window.Description, 'BOTTOMLEFT', 0, -4)
+	exportSourceFrame:SetSize(500, 40)
+	exportSourceFrame:SetPoint('TOPLEFT', ProfileManagerState.window.Description, 'BOTTOMLEFT', 0, 0)
 	ProfileManagerState.window.ExportSourceFrame = exportSourceFrame
 	exportSourceFrame:Hide()
 
 	local sourceLabel = exportSourceFrame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	sourceLabel:SetPoint('LEFT', exportSourceFrame, 'LEFT', 0, 0)
+	sourceLabel:SetPoint('TOPLEFT', exportSourceFrame, 'TOPLEFT', 0, -2)
 	sourceLabel:SetText('Export:')
 	sourceLabel:SetTextColor(1, 0.82, 0)
 
 	ProfileManagerState.window.ExportSourceDropdown = LibAT.UI.CreateDropdown(exportSourceFrame, 'Current Profile', 220, 22)
-	ProfileManagerState.window.ExportSourceDropdown:SetPoint('LEFT', sourceLabel, 'RIGHT', 5, 0)
+	ProfileManagerState.window.ExportSourceDropdown:SetPoint('LEFT', sourceLabel, 'RIGHT', 3, 0)
 	ProfileManagerState.window.exportSourceProfile = nil -- nil = current profile
 
 	-- Create export action button (positioned below source dropdown)
-	ProfileManagerState.window.ExportActionButton = LibAT.UI.CreateButton(ProfileManagerState.window.ExportSourceDropdown, 200, 20, 'Export', true)
-	ProfileManagerState.window.ExportActionButton:SetPoint('LEFT', exportSourceFrame, 'LEFT', 5, 0)
+	ProfileManagerState.window.ExportActionButton = LibAT.UI.CreateButton(exportSourceFrame, 100, 20, 'Export', true)
+	ProfileManagerState.window.ExportActionButton:SetPoint('TOPRIGHT', exportSourceFrame, 'TOPRIGHT', 0, 2)
 	ProfileManagerState.window.ExportActionButton:SetScript('OnClick', function()
 		ProfileManager:DoExport()
 	end)

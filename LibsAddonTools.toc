@@ -37,8 +37,7 @@ Systems\ErrorDisplay\Config.lua
 libs\Ace3\Ace3.xml
 
 # Compression & Encoding Libraries
-libs\LibCompress\lib.xml
-libs\LibBase64-1.0\lib.xml
+libs\LibDeflate\lib.xml
 
 # Core Framework
 Core\Framework.lua

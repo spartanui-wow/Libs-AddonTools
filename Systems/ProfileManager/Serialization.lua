@@ -5,41 +5,39 @@ local ProfileManager = LibAT.ProfileManager
 
 ----------------------------------------------------------------------------------------------------
 -- Serialization Pipeline
--- Encode: Data table → AceSerializer → LibCompress → LibBase64 → shareable string
--- Decode: shareable string → LibBase64 → LibCompress → AceSerializer → Data table
+-- Encode: Data table → AceSerializer → LibDeflate (Compress + EncodeForPrint) → shareable string
+-- Decode: shareable string → LibDeflate (DecodeForPrint + Decompress) → AceSerializer → Data table
+--
+-- Uses DEFLATE compression (same as ElvUI, WeakAuras) for better compression ratios
+-- and industry-standard codec compatibility.
 ----------------------------------------------------------------------------------------------------
 
 -- Library references (resolved lazily to handle load order)
 local AceSerializer
-local LibCompress
-local LibBase64
+local LibDeflate
 
 ---Get library references (lazy initialization)
 ---@return boolean success Whether all libraries are available
 ---@return string|nil error Error message if a library is missing
 local function EnsureLibraries()
-	if AceSerializer and LibCompress and LibBase64 then
+	if AceSerializer and LibDeflate then
 		return true
 	end
 
 	AceSerializer = LibStub and LibStub('AceSerializer-3.0', true)
-	LibCompress = LibStub and LibStub('LibCompress', true)
-	LibBase64 = LibStub and LibStub('LibBase64-1.0', true)
+	LibDeflate = LibStub and LibStub('LibDeflate', true)
 
 	if not AceSerializer then
 		return false, 'AceSerializer-3.0 not available'
 	end
-	if not LibCompress then
-		return false, 'LibCompress not available'
-	end
-	if not LibBase64 then
-		return false, 'LibBase64-1.0 not available'
+	if not LibDeflate then
+		return false, 'LibDeflate not available'
 	end
 
 	return true
 end
 
----Encode a data table to a compressed, base64-encoded string
+---Encode a data table to a compressed, printable string
 ---@param data table The data to encode
 ---@return string|nil encoded The encoded string, or nil on error
 ---@return string|nil error Error message if encoding failed
@@ -55,26 +53,23 @@ function ProfileManager.EncodeData(data)
 		return nil, 'Serialization failed'
 	end
 
-	-- Step 2: Compress with LibCompress (force LZW for web decoder compatibility)
-	-- Use CompressLZW instead of Compress to ensure consistent codec for web-based decoding
-	local compressed, compressErr = LibCompress:CompressLZW(serialized)
+	-- Step 2: Compress with LibDeflate (DEFLATE algorithm)
+	local compressed = LibDeflate:CompressDeflate(serialized, { level = 9 })
 	if not compressed then
-		return nil, 'Compression failed: ' .. tostring(compressErr)
+		return nil, 'Compression failed'
 	end
 
-	-- Step 3: Encode to Base64
-	local ok, encoded = pcall(function()
-		return LibBase64:Encode(compressed)
-	end)
-	if not ok then
-		return nil, 'Base64 encoding failed: ' .. tostring(encoded)
+	-- Step 3: Encode for print (custom base-64-like encoding optimized for WoW)
+	local encoded = LibDeflate:EncodeForPrint(compressed)
+	if not encoded then
+		return nil, 'EncodeForPrint failed'
 	end
 
 	return encoded
 end
 
----Decode a compressed, base64-encoded string back to a data table
----@param encodedString string The base64-encoded string to decode
+---Decode a compressed, printable string back to a data table
+---@param encodedString string The encoded string to decode
 ---@return table|nil data The decoded data table, or nil on error
 ---@return string|nil error Error message if decoding failed
 function ProfileManager.DecodeData(encodedString)
@@ -87,18 +82,16 @@ function ProfileManager.DecodeData(encodedString)
 		return nil, 'Invalid input: expected non-empty string'
 	end
 
-	-- Step 1: Decode from Base64
-	local ok, decoded = pcall(function()
-		return LibBase64:Decode(encodedString)
-	end)
-	if not ok or not decoded then
-		return nil, 'Base64 decoding failed: ' .. tostring(decoded)
+	-- Step 1: Decode from printable format
+	local decoded = LibDeflate:DecodeForPrint(encodedString)
+	if not decoded then
+		return nil, 'DecodeForPrint failed: invalid encoding'
 	end
 
-	-- Step 2: Decompress with LibCompress
-	local decompressed, decompressErr = LibCompress:Decompress(decoded)
+	-- Step 2: Decompress with LibDeflate
+	local decompressed = LibDeflate:DecompressDeflate(decoded)
 	if not decompressed then
-		return nil, 'Decompression failed: ' .. tostring(decompressErr)
+		return nil, 'Decompression failed'
 	end
 
 	-- Step 3: Deserialize with AceSerializer

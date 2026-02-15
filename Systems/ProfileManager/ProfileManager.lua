@@ -826,7 +826,7 @@ function ProfileManager:DoExport()
 	-- Build comment header
 	local header = '-- ' .. addon.displayName .. ' Profile Export\n'
 	header = header .. '-- Generated: ' .. exportData.timestamp .. '\n'
-	header = header .. '-- Version: ' .. exportData.version .. ' (Base64 Encoded)\n'
+	header = header .. '-- Version: ' .. exportData.version .. '\n'
 	if activeNS == '__COREDB__' then
 		header = header .. '-- Section: Core DB\n'
 	elseif activeNS then
