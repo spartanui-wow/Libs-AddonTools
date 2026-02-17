@@ -51,6 +51,7 @@ local TabState = {
 
 	-- Profile dropdown
 	ProfileDropdown = nil,
+	SelectedProfile = nil, -- Profile selected in dropdown (not yet applied)
 
 	-- Collapse/expand state
 	CollapsedAddons = {}, -- { [addonName] = true } for collapsed parent addons
@@ -169,6 +170,14 @@ function RefreshCategoryList()
 	-- Create category buttons
 	local yOffset = -4
 	for i, category in ipairs(categories) do
+		-- Get category count
+		local count = AddonManager.Categories and AddonManager.Categories.GetCategoryCount(category) or 0
+
+		-- Hide empty categories (except "All" which always shows)
+		if count == 0 and category ~= 'All' then
+			-- Skip empty category
+		else
+
 		local btn = CreateFrame('Button', nil, scrollChild)
 		btn:SetSize(140, 20)
 		btn:SetPoint('TOPLEFT', scrollChild, 'TOPLEFT', 0, yOffset)
@@ -183,8 +192,6 @@ function RefreshCategoryList()
 		btn.text = btn:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 		btn.text:SetPoint('LEFT', btn, 'LEFT', 6, 0)
 
-		-- Get category count
-		local count = AddonManager.Categories and AddonManager.Categories.GetCategoryCount(category) or 0
 		btn.text:SetText(string.format('%s (%d)', category, count))
 		btn.text:SetJustifyH('LEFT')
 
@@ -219,6 +226,8 @@ function RefreshCategoryList()
 
 		table.insert(TabState.CategoryButtons, btn)
 		yOffset = yOffset - 22
+
+		end -- end else (non-empty category)
 	end
 
 	-- Update scroll child height
@@ -340,11 +349,11 @@ function RefreshAddonList()
 			local dependents = AddonManager.Core.GetDependents(addon.name)
 			local hasChildren = (#dependents > 0)
 
-			-- Debug log for first few addons
-			if i <= 5 and AddonManager.logger then
+			-- Log addons with parent/child relationships for debugging
+			if AddonManager.logger and (hasChildren or isChild) then
 				AddonManager.logger.info(
 					string.format(
-						'Addon %s: isChild=%s, parent=%s, hasChildren=%s, dependents=%s',
+						'Hierarchy %s: isChild=%s, parent=%s, hasChildren=%s, dependents=%s',
 						addon.name,
 						tostring(isChild),
 						tostring(parentName or 'nil'),
@@ -943,27 +952,84 @@ function BuildFooterPanel(parent)
 	profileDropdown:SetPoint('LEFT', profileLabel, 'RIGHT', 4, 0)
 	TabState.ProfileDropdown = profileDropdown
 
-	-- Changes indicator (right of profile)
-	local changesLabel = footer:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	changesLabel:SetPoint('LEFT', profileDropdown, 'RIGHT', 16, 0)
-	changesLabel:SetText('Changes: 0')
-	TabState.ChangesLabel = changesLabel
-
-	-- Apply button (right side)
-	local applyBtn = LibAT.UI.CreateButton(footer, 80, 24, 'Apply')
-	applyBtn:SetPoint('RIGHT', footer, 'RIGHT', -92, 0)
-	applyBtn:SetScript('OnClick', function()
+	-- Save Profile button (saves current addon states to selected profile)
+	local saveProfileBtn = LibAT.UI.CreateButton(footer, 100, 24, 'Save Profile')
+	saveProfileBtn:SetPoint('LEFT', profileDropdown, 'RIGHT', 8, 0)
+	saveProfileBtn:SetScript('OnClick', function()
+		local profileName = TabState.SelectedProfile or AddonManager.Profiles.GetActiveProfile() or 'Default'
+		-- Apply pending changes first
 		ApplyChanges()
+		-- Then save current states to the profile
+		AddonManager.Profiles.SaveProfile(profileName)
 		UpdateChangeIndicator()
 		RefreshAddonList()
+		if AddonManager.logger then
+			AddonManager.logger.info(string.format('Saved current addon states to profile: %s', profileName))
+		end
 	end)
-	TabState.ApplyButton = applyBtn
+	TabState.SaveProfileButton = saveProfileBtn
 
-	-- Cancel button (far right)
+	-- Apply Profile button (applies the previewed pending changes and prompts reload)
+	local applyProfileBtn = LibAT.UI.CreateButton(footer, 100, 24, 'Apply Profile')
+	applyProfileBtn:SetPoint('LEFT', saveProfileBtn, 'RIGHT', 4, 0)
+	applyProfileBtn:SetScript('OnClick', function()
+		local profileName = TabState.SelectedProfile or AddonManager.Profiles.GetActiveProfile() or 'Default'
+
+		-- Count pending changes for the confirm message
+		local count = 0
+		for _ in pairs(TabState.PendingChanges) do
+			count = count + 1
+		end
+
+		if count == 0 then
+			-- No changes to apply, just set active profile
+			AddonManager.Profiles.SetActiveProfile(profileName)
+			return
+		end
+
+		StaticPopupDialogs['LIBAT_ADDONMANAGER_APPLY_PROFILE'] = {
+			text = string.format('Apply profile "%s"?\n%d addon(s) will change. This requires a UI reload.', profileName, count),
+			button1 = 'Reload UI',
+			button2 = 'Cancel',
+			OnAccept = function()
+				ApplyChanges()
+				AddonManager.Profiles.SetActiveProfile(profileName)
+				LibAT:SafeReloadUI()
+			end,
+			timeout = 0,
+			whileDead = true,
+			hideOnEscape = true,
+		}
+		StaticPopup_Show('LIBAT_ADDONMANAGER_APPLY_PROFILE')
+	end)
+	TabState.ApplyButton = applyProfileBtn
+
+	-- Changes indicator
+	local changesLabel = footer:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	changesLabel:SetPoint('LEFT', applyProfileBtn, 'RIGHT', 12, 0)
+	changesLabel:SetText('')
+	TabState.ChangesLabel = changesLabel
+
+	-- Contextual Reload UI button (only visible when changes are pending)
+	local contextReloadBtn = LibAT.UI.CreateButton(footer, 80, 24, 'Reload UI')
+	contextReloadBtn:SetPoint('LEFT', changesLabel, 'RIGHT', 8, 0)
+	contextReloadBtn:SetScript('OnClick', function()
+		LibAT:SafeReloadUI()
+	end)
+	contextReloadBtn:Hide()
+	TabState.ContextReloadButton = contextReloadBtn
+
+	-- Cancel button (far right) - clears preview and resets dropdown to active profile
 	local cancelBtn = LibAT.UI.CreateButton(footer, 80, 24, 'Cancel')
 	cancelBtn:SetPoint('RIGHT', footer, 'RIGHT', -8, 0)
 	cancelBtn:SetScript('OnClick', function()
 		wipe(TabState.PendingChanges)
+		-- Reset dropdown to the actual active profile
+		local activeProfile = AddonManager.Profiles.GetActiveProfile() or 'Default'
+		TabState.SelectedProfile = activeProfile
+		if TabState.ProfileDropdown then
+			TabState.ProfileDropdown:SetText(activeProfile)
+		end
 		UpdateChangeIndicator()
 		RefreshAddonList()
 	end)
@@ -984,9 +1050,15 @@ function UpdateChangeIndicator()
 	end
 
 	if count > 0 then
-		TabState.ChangesLabel:SetText('|cffff0000Changes: ' .. count .. '|r')
+		TabState.ChangesLabel:SetText('|cffff0000' .. count .. ' pending|r')
+		if TabState.ContextReloadButton then
+			TabState.ContextReloadButton:Show()
+		end
 	else
-		TabState.ChangesLabel:SetText('Changes: 0')
+		TabState.ChangesLabel:SetText('')
+		if TabState.ContextReloadButton then
+			TabState.ContextReloadButton:Hide()
+		end
 	end
 end
 
@@ -1002,11 +1074,44 @@ function SetupProfileDropdown(dropdown)
 	-- Set initial text to active profile
 	local activeProfile = AddonManager.Profiles.GetActiveProfile() or 'Default'
 	dropdown:SetText(activeProfile)
+	TabState.SelectedProfile = activeProfile
 
 	-- Set click handler
 	dropdown:SetScript('OnMouseDown', function(self)
 		ShowProfileMenu(self)
 	end)
+end
+
+---Preview a profile by computing the diff against current addon states
+---and populating PendingChanges so the checkbox list updates
+---@param profileName string Profile name to preview
+function PreviewProfile(profileName)
+	if not AddonManager.Profiles or not AddonManager.Core then
+		return
+	end
+
+	-- Clear existing pending changes
+	wipe(TabState.PendingChanges)
+
+	local profile = AddonManager.Profiles.GetProfile(profileName)
+	if not profile or not profile.enabled then
+		-- No profile data - just refresh to show current state
+		UpdateChangeIndicator()
+		RefreshAddonList()
+		return
+	end
+
+	-- Compare profile states against current actual addon states
+	for _, addon in pairs(AddonManager.Core.AddonCache) do
+		local profileEnabled = profile.enabled[addon.name]
+		-- Only create a pending change if the profile says something different from current state
+		if profileEnabled ~= nil and profileEnabled ~= addon.enabled then
+			TabState.PendingChanges[addon.name] = { enabled = profileEnabled }
+		end
+	end
+
+	UpdateChangeIndicator()
+	RefreshAddonList()
 end
 
 function ShowProfileMenu(anchorFrame)
@@ -1025,14 +1130,15 @@ function ShowProfileMenu(anchorFrame)
 		local profiles = AddonManager.Profiles.GetProfileNames()
 		local activeProfile = AddonManager.Profiles.GetActiveProfile()
 
-		-- Add profile entries
+		-- Add profile entries (selecting previews the profile's addon states as pending changes)
 		for _, profileName in ipairs(profiles) do
 			info.text = profileName
 			info.func = function()
-				LoadProfileWithConfirm(profileName)
+				TabState.SelectedProfile = profileName
 				if TabState.ProfileDropdown then
 					TabState.ProfileDropdown:SetText(profileName)
 				end
+				PreviewProfile(profileName)
 				CloseDropDownMenus()
 			end
 			info.checked = (profileName == activeProfile)

@@ -242,7 +242,7 @@ end
 -- Dependency Helpers
 ----------------------------------------------------------------------------------------------------
 
----Check if an addon is a child addon (has X-Part-Of, RequiredDeps, or is part of known family)
+---Check if an addon is a child addon (has X-Part-Of, known family, or name-prefix dependency)
 ---@param addon table Addon metadata
 ---@return boolean isChild Whether addon is a child
 ---@return string|nil parentName Name of parent addon if child
@@ -251,35 +251,45 @@ function Core.IsChildAddon(addon)
 		return false, nil
 	end
 
-	-- Check X-Part-Of first (explicit parent declaration)
+	-- 1. Explicit X-Part-Of declaration (highest priority)
 	if addon.partOf then
-		return true, addon.partOf
+		-- Verify the declared parent actually exists in the cache
+		if Core.GetAddonByName(addon.partOf) then
+			return true, addon.partOf
+		end
 	end
 
-	-- Special case for known addon families (DBM, etc.) due to ordering issues
+	-- 2. Known family detection (DBM, WeakAuras, BigWigs, etc.)
 	if AddonManager.SpecialCases then
 		local family = AddonManager.SpecialCases.GetAddonFamily(addon.name)
-		if family then
-			-- Check if this is a child addon (not the core addon itself)
-			if not AddonManager.SpecialCases.IsCoreAddon(addon.name) then
-				-- For DBM and other known families, find the core addon
-				for _, otherAddon in pairs(Core.AddonCache) do
-					if AddonManager.SpecialCases.IsCoreAddon(otherAddon.name) then
-						local otherFamily = AddonManager.SpecialCases.GetAddonFamily(otherAddon.name)
-						if otherFamily == family then
-							return true, otherAddon.name
-						end
+		if family and not AddonManager.SpecialCases.IsCoreAddon(addon.name) then
+			-- Find the core/parent addon for this family in the cache
+			for _, otherAddon in pairs(Core.AddonCache) do
+				if otherAddon.name ~= addon.name and AddonManager.SpecialCases.IsCoreAddon(otherAddon.name) then
+					local otherFamily = AddonManager.SpecialCases.GetAddonFamily(otherAddon.name)
+					if otherFamily == family then
+						return true, otherAddon.name
 					end
 				end
 			end
 		end
 	end
 
-	-- Dynamic detection: Check if this addon has RequiredDeps (dependencies)
-	-- If it does, the first dependency is considered the parent
+	-- 3. Name-prefix detection: only treat a dependency as parent if it is a true
+	--    name prefix of this addon (e.g. "DataStore" -> "DataStore_Achievements").
+	--    This avoids false positives from shared libraries like AddonFactory.
 	if addon.dependencies and #addon.dependencies > 0 then
-		-- Return first dependency as parent
-		return true, addon.dependencies[1]
+		for _, dep in ipairs(addon.dependencies) do
+			-- The dep must exist in the addon cache (it's a real installed addon, not just a lib)
+			local depAddon = Core.GetAddonByName(dep)
+			if depAddon then
+				-- The dep name must be a prefix of this addon's name followed by _ or -
+				local escapedDep = dep:gsub('([%-%.%+%[%]%(%)%$%^%%%?%*])', '%%%1')
+				if addon.name:match('^' .. escapedDep .. '[%-%_]') then
+					return true, dep
+				end
+			end
+		end
 	end
 
 	return false, nil

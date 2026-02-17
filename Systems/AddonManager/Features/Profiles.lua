@@ -22,21 +22,34 @@ function Profiles.GetProfileNames(characterName)
 
 	characterName = characterName or UnitName('player')
 
-	-- Check if character has per-character profiles
+	local seen = {}
+	local names = {}
+
+	-- Collect per-character profiles first
 	if AddonManager.DB.perCharacter and AddonManager.DB.perCharacter[characterName] and AddonManager.DB.perCharacter[characterName].profiles then
-		local names = {}
 		for name in pairs(AddonManager.DB.perCharacter[characterName].profiles) do
-			table.insert(names, name)
+			if not seen[name] then
+				seen[name] = true
+				table.insert(names, name)
+			end
 		end
-		table.sort(names)
-		return names
 	end
 
-	-- Fall back to global profiles
-	local names = {}
-	for name in pairs(AddonManager.DB.profiles) do
-		table.insert(names, name)
+	-- Also collect global profiles (ensures Default is always included)
+	if AddonManager.DB.profiles then
+		for name in pairs(AddonManager.DB.profiles) do
+			if not seen[name] then
+				seen[name] = true
+				table.insert(names, name)
+			end
+		end
 	end
+
+	-- Safety net: always include Default
+	if not seen['Default'] then
+		table.insert(names, 'Default')
+	end
+
 	table.sort(names)
 	return names
 end
