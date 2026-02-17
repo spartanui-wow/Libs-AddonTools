@@ -11,17 +11,18 @@ local logger
 ---@param self Button
 ---@param button string Mouse button that was clicked
 local function OnMouseDown(self, button)
-	local text = self.Text:GetText()
+	local text = self.Text and self.Text:GetText()
+	if not text then
+		return
+	end
+
 	if button == 'RightButton' then
-		-- Copy to chat edit box and show it
 		local editBox = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()
 		if not editBox then
-			-- No active window, use ChatFrame1EditBox as default
 			editBox = ChatFrame1EditBox
 		end
 
 		if editBox then
-			-- Show/activate the chat edit box if not shown
 			if not editBox:IsShown() and ChatEdit_ActivateChat then
 				ChatEdit_ActivateChat(editBox)
 			end
@@ -31,13 +32,11 @@ local function OnMouseDown(self, button)
 			LibAT:Print('Chat edit box not available.')
 		end
 	elseif button == 'MiddleButton' then
-		-- Get the raw value from the attribute data
 		local parent = self:GetParent()
 		if parent and parent.GetAttributeData then
 			local attrData = parent:GetAttributeData()
 			if attrData and attrData.rawValue then
 				local rawData = attrData.rawValue
-				-- Check if it's a texture or frame
 				if type(rawData) == 'table' and rawData.IsObjectType then
 					if rawData:IsObjectType('Texture') then
 						_G.TEX = rawData
@@ -50,25 +49,20 @@ local function OnMouseDown(self, button)
 			end
 		end
 	else
-		-- Left-click or other buttons - use default handler
 		if _G.TableAttributeDisplayValueButton_OnMouseDown then
 			_G.TableAttributeDisplayValueButton_OnMouseDown(self)
 		end
 	end
 end
 
----Update TableAttributeDisplay lines to add click handlers
-local function UpdateTableInspectorLines()
-	if not _G.TableAttributeDisplay then
-		return
-	end
-
-	local scrollFrame = _G.TableAttributeDisplay.LinesScrollFrame
+---Patch all ValueButtons in an inspector's LinesContainer with our custom handler
+---@param inspector Frame TableInspectorMixin instance
+local function PatchInspectorLines(inspector)
+	local scrollFrame = inspector.LinesScrollFrame
 	if not scrollFrame or not scrollFrame.LinesContainer then
 		return
 	end
 
-	-- Get all children from the LinesContainer
 	local children = { scrollFrame.LinesContainer:GetChildren() }
 	for _, child in ipairs(children) do
 		if child.ValueButton and child.ValueButton:GetScript('OnMouseDown') ~= OnMouseDown then
@@ -77,26 +71,37 @@ local function UpdateTableInspectorLines()
 	end
 end
 
----Setup hooks for TableAttributeDisplay to add shift/middle/right-click functionality
+---Hook an inspector instance's UpdateLines to auto-patch ValueButtons after refresh
+---@param inspector Frame TableInspectorMixin instance
+local function HookInspectorInstance(inspector)
+	if inspector._devToolsHooked then
+		return
+	end
+	inspector._devToolsHooked = true
+	hooksecurefunc(inspector, 'UpdateLines', function(self)
+		PatchInspectorLines(self)
+	end)
+end
+
+---Setup hooks for TableAttributeDisplay to add right-click copy and middle-click frame capture
 local function SetupTableInspectorHooks()
-	-- Wait for TableAttributeDisplay to be available
 	local function SetupHooks()
-		if not _G.TableAttributeDisplay then
-			return
+		-- Hook the singleton instance used by frame stack (ctrl+click)
+		if _G.TableAttributeDisplay then
+			HookInspectorInstance(_G.TableAttributeDisplay)
 		end
 
-		-- Hook into TableInspectorMixin.RefreshAllData for /tinspect
-		if _G.TableInspectorMixin and _G.TableInspectorMixin.RefreshAllData then
-			hooksecurefunc(_G.TableInspectorMixin, 'RefreshAllData', function()
-				UpdateTableInspectorLines()
-			end)
-		end
-
-		-- Hook into TableAttributeDisplay.dataProviders[2].RefreshData for fstack ctrl
-		if _G.TableAttributeDisplay.dataProviders and _G.TableAttributeDisplay.dataProviders[2] and _G.TableAttributeDisplay.dataProviders[2].RefreshData then
-			hooksecurefunc(_G.TableAttributeDisplay.dataProviders[2], 'RefreshData', function()
-				UpdateTableInspectorLines()
-			end)
+		-- Wrap DisplayTableInspectorWindow to catch /tinspect pool instances
+		if _G.DisplayTableInspectorWindow then
+			local origDisplay = _G.DisplayTableInspectorWindow
+			_G.DisplayTableInspectorWindow = function(...)
+				local result = origDisplay(...)
+				if result then
+					HookInspectorInstance(result)
+					PatchInspectorLines(result)
+				end
+				return result
+			end
 		end
 
 		if logger then
@@ -104,16 +109,15 @@ local function SetupTableInspectorHooks()
 		end
 	end
 
-	-- Try to setup immediately if available, otherwise wait for ADDON_LOADED
 	if _G.TableAttributeDisplay then
 		SetupHooks()
 	else
 		local frame = CreateFrame('Frame')
 		frame:RegisterEvent('ADDON_LOADED')
-		frame:SetScript('OnEvent', function(_, event, addonName)
+		frame:SetScript('OnEvent', function(self, event, addonName)
 			if addonName == 'Blizzard_DebugTools' then
 				SetupHooks()
-				frame:UnregisterEvent('ADDON_LOADED')
+				self:UnregisterEvent('ADDON_LOADED')
 			end
 		end)
 	end
