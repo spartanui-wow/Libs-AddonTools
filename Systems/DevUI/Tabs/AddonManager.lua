@@ -1107,7 +1107,7 @@ function ShowCreateProfileDialog()
 		button2 = L['Cancel'] or 'Cancel',
 		hasEditBox = true,
 		OnAccept = function(self)
-			local profileName = self.editBox:GetText()
+			local profileName = self:GetEditBox():GetText()
 			if profileName and profileName ~= '' then
 				AddonManager.Profiles.CreateProfile(profileName)
 				UpdateProfileDropdown()
