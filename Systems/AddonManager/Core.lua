@@ -9,69 +9,24 @@ local Core = {}
 AddonManager.Core = Core
 
 ----------------------------------------------------------------------------------------------------
--- API Compatibility Layer (Retail vs Classic)
+-- API Layer (C_AddOns available on all game versions)
 ----------------------------------------------------------------------------------------------------
 
--- Detect game version
-local IS_RETAIL = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
-local IS_CLASSIC = (WOW_PROJECT_ID == WOW_PROJECT_CLASSIC)
-local IS_TBC = (WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC)
-local IS_WRATH = (WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC)
-local IS_CATA = (WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC)
-
--- Unified API wrappers
-if IS_RETAIL then
-	-- Retail (WoW 12.0+): Use C_AddOns namespace, flipped arguments
-	Core.GetNumAddOns = C_AddOns.GetNumAddOns
-	Core.GetAddOnInfo = C_AddOns.GetAddOnInfo
-	Core.GetAddOnMetadata = C_AddOns.GetAddOnMetadata
-	Core.GetAddOnDependencies = C_AddOns.GetAddOnDependencies
-	Core.GetAddOnOptionalDependencies = C_AddOns.GetAddOnOptionalDependencies
-	Core.IsAddOnLoaded = C_AddOns.IsAddOnLoaded
-	Core.IsAddOnLoadOnDemand = C_AddOns.IsAddOnLoadOnDemand
-	Core.LoadAddOn = C_AddOns.LoadAddOn
-
-	-- Arguments NOT flipped for GetAddOnEnableState: index first, character second
-	Core.GetAddOnEnableState = function(index, character)
-		return C_AddOns.GetAddOnEnableState(index, character)
-	end
-
-	Core.EnableAddOn = function(index, character)
-		C_AddOns.EnableAddOn(index, character)
-	end
-
-	Core.DisableAddOn = function(index, character)
-		C_AddOns.DisableAddOn(index, character)
-	end
-
-	Core.EnableAllAddOns = function(character)
-		C_AddOns.EnableAllAddOns(character)
-	end
-
-	Core.DisableAllAddOns = function(character)
-		C_AddOns.DisableAllAddOns(character)
-	end
-
-	Core.SaveAddOns = C_AddOns.SaveAddOns
-	Core.ResetAddOns = C_AddOns.ResetAddOns
-else
-	-- Classic (Vanilla, TBC, Wrath, Cata, MOP): Use legacy global functions
-	Core.GetNumAddOns = GetNumAddOns
-	Core.GetAddOnInfo = GetAddOnInfo
-	Core.GetAddOnMetadata = GetAddOnMetadata
-	Core.GetAddOnDependencies = GetAddOnDependencies
-	Core.GetAddOnOptionalDependencies = GetAddOnOptionalDependencies
-	Core.IsAddOnLoaded = IsAddOnLoaded
-	Core.IsAddOnLoadOnDemand = IsAddOnLoadOnDemand
-	Core.LoadAddOn = LoadAddOn
-	Core.GetAddOnEnableState = GetAddOnEnableState
-	Core.EnableAddOn = EnableAddOn
-	Core.DisableAddOn = DisableAddOn
-	Core.EnableAllAddOns = EnableAllAddOns
-	Core.DisableAllAddOns = DisableAllAddOns
-	Core.SaveAddOns = SaveAddOns
-	Core.ResetAddOns = ResetAddOns
-end
+Core.GetNumAddOns = C_AddOns.GetNumAddOns
+Core.GetAddOnInfo = C_AddOns.GetAddOnInfo
+Core.GetAddOnMetadata = C_AddOns.GetAddOnMetadata
+Core.GetAddOnDependencies = C_AddOns.GetAddOnDependencies
+Core.GetAddOnOptionalDependencies = C_AddOns.GetAddOnOptionalDependencies
+Core.IsAddOnLoaded = C_AddOns.IsAddOnLoaded
+Core.IsAddOnLoadOnDemand = C_AddOns.IsAddOnLoadOnDemand
+Core.LoadAddOn = C_AddOns.LoadAddOn
+Core.GetAddOnEnableState = C_AddOns.GetAddOnEnableState
+Core.EnableAddOn = C_AddOns.EnableAddOn
+Core.DisableAddOn = C_AddOns.DisableAddOn
+Core.EnableAllAddOns = C_AddOns.EnableAllAddOns
+Core.DisableAllAddOns = C_AddOns.DisableAllAddOns
+Core.SaveAddOns = C_AddOns.SaveAddOns
+Core.ResetAddOns = C_AddOns.ResetAddOns
 
 ----------------------------------------------------------------------------------------------------
 -- Addon Metadata Cache
