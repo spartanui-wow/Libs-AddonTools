@@ -99,6 +99,7 @@ Systems\AddonManager\Features\Categories.lua
 Systems\AddonManager\Features\Profiles.lua
 Systems\AddonManager\Features\Dependencies.lua
 Systems\AddonManager\Features\Compatibility.lua
+Systems\AddonManager\BlizzardAddonListEnhance.lua
 
 # Performance System
 Systems\Performance\_Performance.Definition.lua

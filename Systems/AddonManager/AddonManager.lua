@@ -25,6 +25,7 @@ function AddonManager:OnInitialize()
 				custom = {}, -- { categoryName = { addon1, addon2, ... } }
 			},
 			perCharacter = {}, -- { [characterName] = { activeProfile = 'ProfileName', profiles = {} } }
+			addonListPosition = nil, -- { point, relPoint, x, y, width, height } saved AddonList position/size
 		},
 	}
 	AddonManager.Database = LibAT.Database:RegisterNamespace('AddonManager', defaults)
