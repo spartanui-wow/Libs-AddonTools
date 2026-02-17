@@ -52,7 +52,28 @@ local function StripDefaults(data, defaults)
 
 	for key, value in pairs(data) do
 		-- Use wildcard default if no specific key default exists
-		local defaultValue = defaults and (defaults[key] or wildcardDefault)
+		-- Note: explicit nil check required because defaults[key] could be false
+		local defaultValue
+		if defaults then
+			if defaults[key] ~= nil then
+				defaultValue = defaults[key]
+				-- AceDB merges wildcard defaults INTO explicit table entries
+				-- e.g. vignette = {} inherits from ['**'] = { enabled = false }
+				-- so effective default for vignette is { enabled = false }, not {}
+				if wildcardDefault and type(defaultValue) == 'table' and type(wildcardDefault) == 'table' then
+					local merged = {}
+					for wk, wv in pairs(wildcardDefault) do
+						merged[wk] = wv
+					end
+					for ek, ev in pairs(defaultValue) do
+						merged[ek] = ev
+					end
+					defaultValue = merged
+				end
+			else
+				defaultValue = wildcardDefault
+			end
+		end
 		local stripped = StripDefaults(value, defaultValue)
 
 		if stripped ~= nil then
@@ -327,9 +348,9 @@ local function ExportRegisteredAddon(addonId)
 	if db.sv.namespaces then
 		for namespace, nsData in pairs(db.sv.namespaces) do
 			if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-				-- Get namespace defaults from AceDB
-				local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[namespace]
-				local strippedData = StripDefaults(nsData, nsDefaults)
+				-- Get namespace defaults from AceDB child DB
+				local nsDefaults = ProfileManagerState.GetNamespaceDefaults(db, namespace)
+				local strippedData = ProfileManagerState.StripNamespaceData(nsData, nsDefaults)
 				-- Pass namespace as path prefix for blacklist checking
 				local pruned = PruneEmptyTables(strippedData, namespace)
 				if pruned then

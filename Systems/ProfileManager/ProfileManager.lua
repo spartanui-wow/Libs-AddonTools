@@ -715,7 +715,28 @@ local function StripDefaults(data, defaults)
 
 	for key, value in pairs(data) do
 		-- Use wildcard default if no specific key default exists
-		local defaultValue = defaults and (defaults[key] or wildcardDefault)
+		-- Note: explicit nil check required because defaults[key] could be false
+		local defaultValue
+		if defaults then
+			if defaults[key] ~= nil then
+				defaultValue = defaults[key]
+				-- AceDB merges wildcard defaults INTO explicit table entries
+				-- e.g. vignette = {} inherits from ['**'] = { enabled = false }
+				-- so effective default for vignette is { enabled = false }, not {}
+				if wildcardDefault and type(defaultValue) == 'table' and type(wildcardDefault) == 'table' then
+					local merged = {}
+					for wk, wv in pairs(wildcardDefault) do
+						merged[wk] = wv
+					end
+					for ek, ev in pairs(defaultValue) do
+						merged[ek] = ev
+					end
+					defaultValue = merged
+				end
+			else
+				defaultValue = wildcardDefault
+			end
+		end
 		local stripped = StripDefaults(value, defaultValue)
 
 		if stripped ~= nil then
@@ -764,6 +785,106 @@ local function PruneEmptyTables(data, currentPath)
 
 	return hasContent and result or nil
 end
+
+---Get defaults for a specific AceDB namespace
+---AceDB stores namespace defaults on child DB objects (db.children[name].defaults),
+---not on the parent DB's defaults table (db.defaults.namespaces is always nil).
+---For modules using SUI.DBM:SetupModule(), the actual defaults are stored on
+---childDB.realDefaults (since AceDB only gets wildcard structure, not real values).
+---@param db table The parent AceDB database object
+---@param namespace string The namespace name
+---@return table|nil defaults The namespace's registered defaults (e.g., { profile = {...}, global = {...} })
+local function GetNamespaceDefaults(db, namespace)
+	if not db.GetNamespace then
+		return nil
+	end
+	local childDB = db:GetNamespace(namespace, true)
+	if not childDB then
+		return nil
+	end
+	-- Prefer realDefaults (set by DBM:SetupModule with actual default values)
+	-- over AceDB defaults (which may only contain wildcard structure)
+	if childDB.realDefaults then
+		return childDB.realDefaults
+	end
+	if childDB.defaults then
+		return childDB.defaults
+	end
+	return nil
+end
+
+---Strip defaults from namespace SavedVariables data
+---Handles the structural mismatch between SV shape and defaults shape:
+---  SV data:  { profiles = { ["ProfileName"] = {...} }, global = {...} }
+---  Defaults: { profile = {...}, global = {...} }
+---@param nsData table The namespace's SavedVariables data
+---@param nsDefaults table|nil The namespace's registered defaults
+---@param exportProfileKey string|nil If provided, only process this specific profile
+---@return table|nil strippedData The namespace data with defaults removed, or nil if empty
+local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
+	if not nsDefaults then
+		-- No defaults available, fall back to unstripped data
+		return nsData
+	end
+
+	local result = {}
+	local hasContent = false
+
+	for key, value in pairs(nsData) do
+		if key == 'profiles' and type(value) == 'table' then
+			-- Strip profile defaults from each profile entry
+			-- SV key is "profiles" (plural), defaults key is "profile" (singular)
+			local profileDefaults = nsDefaults.profile
+			if profileDefaults then
+				local strippedProfiles = {}
+				local hasProfiles = false
+				for profileName, profileData in pairs(value) do
+					if not exportProfileKey or profileName == exportProfileKey then
+						local stripped = StripDefaults(profileData, profileDefaults)
+						if stripped ~= nil then
+							strippedProfiles[profileName] = stripped
+							hasProfiles = true
+						end
+					end
+				end
+				if hasProfiles then
+					result.profiles = strippedProfiles
+					hasContent = true
+				end
+			else
+				result.profiles = value
+				hasContent = true
+			end
+		elseif key == 'global' and nsDefaults.global then
+			local stripped = StripDefaults(value, nsDefaults.global)
+			if stripped ~= nil then
+				result[key] = stripped
+				hasContent = true
+			end
+		elseif key == 'profileKeys' then
+			-- Skip profileKeys - AceDB internal bookkeeping
+		else
+			-- Other sections (char, realm, etc.)
+			local sectionDefaults = nsDefaults[key]
+			if sectionDefaults and type(value) == 'table' then
+				local stripped = StripDefaults(value, sectionDefaults)
+				if stripped ~= nil then
+					result[key] = stripped
+					hasContent = true
+				end
+			elseif type(value) ~= 'table' or next(value) ~= nil then
+				result[key] = value
+				hasContent = true
+			end
+		end
+	end
+
+	return hasContent and result or nil
+end
+
+-- Expose helpers for Composite.lua (shares ProfileManagerState)
+ProfileManagerState.GetNamespaceDefaults = GetNamespaceDefaults
+ProfileManagerState.StripNamespaceData = StripNamespaceData
 
 function ProfileManager:DoExport()
 	if not ProfileManagerState.window then
@@ -826,9 +947,9 @@ function ProfileManager:DoExport()
 	elseif activeNS then
 		-- Export single namespace
 		if db.sv.namespaces and db.sv.namespaces[activeNS] then
-			-- Get namespace defaults from AceDB
-			local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[activeNS]
-			local strippedData = StripDefaults(db.sv.namespaces[activeNS], nsDefaults)
+			-- Get namespace defaults from AceDB child DB
+			local nsDefaults = GetNamespaceDefaults(db, activeNS)
+			local strippedData = StripNamespaceData(db.sv.namespaces[activeNS], nsDefaults)
 			-- Pass namespace as path prefix for blacklist checking
 			local pruned = PruneEmptyTables(strippedData, activeNS)
 			if pruned then
@@ -844,9 +965,9 @@ function ProfileManager:DoExport()
 		if db.sv.namespaces then
 			for namespace, nsData in pairs(db.sv.namespaces) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					-- Get namespace defaults from AceDB
-					local nsDefaults = db.defaults and db.defaults.namespaces and db.defaults.namespaces[namespace]
-					local strippedData = StripDefaults(nsData, nsDefaults)
+					-- Get namespace defaults from AceDB child DB
+					local nsDefaults = GetNamespaceDefaults(db, namespace)
+					local strippedData = StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 					-- Pass namespace as path prefix for blacklist checking
 					local pruned = PruneEmptyTables(strippedData, namespace)
 					if pruned then
