@@ -177,6 +177,9 @@ local function CreateDevUIWindow()
 		title = "Lib's Developer UI",
 		width = 800,
 		height = 538,
+		resizable = true,
+		minWidth = 600,
+		minHeight = 400,
 	})
 
 	-- Hide the ButtonFrameTemplate's built-in Inset NineSlice — tabs provide their own panel styling
