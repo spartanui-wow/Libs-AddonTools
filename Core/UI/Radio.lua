@@ -120,6 +120,11 @@ function LibAT.UI.CreateRadio(parent, text, groupName, width, height)
 		return self.radio:GetChecked()
 	end
 
+	---Programmatically click the radio button
+	function container:Click()
+		self.radio:Click()
+	end
+
 	---Set the label text
 	---@param labelText string The text to display
 	function container:SetText(labelText)
