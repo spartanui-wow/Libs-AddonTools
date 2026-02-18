@@ -587,6 +587,53 @@ function LibAT.UI.CreateDropdown(parent, text, width, height)
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Favorite/Star Toggle Button
+----------------------------------------------------------------------------------------------------
+
+---@class LibAT.FavoriteButton : Button
+---@field starTex Texture The star atlas texture
+---@field SetFavorite fun(self: LibAT.FavoriteButton, isFavorite: boolean) Set the visual state
+---@field IsFavorite fun(self: LibAT.FavoriteButton): boolean Get the current visual state
+
+---Create a dual-state favorite star button using AuctionHouse atlas icons
+---@param parent Frame Parent frame
+---@param size? number Icon size (default 18)
+---@param onToggle? fun(self: LibAT.FavoriteButton, isFavorite: boolean) Callback when toggled
+---@return LibAT.FavoriteButton button Favorite toggle button
+function LibAT.UI.CreateFavoriteButton(parent, size, onToggle)
+	size = size or 18
+	---@type LibAT.FavoriteButton
+	local button = CreateFrame('Button', nil, parent)
+	button:SetSize(size + 4, size + 4)
+
+	button.starTex = button:CreateTexture(nil, 'ARTWORK')
+	button.starTex:SetAtlas('auctionhouse-icon-favorite-off', false)
+	button.starTex:SetSize(size, size)
+	button.starTex:SetPoint('CENTER', button, 'CENTER', 0, 0)
+
+	button._isFavorite = false
+
+	function button:SetFavorite(isFavorite)
+		button._isFavorite = isFavorite
+		button.starTex:SetAtlas(isFavorite and 'auctionhouse-icon-favorite' or 'auctionhouse-icon-favorite-off', false)
+	end
+
+	function button:IsFavorite()
+		return button._isFavorite
+	end
+
+	button:SetScript('OnClick', function(self)
+		local newState = not self._isFavorite
+		self:SetFavorite(newState)
+		if onToggle then
+			onToggle(self, newState)
+		end
+	end)
+
+	return button
+end
+
+----------------------------------------------------------------------------------------------------
 -- Panel Components
 ----------------------------------------------------------------------------------------------------
 
