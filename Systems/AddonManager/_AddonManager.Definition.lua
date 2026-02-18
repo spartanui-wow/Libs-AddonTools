@@ -11,10 +11,12 @@ local LibAT = LibAT
 ---@field description string
 ---@field Database AceDB Database object
 ---@field DB table Profile data
+---@field GDB table Global DB scope (favorites, lock state)
 ---@field logger LoggerObject Logger instance
 ---@field Core LibAT.AddonManager.Core Core API functions
 ---@field SpecialCases LibAT.AddonManager.SpecialCases Special case handling
 ---@field Metadata LibAT.AddonManager.Metadata Metadata utilities
+---@field Favorites LibAT.AddonManager.Favorites Favorites system
 
 ----------------------------------------------------------------------------------------------------
 -- Core System
@@ -146,3 +148,19 @@ local LibAT = LibAT
 
 ---@alias LibAT.AddonManager.ProfileCallback fun(profileName: string)
 ---Callback when active profile changes
+
+----------------------------------------------------------------------------------------------------
+-- Favorites System
+----------------------------------------------------------------------------------------------------
+
+---@class LibAT.AddonManager.Favorites
+---@field PendingRemovals table<string, boolean> Tracks removed favorites until panel hides
+---@field IsFavorite fun(addonName: string): boolean Check if addon is favorited
+---@field AddFavorite fun(addonName: string) Add addon to favorites
+---@field RemoveFavorite fun(addonName: string) Remove addon from favorites (pending removal)
+---@field CommitRemovals fun() Clear pending removals
+---@field GetFavorites fun(): string[] Get sorted list of favorited addon names
+---@field GetNonFavorites fun(): string[] Get sorted list of non-favorited addon names
+---@field IsLocked fun(): boolean Get lock state
+---@field SetLocked fun(locked: boolean) Set lock state
+---@field EnforceLock fun() Re-enable any disabled favorites when lock is on

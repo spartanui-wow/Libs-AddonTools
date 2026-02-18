@@ -215,6 +215,11 @@ function Profiles.LoadProfile(profileName, characterName)
 	-- Set as active profile
 	Profiles.SetActiveProfile(profileName, characterName)
 
+	-- Enforce favorites lock after profile application
+	if AddonManager.Favorites then
+		AddonManager.Favorites.EnforceLock()
+	end
+
 	if AddonManager.logger then
 		AddonManager.logger.info(string.format('Loaded profile: %s (%d changes)', profileName, changesCount))
 	end

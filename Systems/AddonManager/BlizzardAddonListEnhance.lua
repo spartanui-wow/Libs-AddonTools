@@ -11,63 +11,151 @@ AddonManager.BlizzardEnhance = Enhance
 local sidecarPanel
 local enhanced = false
 local sessionAddonStates = {} -- Snapshot of addon enabled states at session start (what's actually loaded)
+local lastRightClickedNode = nil -- Captured from OnClick hook for use in Menu.ModifyMenu
 
-----------------------------------------------------------------------------------------------------
--- Position/Size Persistence
-----------------------------------------------------------------------------------------------------
+local function RefreshLockIcons()
+	if not AddonManager.Favorites or not AddonList or not AddonList.ScrollBox then return end
 
-local function SavePosition()
-	if not AddonManager.DB or not AddonList then
-		return
-	end
-	if not AddonManager.DB.addonListPosition then
-		AddonManager.DB.addonListPosition = {}
-	end
-	local point, _, relPoint, x, y = AddonList:GetPoint(1)
-	AddonManager.DB.addonListPosition.point = point
-	AddonManager.DB.addonListPosition.relPoint = relPoint
-	AddonManager.DB.addonListPosition.x = x
-	AddonManager.DB.addonListPosition.y = y
-end
+	AddonList.ScrollBox:ForEachFrame(function(frame)
+		local entry = frame
+		if not entry.Enabled then return end
+		if not entry.treeNode then return end
 
-local function SaveSize()
-	if not AddonManager.DB or not AddonList then
-		return
-	end
-	if not AddonManager.DB.addonListPosition then
-		AddonManager.DB.addonListPosition = {}
-	end
-	AddonManager.DB.addonListPosition.width = AddonList:GetWidth()
-	AddonManager.DB.addonListPosition.height = AddonList:GetHeight()
-end
+		local data = entry.treeNode:GetData()
+		local addonIndex = data and data.addonIndex
+		if not addonIndex then
+			-- Group/category node: hide all our decorations
+			if entry.SUILockIcon then
+				entry.SUILockIcon:Hide()
+				entry.Enabled:Show()
+			end
+			if entry.SUIStar then
+				entry.SUIStar:Hide()
+			end
+			return
+		end
 
-local function RestorePosition()
-	if not AddonManager.DB or not AddonManager.DB.addonListPosition or not AddonList then
-		return
-	end
-	local pos = AddonManager.DB.addonListPosition
-	if pos.point and pos.x and pos.y then
-		AddonList:ClearAllPoints()
-		AddonList:SetPoint(pos.point, UIParent, pos.relPoint or 'CENTER', pos.x, pos.y)
-	end
-	if pos.width and pos.height then
-		AddonList:SetSize(pos.width, pos.height)
-	end
+		local name = C_AddOns.GetAddOnName(addonIndex)
+		local isLockedFavorite = name and AddonManager.Favorites.IsFavorite(name) and AddonManager.Favorites.IsLocked()
+
+		-- Lock icon: replaces checkbox for locked favorites
+		if isLockedFavorite then
+			if not entry.SUILockIcon then
+				local icon = entry:CreateTexture(nil, 'OVERLAY')
+				icon:SetAtlas('Forge-Lock', false)
+				icon:SetSize(16, 16)
+				icon:SetPoint('CENTER', entry.Enabled, 'CENTER')
+				entry.SUILockIcon = icon
+			end
+			entry.Enabled:Hide()
+			entry.SUILockIcon:Show()
+		else
+			if entry.SUILockIcon then
+				entry.SUILockIcon:Hide()
+			end
+			entry.Enabled:Show()
+		end
+
+		-- Star icon: clickable favorite toggle, positioned between checkbox and title
+		if not entry.SUIStar then
+			local star = CreateFrame('Button', nil, entry)
+			star:SetSize(14, 14)
+			star:SetPoint('LEFT', entry, 'LEFT', 33, 0)
+
+			local starTex = star:CreateTexture(nil, 'ARTWORK')
+			starTex:SetAllPoints()
+			star.starTex = starTex
+			entry.SUIStar = star
+
+			-- Shift Title right to make room for the star
+			entry.Title:ClearAllPoints()
+			entry.Title:SetPoint('LEFT', entry, 'LEFT', 50, 0)
+			entry.Title:SetPoint('RIGHT', entry, 'RIGHT', -140, 0)
+
+			star:SetScript('OnEnter', function(self)
+				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+				local isFav = AddonManager.Favorites and self.addonName and AddonManager.Favorites.IsFavorite(self.addonName)
+				GameTooltip:SetText(isFav and 'Remove from Favorites' or 'Add to Favorites', 1, 1, 1)
+				GameTooltip:Show()
+			end)
+			star:SetScript('OnLeave', function() GameTooltip:Hide() end)
+			star:SetScript('OnClick', function(self)
+				if not AddonManager.Favorites or not self.addonName then return end
+				if AddonManager.Favorites.IsFavorite(self.addonName) then
+					AddonManager.Favorites.RemoveFavorite(self.addonName)
+				else
+					AddonManager.Favorites.AddFavorite(self.addonName)
+				end
+				RefreshFavoritesList()
+				if AddonList_Update then AddonList_Update() end
+			end)
+		end
+
+		-- Update star state each refresh
+		entry.SUIStar.addonName = name
+		local isFavorite = name and AddonManager.Favorites.IsFavorite(name)
+		entry.SUIStar.starTex:SetAtlas(isFavorite and 'auctionhouse-icon-favorite' or 'auctionhouse-icon-favorite-off', false)
+		entry.SUIStar:Show()
+	end)
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Sidecar Panel
 ----------------------------------------------------------------------------------------------------
 
+---Check if live addon states differ from the selected profile. Returns drift count.
+local function GetProfileDrift(profileName)
+	if not AddonManager.Profiles or not AddonManager.Core then return 0 end
+
+	local profile = AddonManager.Profiles.GetProfile(profileName)
+	local drift = 0
+
+	for _, addon in pairs(AddonManager.Core.AddonCache) do
+		local liveEnabled = (C_AddOns.GetAddOnEnableState(addon.index) > 0)
+		local profileEnabled
+		if profile and profile.enabled then
+			profileEnabled = profile.enabled[addon.name]
+			if profileEnabled == nil then
+				profileEnabled = true -- addons not in profile default to enabled
+			end
+		else
+			profileEnabled = true -- Default profile with no saved data = all enabled
+		end
+		if liveEnabled ~= profileEnabled then
+			drift = drift + 1
+		end
+	end
+
+	return drift
+end
+
 local function UpdateSidecarStatus()
 	if not sidecarPanel or not sidecarPanel.statusText then
 		return
 	end
+
+	local profileName = sidecarPanel.selectedProfile or 'Default'
+	local drift = GetProfileDrift(profileName)
+	local hasDrift = drift > 0
+
+	if sidecarPanel.applyBtn then
+		if hasDrift then
+			sidecarPanel.applyBtn:Show()
+		else
+			sidecarPanel.applyBtn:Hide()
+		end
+	end
+
 	-- Check if current addon states differ from what was loaded (needs reload)
 	if sidecarPanel.pendingReload then
 		sidecarPanel.statusText:SetText(string.format('|cffff0000%d change(s) - reload needed|r', sidecarPanel.changeCount or 0))
 		if sidecarPanel.reloadBtn then
 			sidecarPanel.reloadBtn:Show()
+		end
+	elseif hasDrift then
+		sidecarPanel.statusText:SetText(string.format('|cffff9900%d addon(s) differ from profile|r', drift))
+		if sidecarPanel.reloadBtn then
+			sidecarPanel.reloadBtn:Hide()
 		end
 	else
 		sidecarPanel.statusText:SetText('')
@@ -78,12 +166,12 @@ local function UpdateSidecarStatus()
 end
 
 local function RefreshSidecarDropdown()
-	if not sidecarPanel or not sidecarPanel.profileText or not AddonManager.Profiles then
+	if not sidecarPanel or not sidecarPanel.profileDropdown or not AddonManager.Profiles then
 		return
 	end
 	local activeProfile = AddonManager.Profiles.GetActiveProfile() or 'Default'
 	sidecarPanel.selectedProfile = activeProfile
-	sidecarPanel.profileText:SetText(activeProfile)
+	sidecarPanel.profileDropdown:SetText(activeProfile)
 	sidecarPanel.pendingReload = false
 	sidecarPanel.changeCount = 0
 	UpdateSidecarStatus()
@@ -97,30 +185,36 @@ local function ApplyProfileToBlizzardList(profileName)
 	end
 
 	local profile = AddonManager.Profiles.GetProfile(profileName)
-	if not profile or not profile.enabled then
-		if AddonManager.logger then
-			AddonManager.logger.warning(string.format('Profile "%s" has no saved addon states', profileName))
-		end
-		return
-	end
 
 	-- Apply addon states directly via C_AddOns (changes WoW's pending state)
 	local changeCount = 0
 	for _, addon in pairs(AddonManager.Core.AddonCache) do
-		local profileEnabled = profile.enabled[addon.name]
-		if profileEnabled ~= nil and profileEnabled ~= addon.enabled then
+		local profileEnabled
+		if profile and profile.enabled and profile.enabled[addon.name] ~= nil then
+			profileEnabled = profile.enabled[addon.name]
+		else
+			-- Default profile unsaved, or addon not in profile: enable everything
+			profileEnabled = true
+		end
+
+		local liveEnabled = (C_AddOns.GetAddOnEnableState(addon.index) > 0)
+		if profileEnabled ~= liveEnabled then
 			if profileEnabled then
 				C_AddOns.EnableAddOn(addon.index)
 			else
 				C_AddOns.DisableAddOn(addon.index)
 			end
-			-- Update our cache too
 			addon.enabled = profileEnabled
 			changeCount = changeCount + 1
 		end
 	end
 
 	C_AddOns.SaveAddOns()
+
+	-- Enforce favorites lock (re-enable any favorites disabled by the profile)
+	if AddonManager.Favorites then
+		AddonManager.Favorites.EnforceLock()
+	end
 
 	-- Set as active profile
 	AddonManager.Profiles.SetActiveProfile(profileName)
@@ -149,97 +243,114 @@ local function ApplyProfileToBlizzardList(profileName)
 	end
 end
 
-local function ShowSidecarProfileMenu(anchorFrame)
-	if not AddonManager.Profiles then
-		return
+----------------------------------------------------------------------------------------------------
+-- Favorites UI Helpers
+----------------------------------------------------------------------------------------------------
+
+local function RefreshFavoritesList()
+	if not sidecarPanel or not sidecarPanel.favScrollChild or not AddonManager.Favorites then return end
+
+	local scrollChild = sidecarPanel.favScrollChild
+
+	-- Hide all existing rows
+	for _, row in ipairs(sidecarPanel.favRowPool) do
+		row:Hide()
 	end
 
-	local menu = CreateFrame('Frame', 'LibAT_BlizzAddonList_ProfileMenu', UIParent, 'UIDropDownMenuTemplate')
-	UIDropDownMenu_Initialize(menu, function(self, level)
-		local info = UIDropDownMenu_CreateInfo()
-		local profiles = AddonManager.Profiles.GetProfileNames()
-		local activeProfile = AddonManager.Profiles.GetActiveProfile()
+	local favorites = AddonManager.Favorites.GetFavorites()
+	local pendingRemovals = AddonManager.Favorites.PendingRemovals
+	local yOffset = 0
+	local rowIndex = 0
 
-		for _, profileName in ipairs(profiles) do
-			info.text = profileName
-			info.func = function()
-				sidecarPanel.selectedProfile = profileName
-				if sidecarPanel.profileText then
-					sidecarPanel.profileText:SetText(profileName)
-				end
-				-- Immediately apply the profile states and refresh Blizzard's checkboxes
-				ApplyProfileToBlizzardList(profileName)
-				CloseDropDownMenus()
-			end
-			info.checked = (profileName == activeProfile)
-			UIDropDownMenu_AddButton(info, level)
+	local function addRow(addonName, isPendingRemoval)
+		rowIndex = rowIndex + 1
+		local row = sidecarPanel.favRowPool[rowIndex]
+		if not row then
+			row = CreateFrame('Frame', nil, scrollChild)
+			row:SetSize(155, 20)
+
+			-- Star icon button (reusable favorite button)
+			row.starBtn = LibAT.UI.CreateFavoriteButton(row, 14)
+			row.starBtn:SetPoint('LEFT', row, 'LEFT', 0, 0)
+
+			-- Addon name label
+			row.label = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+			row.label:SetPoint('LEFT', row.starBtn, 'RIGHT', 4, 0)
+			row.label:SetPoint('RIGHT', row, 'RIGHT', 0, 0)
+			row.label:SetJustifyH('LEFT')
+			row.label:SetWordWrap(false)
+
+			table.insert(sidecarPanel.favRowPool, row)
 		end
 
-		-- Separator
-		info = UIDropDownMenu_CreateInfo()
-		info.isTitle = true
-		info.notCheckable = true
-		UIDropDownMenu_AddButton(info, level)
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', scrollChild, 'TOPLEFT', 0, -yOffset)
+		row:Show()
 
-		-- Create new profile
-		info = UIDropDownMenu_CreateInfo()
-		info.text = 'Create Profile'
-		info.notCheckable = true
-		info.func = function()
-			CloseDropDownMenus()
-			StaticPopupDialogs['LIBAT_SIDECAR_CREATE_PROFILE'] = {
-				text = 'Enter profile name:',
-				button1 = 'Create',
-				button2 = 'Cancel',
-				hasEditBox = true,
-				OnAccept = function(dialog)
-					local name = dialog:GetEditBox():GetText()
-					if name and name ~= '' then
-						-- Rescan so cache matches current Blizzard checkbox states
-						AddonManager.Core.ScanAddons()
-						AddonManager.Profiles.CreateProfile(name)
-						sidecarPanel.selectedProfile = name
-						if sidecarPanel.profileText then
-							sidecarPanel.profileText:SetText(name)
-						end
-						AddonManager.Profiles.SetActiveProfile(name)
-					end
-				end,
-				EditBoxOnEnterPressed = function(editBox)
-					local name = editBox:GetText()
-					if name and name ~= '' then
-						AddonManager.Core.ScanAddons()
-						AddonManager.Profiles.CreateProfile(name)
-						sidecarPanel.selectedProfile = name
-						if sidecarPanel.profileText then
-							sidecarPanel.profileText:SetText(name)
-						end
-						AddonManager.Profiles.SetActiveProfile(name)
-					end
-					editBox:GetParent():Hide()
-				end,
-				EditBoxOnEscapePressed = function(editBox)
-					editBox:GetParent():Hide()
-				end,
-				timeout = 0,
-				whileDead = true,
-				hideOnEscape = true,
-			}
-			StaticPopup_Show('LIBAT_SIDECAR_CREATE_PROFILE')
+		local addonMeta = AddonManager.Core and AddonManager.Core.GetAddonByName(addonName)
+		local displayName = (addonMeta and addonMeta.title) or addonName
+		row.label:SetText(displayName)
+
+		if isPendingRemoval then
+			row.label:SetTextColor(0.4, 0.4, 0.4)
+			row.starBtn:SetFavorite(false)
+			row.starBtn.starTex:SetVertexColor(0.4, 0.4, 0.4)
+			row.starBtn:SetScript('OnClick', function()
+				AddonManager.Favorites.AddFavorite(addonName)
+				RefreshFavoritesList()
+				if AddonList_Update then AddonList_Update() end
+			end)
+			row.starBtn:SetScript('OnEnter', function(self)
+				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+				GameTooltip:SetText('Re-add to favorites', 1, 1, 1)
+				GameTooltip:Show()
+			end)
+		else
+			row.label:SetTextColor(1, 1, 1)
+			row.starBtn:SetFavorite(true)
+			row.starBtn.starTex:SetVertexColor(1, 1, 1)
+			row.starBtn:SetScript('OnClick', function()
+				AddonManager.Favorites.RemoveFavorite(addonName)
+				RefreshFavoritesList()
+				if AddonList_Update then AddonList_Update() end
+			end)
+			row.starBtn:SetScript('OnEnter', function(self)
+				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+				GameTooltip:SetText('Remove from favorites', 1, 1, 1)
+				GameTooltip:Show()
+			end)
 		end
-		UIDropDownMenu_AddButton(info, level)
-	end, 'MENU')
+		row.starBtn:SetScript('OnLeave', function()
+			GameTooltip:Hide()
+		end)
 
-	ToggleDropDownMenu(1, nil, menu, anchorFrame, 0, 0)
+		yOffset = yOffset + 22
+	end
+
+	-- Active favorites
+	for _, name in ipairs(favorites) do
+		addRow(name, false)
+	end
+
+	-- Pending removals (dimmed)
+	for name in pairs(pendingRemovals) do
+		addRow(name, true)
+	end
+
+	scrollChild:SetHeight(math.max(yOffset, 1))
 end
+
+----------------------------------------------------------------------------------------------------
+-- Sidecar Panel Creation
+----------------------------------------------------------------------------------------------------
 
 local function CreateSidecarPanel()
 	if sidecarPanel then
 		return sidecarPanel
 	end
 
-	sidecarPanel = CreateFrame('Frame', 'LibAT_AddonListSidecar', AddonList, 'InsetFrameTemplate3')
-	sidecarPanel:SetWidth(200)
+	sidecarPanel = LibAT.UI.CreateStyledPanel(AddonList, 'auctionhouse-background-summarylist')
+	sidecarPanel:SetWidth(205)
 	sidecarPanel:SetPoint('TOPLEFT', AddonList, 'TOPRIGHT', 2, 0)
 	sidecarPanel:SetPoint('BOTTOMLEFT', AddonList, 'BOTTOMRIGHT', 2, 0)
 
@@ -248,50 +359,93 @@ local function CreateSidecarPanel()
 	title:SetPoint('TOP', sidecarPanel, 'TOP', 0, -12)
 	title:SetText('Profiles')
 
-	-- Profile dropdown button
-	local dropdownBtn = CreateFrame('Button', nil, sidecarPanel, 'BackdropTemplate')
-	dropdownBtn:SetSize(170, 24)
-	dropdownBtn:SetPoint('TOP', title, 'BOTTOM', 0, -12)
-	dropdownBtn:SetBackdrop({
-		bgFile = 'Interface\\Buttons\\WHITE8x8',
-		edgeFile = 'Interface\\Buttons\\WHITE8x8',
-		edgeSize = 1,
-	})
-	dropdownBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-	dropdownBtn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+	-- Profile dropdown (modern WowStyle1 dropdown)
+	local profileDropdown = LibAT.UI.CreateDropdown(sidecarPanel, 'Default', 170, 22)
+	profileDropdown:SetPoint('TOP', title, 'BOTTOM', 0, -12)
+	sidecarPanel.profileDropdown = profileDropdown
 
-	local profileText = dropdownBtn:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	profileText:SetPoint('LEFT', dropdownBtn, 'LEFT', 8, 0)
-	profileText:SetPoint('RIGHT', dropdownBtn, 'RIGHT', -16, 0)
-	profileText:SetJustifyH('LEFT')
-	sidecarPanel.profileText = profileText
+	if profileDropdown.SetupMenu then
+		profileDropdown:SetupMenu(function(owner, rootDescription)
+			if not AddonManager.Profiles then return end
 
-	local arrow = dropdownBtn:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	arrow:SetPoint('RIGHT', dropdownBtn, 'RIGHT', -4, 0)
-	arrow:SetText('v')
+			local profiles = AddonManager.Profiles.GetProfileNames()
+			local activeProfile = AddonManager.Profiles.GetActiveProfile()
 
-	dropdownBtn:SetScript('OnClick', function(self)
-		ShowSidecarProfileMenu(self)
-	end)
-	dropdownBtn:SetScript('OnEnter', function(self)
-		self:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-	end)
-	dropdownBtn:SetScript('OnLeave', function(self)
-		self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-	end)
+			for _, profileName in ipairs(profiles) do
+				rootDescription:CreateRadio(
+					profileName,
+					function() return profileName == (sidecarPanel.selectedProfile or activeProfile) end,
+					function()
+						sidecarPanel.selectedProfile = profileName
+						profileDropdown:SetText(profileName)
+						ApplyProfileToBlizzardList(profileName)
+					end
+				)
+			end
+
+			rootDescription:CreateDivider()
+
+			rootDescription:CreateButton('Create Profile', function()
+				StaticPopupDialogs['LIBAT_SIDECAR_CREATE_PROFILE'] = {
+					text = 'Enter profile name:',
+					button1 = 'Create',
+					button2 = 'Cancel',
+					hasEditBox = true,
+					OnAccept = function(dialog)
+						local name = dialog:GetEditBox():GetText()
+						if name and name ~= '' then
+							AddonManager.Core.ScanAddons()
+							AddonManager.Profiles.CreateProfile(name)
+							sidecarPanel.selectedProfile = name
+							profileDropdown:SetText(name)
+							AddonManager.Profiles.SetActiveProfile(name)
+						end
+					end,
+					EditBoxOnEnterPressed = function(editBox)
+						local name = editBox:GetText()
+						if name and name ~= '' then
+							AddonManager.Core.ScanAddons()
+							AddonManager.Profiles.CreateProfile(name)
+							sidecarPanel.selectedProfile = name
+							profileDropdown:SetText(name)
+							AddonManager.Profiles.SetActiveProfile(name)
+						end
+						editBox:GetParent():Hide()
+					end,
+					EditBoxOnEscapePressed = function(editBox)
+						editBox:GetParent():Hide()
+					end,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+				}
+				StaticPopup_Show('LIBAT_SIDECAR_CREATE_PROFILE')
+			end)
+		end)
+	end
 
 	-- Status text (shows change count after profile switch)
 	local statusText = sidecarPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	statusText:SetPoint('TOP', dropdownBtn, 'BOTTOM', 0, -6)
+	statusText:SetPoint('TOP', profileDropdown, 'BOTTOM', 0, -6)
 	statusText:SetPoint('LEFT', sidecarPanel, 'LEFT', 15, 0)
 	statusText:SetPoint('RIGHT', sidecarPanel, 'RIGHT', -15, 0)
 	statusText:SetJustifyH('CENTER')
 	statusText:SetText('')
 	sidecarPanel.statusText = statusText
 
+	-- Apply Profile button (re-applies profile when live state has drifted)
+	local applyBtn = LibAT.UI.CreateButton(sidecarPanel, 170, 24, 'Apply Profile')
+	applyBtn:SetPoint('TOP', statusText, 'BOTTOM', 0, -4)
+	applyBtn:SetScript('OnClick', function()
+		local profileName = sidecarPanel.selectedProfile or 'Default'
+		ApplyProfileToBlizzardList(profileName)
+	end)
+	applyBtn:Hide()
+	sidecarPanel.applyBtn = applyBtn
+
 	-- Reload UI button (only visible after profile switch with changes)
 	local reloadBtn = LibAT.UI.CreateButton(sidecarPanel, 170, 24, 'Reload UI')
-	reloadBtn:SetPoint('TOP', statusText, 'BOTTOM', 0, -4)
+	reloadBtn:SetPoint('TOP', applyBtn, 'BOTTOM', 0, -4)
 	reloadBtn:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)
@@ -309,6 +463,7 @@ local function CreateSidecarPanel()
 		-- Rescan so cache matches what Blizzard's list currently shows
 		AddonManager.Core.ScanAddons()
 		AddonManager.Profiles.SaveProfile(profileName)
+		UpdateSidecarStatus()
 		if AddonManager.logger then
 			AddonManager.logger.info(string.format('Saved current addon states to profile: %s', profileName))
 		end
@@ -320,14 +475,169 @@ local function CreateSidecarPanel()
 	sep:SetPoint('TOP', saveBtn, 'BOTTOM', 0, -12)
 	sep:SetColorTexture(0.4, 0.4, 0.4, 0.5)
 
-	-- Open Addon Manager button
+	----------------------------------------------------------------------------------------------------
+	-- Favorites Section
+	----------------------------------------------------------------------------------------------------
+
+	-- Favorites header
+	local favTitle = sidecarPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+	favTitle:SetPoint('TOP', sep, 'BOTTOM', 0, -10)
+	favTitle:SetText('Favorites')
+
+	-- Lock Favorites checkbox
+	local lockCheckbox = LibAT.UI.CreateCheckbox(sidecarPanel, 'Lock Favorites', 170, 24)
+	lockCheckbox:SetPoint('TOP', favTitle, 'BOTTOM', 0, -6)
+	lockCheckbox:SetPoint('LEFT', sidecarPanel, 'LEFT', 15, 0)
+	lockCheckbox._onClickHandler = function(self)
+		local locked = self:GetChecked()
+		if AddonManager.Favorites then
+			AddonManager.Favorites.SetLocked(locked)
+		end
+		if AddonList_Update then AddonList_Update() end
+	end
+	lockCheckbox:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:SetText('Lock Favorites', 1, 0.82, 0)
+		GameTooltip:AddLine('Keep favorites enabled no matter\nwhich profile is loaded.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	lockCheckbox:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+	end)
+	sidecarPanel.lockCheckbox = lockCheckbox
+
+	-- Add Favorite button (opens a scrollable picker popup)
+	local addFavBtn = LibAT.UI.CreateButton(sidecarPanel, 170, 24, '+ Add Favorite')
+	addFavBtn:SetPoint('BOTTOM', sidecarPanel, 'BOTTOM', 0, 44)
+	sidecarPanel.addFavBtn = addFavBtn
+
+	-- Favorites scroll list — dynamically fills space between lock checkbox and add button
+	local favScrollFrame = LibAT.UI.CreateScrollFrame(sidecarPanel)
+	favScrollFrame:SetPoint('TOPLEFT', lockCheckbox, 'BOTTOMLEFT', 0, -6)
+	favScrollFrame:SetPoint('BOTTOMRIGHT', addFavBtn, 'TOPRIGHT', 0, 6)
+
+	local favScrollChild = CreateFrame('Frame', nil, favScrollFrame)
+	favScrollFrame:SetScrollChild(favScrollChild)
+	favScrollChild:SetSize(155, 1)
+
+	sidecarPanel.favScrollFrame = favScrollFrame
+	sidecarPanel.favScrollChild = favScrollChild
+	sidecarPanel.favRowPool = {}
+
+	-- Scrollable favorite picker popup
+	local picker = CreateFrame('Frame', 'SUIAddonFavPicker', UIParent, 'BackdropTemplate')
+	picker:SetSize(220, 280)
+	picker:SetFrameStrata('DIALOG')
+	picker:SetBackdrop({ bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background', edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border', tile = true, tileSize = 32, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+	picker:Hide()
+	picker:SetClampedToScreen(true)
+	picker.rowPool = {}
+
+	local pickerSearch = LibAT.UI.CreateSearchBox(picker, 180, 22)
+	pickerSearch:SetPoint('TOP', picker, 'TOP', 0, -10)
+
+	local pickerScroll = LibAT.UI.CreateScrollFrame(picker)
+	pickerScroll:SetPoint('TOPLEFT', pickerSearch, 'BOTTOMLEFT', 0, -4)
+	pickerScroll:SetPoint('BOTTOMRIGHT', picker, 'BOTTOMRIGHT', -6, 8)
+
+	local pickerChild = CreateFrame('Frame', nil, pickerScroll)
+	pickerScroll:SetScrollChild(pickerChild)
+	pickerChild:SetWidth(170)
+
+	local function RebuildPickerList(filter)
+		for _, row in ipairs(picker.rowPool) do
+			row:Hide()
+		end
+
+		if not AddonManager.Favorites then return end
+
+		local nonFavs = AddonManager.Favorites.GetNonFavorites()
+		local yOffset = 0
+		local rowIndex = 0
+		filter = filter and filter:lower() or ''
+
+		for _, addonName in ipairs(nonFavs) do
+			local addonMeta = AddonManager.Core and AddonManager.Core.GetAddonByName(addonName)
+			local displayName = (addonMeta and addonMeta.title) or addonName
+
+			if filter == '' or displayName:lower():find(filter, 1, true) or addonName:lower():find(filter, 1, true) then
+				rowIndex = rowIndex + 1
+				local row = picker.rowPool[rowIndex]
+				if not row then
+					row = CreateFrame('Button', nil, pickerChild)
+					row:SetHeight(22)
+					row:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight', 'ADD')
+
+					local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+					label:SetPoint('LEFT', row, 'LEFT', 4, 0)
+					label:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
+					label:SetJustifyH('LEFT')
+					label:SetWordWrap(false)
+					row.label = label
+
+					table.insert(picker.rowPool, row)
+				end
+
+				row:ClearAllPoints()
+				row:SetPoint('TOPLEFT', pickerChild, 'TOPLEFT', 0, -yOffset)
+				row:SetWidth(pickerChild:GetWidth())
+				row.label:SetText(displayName)
+				row.addonName = addonName
+				row:SetScript('OnClick', function()
+					AddonManager.Favorites.AddFavorite(addonName)
+					picker:Hide()
+					RefreshFavoritesList()
+					if AddonList_Update then AddonList_Update() end
+				end)
+				row:Show()
+
+				yOffset = yOffset + 22
+			end
+		end
+
+		pickerChild:SetHeight(math.max(yOffset, 1))
+	end
+
+	pickerSearch:SetScript('OnTextChanged', function(self)
+		RebuildPickerList(self:GetText())
+	end)
+
+	-- Close picker when clicking outside; clear focus so EditBox doesn't eat Escape
+	picker:SetScript('OnHide', function()
+		pickerSearch:SetText('')
+		pickerSearch:ClearFocus()
+	end)
+
+	-- Register picker in UISpecialFrames so Escape closes it when open
+	tinsert(UISpecialFrames, 'SUIAddonFavPicker')
+
+	addFavBtn:SetScript('OnClick', function()
+		if picker:IsShown() then
+			picker:Hide()
+			return
+		end
+		picker:ClearAllPoints()
+		picker:SetPoint('BOTTOMLEFT', sidecarPanel, 'BOTTOMRIGHT', 4, 0)
+		RebuildPickerList('')
+		picker:Show()
+	end)
+
+	-- Open Addon Manager button (pinned to bottom of panel)
 	local openBtn = LibAT.UI.CreateButton(sidecarPanel, 170, 24, 'Open Addon Manager')
-	openBtn:SetPoint('TOP', sep, 'BOTTOM', 0, -12)
+	openBtn:SetPoint('BOTTOM', sidecarPanel, 'BOTTOM', 0, 12)
 	openBtn:SetScript('OnClick', function()
 		local DevUI = LibAT:GetModule('Handler.DevUI', true)
 		if DevUI and DevUI.ShowTab then
 			DevUI.ShowTab(5)
 		end
+	end)
+
+	-- Commit pending removals when sidecar hides; also close the picker
+	sidecarPanel:HookScript('OnHide', function()
+		if AddonManager.Favorites then
+			AddonManager.Favorites.CommitRemovals()
+		end
+		picker:Hide()
 	end)
 
 	sidecarPanel.selectedProfile = AddonManager.Profiles and AddonManager.Profiles.GetActiveProfile() or 'Default'
@@ -347,14 +657,9 @@ function Enhance.Setup()
 	end
 	enhanced = true
 
-	-- Remove from UIPanelWindows so WoW doesn't manage its position
-	if UIPanelWindows then
-		UIPanelWindows['AddonList'] = nil
-	end
-	AddonList:SetAttribute('UIPanelLayout-defined', nil)
-	AddonList:SetAttribute('UIPanelLayout-enabled', nil)
-	AddonList:SetAttribute('UIPanelLayout-area', nil)
-	AddonList:SetAttribute('UIPanelLayout-pushable', nil)
+	-- NOTE: Do NOT modify UIPanelWindows or UIPanelLayout attributes.
+	-- Doing so permanently breaks WoW's Escape key handling for the entire session.
+	-- WoW's UIPanelWindows system handles Escape for AddonList natively.
 
 	-- Make movable
 	AddonList:SetMovable(true)
@@ -366,12 +671,11 @@ function Enhance.Setup()
 	end)
 	AddonList:HookScript('OnDragStop', function(self)
 		self:StopMovingOrSizing()
-		SavePosition()
 	end)
 
 	-- Make resizable
 	AddonList:SetResizable(true)
-	AddonList:SetResizeBounds(500, 400, 1200, 900)
+	AddonList:SetResizeBounds(500, 500, 1200, 900)
 
 	-- Resize grip
 	local resizeHandle = CreateFrame('Button', nil, AddonList)
@@ -386,8 +690,6 @@ function Enhance.Setup()
 	end)
 	resizeHandle:SetScript('OnMouseUp', function()
 		AddonList:StopMovingOrSizing()
-		SaveSize()
-		SavePosition()
 	end)
 
 	-- Snapshot current addon states (what's actually loaded this session)
@@ -398,12 +700,116 @@ function Enhance.Setup()
 		end
 	end
 
-	-- Restore saved position/size
-	RestorePosition()
-
 	-- Create sidecar panel
 	CreateSidecarPanel()
 	RefreshSidecarDropdown()
+
+	-- Initialize favorites UI
+	if AddonManager.Favorites then
+		if sidecarPanel.lockCheckbox then
+			sidecarPanel.lockCheckbox:SetChecked(AddonManager.Favorites.IsLocked())
+		end
+		RefreshFavoritesList()
+	end
+
+	-- Hook Blizzard's AddonList_Enable to prevent unchecking locked favorites
+	if AddonList_Enable then
+		hooksecurefunc('AddonList_Enable', function(index, enabled)
+			if enabled then return end
+			if not AddonManager.Favorites or not AddonManager.Favorites.IsLocked() then return end
+
+			local addonName = C_AddOns.GetAddOnInfo(index)
+			if addonName and AddonManager.Favorites.IsFavorite(addonName) then
+				-- Re-enable using the same character context Blizzard uses
+				-- GetAddonCharacter() is local to Blizzard's AddonList, so we
+				-- replicate: nil means "all characters" which is correct for us
+				C_AddOns.EnableAddOn(index)
+				C_AddOns.SaveAddOns()
+
+				-- Schedule the UI update for next frame to avoid recursion
+				-- (AddonList_Update is called by AddonList_Enable, then our hook
+				-- runs. Calling AddonList_Update here would re-enter the hook chain.)
+				C_Timer.After(0, function()
+					if AddonList:IsVisible() and AddonList_Update then
+						AddonList_Update()
+					end
+				end)
+
+				if AddonManager.logger then
+					AddonManager.logger.info('Lock prevented disabling favorite: ' .. addonName)
+				end
+			end
+		end)
+	end
+
+	-- Hook C_AddOns.DisableAllAddOns to re-enable locked favorites.
+	-- The DisableAll button captures AddonList_DisableAll by reference at load time,
+	-- so hooksecurefunc('AddonList_DisableAll') never fires. Hooking the underlying
+	-- C_AddOns API catches it regardless of caller.
+	hooksecurefunc(C_AddOns, 'DisableAllAddOns', function()
+		if AddonManager.logger then
+			AddonManager.logger.debug('C_AddOns.DisableAllAddOns hook fired, lock=' .. tostring(AddonManager.Favorites and AddonManager.Favorites.IsLocked()))
+		end
+
+		if not AddonManager.Favorites or not AddonManager.Favorites.IsLocked() then return end
+
+		AddonManager.Favorites.EnforceLock()
+
+		C_Timer.After(0, function()
+			if AddonList:IsVisible() and AddonList_Update then
+				AddonList_Update()
+			end
+		end)
+	end)
+
+	-- Hook AddonList_Update to refresh lock icons and drift status after each update.
+	-- Deferred one frame so the ScrollBox has finished populating its frames.
+	hooksecurefunc('AddonList_Update', function()
+		C_Timer.After(0, function()
+			RefreshLockIcons()
+			UpdateSidecarStatus()
+		end)
+	end)
+
+	-- Capture the last right-clicked node so Menu.ModifyMenu can access it
+	if AddonListNodeMixin then
+		hooksecurefunc(AddonListNodeMixin, 'OnClick', function(self, button)
+			if button == 'RightButton' then
+				lastRightClickedNode = self
+			end
+		end)
+	end
+
+	-- Extend the Blizzard addon list right-click menu with Add/Remove from Favorites
+	if Menu and Menu.ModifyMenu then
+		Menu.ModifyMenu('MENU_ADDON_LIST_ENTRY', function(owner, rootDescription)
+			local node = lastRightClickedNode
+			if not node or not AddonManager.Favorites then return end
+
+			local data = node.treeNode and node.treeNode:GetData()
+			local addonIndex = data and data.addonIndex
+			if not addonIndex then return end
+
+			local name = C_AddOns.GetAddOnName(addonIndex)
+			if not name then return end
+
+			rootDescription:CreateDivider()
+
+			if AddonManager.Favorites.IsFavorite(name) then
+				rootDescription:CreateButton('Remove from Favorites', function()
+					AddonManager.Favorites.RemoveFavorite(name)
+					RefreshFavoritesList()
+					if AddonList_Update then AddonList_Update() end
+				end)
+			else
+				rootDescription:CreateButton('Add to Favorites', function()
+					AddonManager.Favorites.AddFavorite(name)
+					RefreshFavoritesList()
+					if AddonList_Update then AddonList_Update() end
+				end)
+			end
+		end)
+	end
 
 	if AddonManager.logger then
 		AddonManager.logger.info('Blizzard AddonList enhanced: movable, resizable, sidecar panel added')
@@ -422,6 +828,19 @@ local function TryHook()
 				Enhance.Setup()
 			end
 			RefreshSidecarDropdown()
+			-- Refresh favorites on every show
+			if AddonManager.Favorites and sidecarPanel then
+				if sidecarPanel.lockCheckbox then
+					sidecarPanel.lockCheckbox:SetChecked(AddonManager.Favorites.IsLocked())
+				end
+				RefreshFavoritesList()
+			end
+			-- Blizzard calls AddonList_Update inside OnShow before our hook runs,
+			-- so refresh lock icons and drift status explicitly, deferred one frame.
+			C_Timer.After(0, function()
+				RefreshLockIcons()
+				UpdateSidecarStatus()
+			end)
 		end)
 		return true
 	end

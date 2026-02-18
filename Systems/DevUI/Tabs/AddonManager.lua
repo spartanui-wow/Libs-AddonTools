@@ -465,8 +465,7 @@ function RefreshAddonList()
 			labelButton:SetScript('OnClick', function(self, button)
 				if button == 'LeftButton' then
 					btn:Click()
-				elseif button == 'RightButton' and hasChildren then
-					-- Right-click on parent addon: show context menu
+				elseif button == 'RightButton' then
 					ShowAddonContextMenu(self, addon, dependents)
 				end
 			end)
@@ -493,8 +492,7 @@ function RefreshAddonList()
 
 			-- Click handler (toggle enable/disable)
 			btn:SetScript('OnClick', function(self, button)
-				if button == 'RightButton' and self.hasChildren then
-					-- Right-click on parent checkbox: show context menu
+				if button == 'RightButton' then
 					ShowAddonContextMenu(self, self.addon, self.dependents)
 					return
 				end
@@ -688,77 +686,112 @@ end
 -- Context Menu (Right-Click on Parent Addons)
 ----------------------------------------------------------------------------------------------------
 
----Show context menu for addon with children
+---Show context menu for any addon (favorites + children controls)
 ---@param anchorFrame table Frame to anchor menu to
 ---@param addon table Addon metadata
----@param dependents table List of dependent addon names
+---@param dependents? table List of dependent addon names
 function ShowAddonContextMenu(anchorFrame, addon, dependents)
-	if not addon or not dependents or #dependents == 0 then
+	if not addon then
 		return
 	end
+	dependents = dependents or {}
 
 	-- Create dropdown menu
 	local menu = CreateFrame('Frame', 'LibAT_AddonManager_ContextMenu', UIParent, 'UIDropDownMenuTemplate')
 
 	UIDropDownMenu_Initialize(menu, function(self, level)
-		local info = UIDropDownMenu_CreateInfo()
+		local info
 
-		-- Enable all children
-		info.text = string.format('Enable All Children (%d)', #dependents)
-		info.notCheckable = true
-		info.func = function()
-			-- Enable parent
-			TabState.PendingChanges[addon.name] = { enabled = true }
-
-			-- Enable all dependents
-			for _, depName in ipairs(dependents) do
-				TabState.PendingChanges[depName] = { enabled = true }
+		-- Favorites section
+		if AddonManager.Favorites then
+			local isFav = AddonManager.Favorites.IsFavorite(addon.name)
+			info = UIDropDownMenu_CreateInfo()
+			info.notCheckable = true
+			if isFav then
+				info.text = 'Remove from Favorites'
+				info.func = function()
+					AddonManager.Favorites.RemoveFavorite(addon.name)
+					if TabState.SelectedAddon and TabState.SelectedAddon.name == addon.name then
+						RefreshDetailsPanel(addon)
+					end
+					CloseDropDownMenus()
+				end
+			else
+				info.text = 'Add to Favorites'
+				info.func = function()
+					AddonManager.Favorites.AddFavorite(addon.name)
+					if TabState.SelectedAddon and TabState.SelectedAddon.name == addon.name then
+						RefreshDetailsPanel(addon)
+					end
+					CloseDropDownMenus()
+				end
 			end
+			UIDropDownMenu_AddButton(info, level)
 
-			UpdateChangeIndicator()
-			RefreshAddonList()
-			CloseDropDownMenus()
-		end
-		UIDropDownMenu_AddButton(info, level)
-
-		-- Disable all children
-		info = UIDropDownMenu_CreateInfo()
-		info.text = string.format('Disable All Children (%d)', #dependents)
-		info.notCheckable = true
-		info.func = function()
-			-- Disable all dependents
-			for _, depName in ipairs(dependents) do
-				TabState.PendingChanges[depName] = { enabled = false }
-			end
-
-			UpdateChangeIndicator()
-			RefreshAddonList()
-			CloseDropDownMenus()
-		end
-		UIDropDownMenu_AddButton(info, level)
-
-		-- Separator
-		info = UIDropDownMenu_CreateInfo()
-		info.text = ''
-		info.isTitle = true
-		info.notCheckable = true
-		UIDropDownMenu_AddButton(info, level)
-
-		-- List children (informational)
-		info = UIDropDownMenu_CreateInfo()
-		info.text = 'Children:'
-		info.isTitle = true
-		info.notCheckable = true
-		UIDropDownMenu_AddButton(info, level)
-
-		for _, depName in ipairs(dependents) do
-			local depAddon = AddonManager.Core.GetAddonByName(depName)
-			if depAddon then
+			-- Separator before children section
+			if #dependents > 0 then
 				info = UIDropDownMenu_CreateInfo()
-				info.text = '  ' .. (depAddon.title or depName)
+				info.text = ''
+				info.isTitle = true
 				info.notCheckable = true
-				info.disabled = true
 				UIDropDownMenu_AddButton(info, level)
+			end
+		end
+
+		-- Children section (only if this addon has dependents)
+		if #dependents > 0 then
+			-- Enable all children
+			info = UIDropDownMenu_CreateInfo()
+			info.text = string.format('Enable All Children (%d)', #dependents)
+			info.notCheckable = true
+			info.func = function()
+				TabState.PendingChanges[addon.name] = { enabled = true }
+				for _, depName in ipairs(dependents) do
+					TabState.PendingChanges[depName] = { enabled = true }
+				end
+				UpdateChangeIndicator()
+				RefreshAddonList()
+				CloseDropDownMenus()
+			end
+			UIDropDownMenu_AddButton(info, level)
+
+			-- Disable all children
+			info = UIDropDownMenu_CreateInfo()
+			info.text = string.format('Disable All Children (%d)', #dependents)
+			info.notCheckable = true
+			info.func = function()
+				for _, depName in ipairs(dependents) do
+					TabState.PendingChanges[depName] = { enabled = false }
+				end
+				UpdateChangeIndicator()
+				RefreshAddonList()
+				CloseDropDownMenus()
+			end
+			UIDropDownMenu_AddButton(info, level)
+
+			-- Separator
+			info = UIDropDownMenu_CreateInfo()
+			info.text = ''
+			info.isTitle = true
+			info.notCheckable = true
+			UIDropDownMenu_AddButton(info, level)
+
+			-- List children (informational)
+			info = UIDropDownMenu_CreateInfo()
+			info.text = 'Children:'
+			info.isTitle = true
+			info.notCheckable = true
+			UIDropDownMenu_AddButton(info, level)
+
+			for _, depName in ipairs(dependents) do
+				local depAddon = AddonManager.Core.GetAddonByName(depName)
+				if depAddon then
+					info = UIDropDownMenu_CreateInfo()
+					info.text = '  ' .. (depAddon.title or depName)
+					info.notCheckable = true
+					info.disabled = true
+					UIDropDownMenu_AddButton(info, level)
+				end
 			end
 		end
 	end, 'MENU')
@@ -834,10 +867,30 @@ function RefreshDetailsPanel(addon)
 	local name = content:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
 	name:SetPoint('TOP', content, 'TOP', 0, -8)
 	name:SetPoint('LEFT', content, 'LEFT', 8, 0)
-	name:SetPoint('RIGHT', content, 'RIGHT', -8, 0)
+	name:SetPoint('RIGHT', content, 'RIGHT', -60, 0)
 	name:SetText(addon.title)
 	name:SetJustifyH('CENTER')
 	name:SetWordWrap(true)
+
+	-- Favorite star icon (top-right)
+	if AddonManager.Favorites then
+		local starBtn = LibAT.UI.CreateFavoriteButton(content, 18, function(self, isFavorite)
+			if isFavorite then
+				AddonManager.Favorites.AddFavorite(addon.name)
+			else
+				AddonManager.Favorites.RemoveFavorite(addon.name)
+			end
+		end)
+		starBtn:SetPoint('TOPRIGHT', content, 'TOPRIGHT', -8, -8)
+		starBtn:SetFavorite(AddonManager.Favorites.IsFavorite(addon.name))
+
+		starBtn:SetScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+			GameTooltip:SetText(self:IsFavorite() and 'Remove from Favorites' or 'Add to Favorites', 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		starBtn:SetScript('OnLeave', function() GameTooltip:Hide() end)
+	end
 
 	-- Version
 	local version = content:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
@@ -1312,6 +1365,11 @@ function ApplyChanges()
 	-- Save changes
 	if AddonManager.Core.SaveAddOns then
 		AddonManager.Core.SaveAddOns()
+	end
+
+	-- Enforce favorites lock after applying changes
+	if AddonManager.Favorites then
+		AddonManager.Favorites.EnforceLock()
 	end
 
 	-- Clear pending changes

@@ -14,6 +14,10 @@ AddonManager.description = 'Addon Manager with profiles, search, and dependency 
 function AddonManager:OnInitialize()
 	-- Register database namespace
 	local defaults = {
+		global = {
+			favorites = {}, -- { [addonName] = true }
+			lockFavorites = false, -- when true, favorites are forced ON during profile apply
+		},
 		profile = {
 			profiles = {
 				['Default'] = {
@@ -30,6 +34,7 @@ function AddonManager:OnInitialize()
 	}
 	AddonManager.Database = LibAT.Database:RegisterNamespace('AddonManager', defaults)
 	AddonManager.DB = AddonManager.Database.profile
+	AddonManager.GDB = AddonManager.Database.global
 
 	-- Register logger category
 	if LibAT.InternalLog then
