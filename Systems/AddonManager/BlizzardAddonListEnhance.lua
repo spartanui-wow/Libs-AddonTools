@@ -13,101 +13,109 @@ local enhanced = false
 local sessionAddonStates = {} -- Snapshot of addon enabled states at session start (what's actually loaded)
 local lastRightClickedNode = nil -- Captured from OnClick hook for use in Menu.ModifyMenu
 
+---Apply or update the star icon and lock icon for a single addon list entry frame.
+---Safe to call any time after the frame's treeNode has been set by AddonList_InitAddon.
+local function DecorateEntry(entry)
+	if not AddonManager.Favorites then
+		return
+	end
+	if not entry.Enabled then
+		return
+	end
+	if not entry.treeNode then
+		return
+	end
+
+	local data = entry.treeNode:GetData()
+	local addonIndex = data and data.addonIndex
+	if not addonIndex then
+		-- Category/group header node: hide our decorations if they exist
+		if entry.SUILockIcon then
+			entry.SUILockIcon:Hide()
+			entry.Enabled:Show()
+		end
+		if entry.SUIStar then
+			entry.SUIStar:Hide()
+		end
+		return
+	end
+
+	local name = C_AddOns.GetAddOnName(addonIndex)
+	local isLockedFavorite = name and AddonManager.Favorites.IsFavorite(name) and AddonManager.Favorites.IsLocked()
+
+	-- Lock icon: replaces checkbox for locked favorites
+	if isLockedFavorite then
+		if not entry.SUILockIcon then
+			local icon = entry:CreateTexture(nil, 'OVERLAY')
+			icon:SetAtlas('Forge-Lock', false)
+			icon:SetSize(16, 16)
+			icon:SetPoint('CENTER', entry.Enabled, 'CENTER')
+			entry.SUILockIcon = icon
+		end
+		entry.Enabled:Hide()
+		entry.SUILockIcon:Show()
+	else
+		if entry.SUILockIcon then
+			entry.SUILockIcon:Hide()
+		end
+		entry.Enabled:Show()
+	end
+
+	-- Star icon: clickable favorite toggle, positioned between checkbox and title
+	if not entry.SUIStar then
+		local star = CreateFrame('Button', nil, entry)
+		star:SetSize(14, 14)
+		star:SetPoint('LEFT', entry, 'LEFT', 33, 0)
+
+		local starTex = star:CreateTexture(nil, 'ARTWORK')
+		starTex:SetAllPoints()
+		star.starTex = starTex
+		entry.SUIStar = star
+
+		-- Shift Title right to make room for the star
+		entry.Title:ClearAllPoints()
+		entry.Title:SetPoint('LEFT', entry, 'LEFT', 50, 0)
+		entry.Title:SetPoint('RIGHT', entry, 'RIGHT', -140, 0)
+
+		star:SetScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+			local isFav = AddonManager.Favorites and self.addonName and AddonManager.Favorites.IsFavorite(self.addonName)
+			GameTooltip:SetText(isFav and 'Remove from Favorites' or 'Add to Favorites', 1, 1, 1)
+			GameTooltip:Show()
+		end)
+		star:SetScript('OnLeave', function()
+			GameTooltip:Hide()
+		end)
+		star:SetScript('OnClick', function(self)
+			if not AddonManager.Favorites or not self.addonName then
+				return
+			end
+			if AddonManager.Favorites.IsFavorite(self.addonName) then
+				AddonManager.Favorites.RemoveFavorite(self.addonName)
+			else
+				AddonManager.Favorites.AddFavorite(self.addonName)
+			end
+			RefreshFavoritesList()
+			if AddonList_Update then
+				AddonList_Update()
+			end
+		end)
+	end
+
+	-- Update star state
+	entry.SUIStar.addonName = name
+	local isFavorite = name and AddonManager.Favorites.IsFavorite(name)
+	entry.SUIStar.starTex:SetAtlas(isFavorite and 'auctionhouse-icon-favorite' or 'auctionhouse-icon-favorite-off', false)
+	entry.SUIStar:Show()
+end
+
 local function RefreshLockIcons()
-	if not AddonManager.Favorites or not AddonList or not AddonList.ScrollBox then
+	if not AddonList or not AddonList.ScrollBox then
 		return
 	end
 
 	AddonList.ScrollBox:ForEachFrame(function(frame)
-		local entry = frame
-		if not entry.Enabled then
-			return
-		end
-		if not entry.treeNode then
-			return
-		end
-
-		local data = entry.treeNode:GetData()
-		local addonIndex = data and data.addonIndex
-		if not addonIndex then
-			-- Group/category node: hide all our decorations
-			if entry.SUILockIcon then
-				entry.SUILockIcon:Hide()
-				entry.Enabled:Show()
-			end
-			if entry.SUIStar then
-				entry.SUIStar:Hide()
-			end
-			return
-		end
-
-		local name = C_AddOns.GetAddOnName(addonIndex)
-		local isLockedFavorite = name and AddonManager.Favorites.IsFavorite(name) and AddonManager.Favorites.IsLocked()
-
-		-- Lock icon: replaces checkbox for locked favorites
-		if isLockedFavorite then
-			if not entry.SUILockIcon then
-				local icon = entry:CreateTexture(nil, 'OVERLAY')
-				icon:SetAtlas('Forge-Lock', false)
-				icon:SetSize(16, 16)
-				icon:SetPoint('CENTER', entry.Enabled, 'CENTER')
-				entry.SUILockIcon = icon
-			end
-			entry.Enabled:Hide()
-			entry.SUILockIcon:Show()
-		else
-			if entry.SUILockIcon then
-				entry.SUILockIcon:Hide()
-			end
-			entry.Enabled:Show()
-		end
-
-		-- Star icon: clickable favorite toggle, positioned between checkbox and title
-		if not entry.SUIStar then
-			local star = CreateFrame('Button', nil, entry)
-			star:SetSize(14, 14)
-			star:SetPoint('LEFT', entry, 'LEFT', 33, 0)
-
-			local starTex = star:CreateTexture(nil, 'ARTWORK')
-			starTex:SetAllPoints()
-			star.starTex = starTex
-			entry.SUIStar = star
-
-			-- Shift Title right to make room for the star
-			entry.Title:ClearAllPoints()
-			entry.Title:SetPoint('LEFT', entry, 'LEFT', 50, 0)
-			entry.Title:SetPoint('RIGHT', entry, 'RIGHT', -140, 0)
-
-			star:SetScript('OnEnter', function(self)
-				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
-				local isFav = AddonManager.Favorites and self.addonName and AddonManager.Favorites.IsFavorite(self.addonName)
-				GameTooltip:SetText(isFav and 'Remove from Favorites' or 'Add to Favorites', 1, 1, 1)
-				GameTooltip:Show()
-			end)
-			star:SetScript('OnLeave', function()
-				GameTooltip:Hide()
-			end)
-			star:SetScript('OnClick', function(self)
-				if not AddonManager.Favorites or not self.addonName then
-					return
-				end
-				if AddonManager.Favorites.IsFavorite(self.addonName) then
-					AddonManager.Favorites.RemoveFavorite(self.addonName)
-				else
-					AddonManager.Favorites.AddFavorite(self.addonName)
-				end
-				RefreshFavoritesList()
-				if AddonList_Update then
-					AddonList_Update()
-				end
-			end)
-		end
-
-		-- Update star state each refresh
-		entry.SUIStar.addonName = name
-		local isFavorite = name and AddonManager.Favorites.IsFavorite(name)
-		entry.SUIStar.starTex:SetAtlas(isFavorite and 'auctionhouse-icon-favorite' or 'auctionhouse-icon-favorite-off', false)
-		entry.SUIStar:Show()
+		DecorateEntry(frame)
 	end)
 end
 
@@ -801,8 +809,16 @@ function Enhance.Setup()
 		end)
 	end)
 
-	-- Hook AddonList_Update to refresh lock icons and drift status after each update.
-	-- Deferred one frame so the ScrollBox has finished populating its frames.
+	-- Hook each frame as it's initialized so the star appears immediately, even for child
+	-- entries that scroll into view after the initial load. OnInitializedFrame fires after
+	-- AddonList_InitAddon has run (and entry.treeNode is set), once per frame per update cycle.
+	if AddonList.ScrollBox.RegisterCallback then
+		AddonList.ScrollBox:RegisterCallback(ScrollBoxListMixin.Event.OnInitializedFrame, function(_, frame)
+			DecorateEntry(frame)
+		end, Enhance)
+	end
+
+	-- Also hook AddonList_Update as a fallback batch refresh for drift status.
 	hooksecurefunc('AddonList_Update', function()
 		C_Timer.After(0, function()
 			RefreshLockIcons()
