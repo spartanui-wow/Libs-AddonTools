@@ -14,12 +14,18 @@ local sessionAddonStates = {} -- Snapshot of addon enabled states at session sta
 local lastRightClickedNode = nil -- Captured from OnClick hook for use in Menu.ModifyMenu
 
 local function RefreshLockIcons()
-	if not AddonManager.Favorites or not AddonList or not AddonList.ScrollBox then return end
+	if not AddonManager.Favorites or not AddonList or not AddonList.ScrollBox then
+		return
+	end
 
 	AddonList.ScrollBox:ForEachFrame(function(frame)
 		local entry = frame
-		if not entry.Enabled then return end
-		if not entry.treeNode then return end
+		if not entry.Enabled then
+			return
+		end
+		if not entry.treeNode then
+			return
+		end
 
 		local data = entry.treeNode:GetData()
 		local addonIndex = data and data.addonIndex
@@ -78,16 +84,22 @@ local function RefreshLockIcons()
 				GameTooltip:SetText(isFav and 'Remove from Favorites' or 'Add to Favorites', 1, 1, 1)
 				GameTooltip:Show()
 			end)
-			star:SetScript('OnLeave', function() GameTooltip:Hide() end)
+			star:SetScript('OnLeave', function()
+				GameTooltip:Hide()
+			end)
 			star:SetScript('OnClick', function(self)
-				if not AddonManager.Favorites or not self.addonName then return end
+				if not AddonManager.Favorites or not self.addonName then
+					return
+				end
 				if AddonManager.Favorites.IsFavorite(self.addonName) then
 					AddonManager.Favorites.RemoveFavorite(self.addonName)
 				else
 					AddonManager.Favorites.AddFavorite(self.addonName)
 				end
 				RefreshFavoritesList()
-				if AddonList_Update then AddonList_Update() end
+				if AddonList_Update then
+					AddonList_Update()
+				end
 			end)
 		end
 
@@ -105,7 +117,9 @@ end
 
 ---Check if live addon states differ from the selected profile. Returns drift count.
 local function GetProfileDrift(profileName)
-	if not AddonManager.Profiles or not AddonManager.Core then return 0 end
+	if not AddonManager.Profiles or not AddonManager.Core then
+		return 0
+	end
 
 	local profile = AddonManager.Profiles.GetProfile(profileName)
 	local drift = 0
@@ -248,7 +262,9 @@ end
 ----------------------------------------------------------------------------------------------------
 
 local function RefreshFavoritesList()
-	if not sidecarPanel or not sidecarPanel.favScrollChild or not AddonManager.Favorites then return end
+	if not sidecarPanel or not sidecarPanel.favScrollChild or not AddonManager.Favorites then
+		return
+	end
 
 	local scrollChild = sidecarPanel.favScrollChild
 
@@ -298,7 +314,9 @@ local function RefreshFavoritesList()
 			row.starBtn:SetScript('OnClick', function()
 				AddonManager.Favorites.AddFavorite(addonName)
 				RefreshFavoritesList()
-				if AddonList_Update then AddonList_Update() end
+				if AddonList_Update then
+					AddonList_Update()
+				end
 			end)
 			row.starBtn:SetScript('OnEnter', function(self)
 				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
@@ -312,7 +330,9 @@ local function RefreshFavoritesList()
 			row.starBtn:SetScript('OnClick', function()
 				AddonManager.Favorites.RemoveFavorite(addonName)
 				RefreshFavoritesList()
-				if AddonList_Update then AddonList_Update() end
+				if AddonList_Update then
+					AddonList_Update()
+				end
 			end)
 			row.starBtn:SetScript('OnEnter', function(self)
 				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
@@ -366,21 +386,21 @@ local function CreateSidecarPanel()
 
 	if profileDropdown.SetupMenu then
 		profileDropdown:SetupMenu(function(owner, rootDescription)
-			if not AddonManager.Profiles then return end
+			if not AddonManager.Profiles then
+				return
+			end
 
 			local profiles = AddonManager.Profiles.GetProfileNames()
 			local activeProfile = AddonManager.Profiles.GetActiveProfile()
 
 			for _, profileName in ipairs(profiles) do
-				rootDescription:CreateRadio(
-					profileName,
-					function() return profileName == (sidecarPanel.selectedProfile or activeProfile) end,
-					function()
-						sidecarPanel.selectedProfile = profileName
-						profileDropdown:SetText(profileName)
-						ApplyProfileToBlizzardList(profileName)
-					end
-				)
+				rootDescription:CreateRadio(profileName, function()
+					return profileName == (sidecarPanel.selectedProfile or activeProfile)
+				end, function()
+					sidecarPanel.selectedProfile = profileName
+					profileDropdown:SetText(profileName)
+					ApplyProfileToBlizzardList(profileName)
+				end)
 			end
 
 			rootDescription:CreateDivider()
@@ -493,7 +513,9 @@ local function CreateSidecarPanel()
 		if AddonManager.Favorites then
 			AddonManager.Favorites.SetLocked(locked)
 		end
-		if AddonList_Update then AddonList_Update() end
+		if AddonList_Update then
+			AddonList_Update()
+		end
 	end
 	lockCheckbox:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
@@ -528,7 +550,14 @@ local function CreateSidecarPanel()
 	local picker = CreateFrame('Frame', 'SUIAddonFavPicker', UIParent, 'BackdropTemplate')
 	picker:SetSize(220, 280)
 	picker:SetFrameStrata('DIALOG')
-	picker:SetBackdrop({ bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background', edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border', tile = true, tileSize = 32, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+	picker:SetBackdrop({
+		bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background',
+		edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border',
+		tile = true,
+		tileSize = 32,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
 	picker:Hide()
 	picker:SetClampedToScreen(true)
 	picker.rowPool = {}
@@ -549,7 +578,9 @@ local function CreateSidecarPanel()
 			row:Hide()
 		end
 
-		if not AddonManager.Favorites then return end
+		if not AddonManager.Favorites then
+			return
+		end
 
 		local nonFavs = AddonManager.Favorites.GetNonFavorites()
 		local yOffset = 0
@@ -587,7 +618,9 @@ local function CreateSidecarPanel()
 					AddonManager.Favorites.AddFavorite(addonName)
 					picker:Hide()
 					RefreshFavoritesList()
-					if AddonList_Update then AddonList_Update() end
+					if AddonList_Update then
+						AddonList_Update()
+					end
 				end)
 				row:Show()
 
@@ -715,8 +748,12 @@ function Enhance.Setup()
 	-- Hook Blizzard's AddonList_Enable to prevent unchecking locked favorites
 	if AddonList_Enable then
 		hooksecurefunc('AddonList_Enable', function(index, enabled)
-			if enabled then return end
-			if not AddonManager.Favorites or not AddonManager.Favorites.IsLocked() then return end
+			if enabled then
+				return
+			end
+			if not AddonManager.Favorites or not AddonManager.Favorites.IsLocked() then
+				return
+			end
 
 			local addonName = C_AddOns.GetAddOnInfo(index)
 			if addonName and AddonManager.Favorites.IsFavorite(addonName) then
@@ -751,7 +788,9 @@ function Enhance.Setup()
 			AddonManager.logger.debug('C_AddOns.DisableAllAddOns hook fired, lock=' .. tostring(AddonManager.Favorites and AddonManager.Favorites.IsLocked()))
 		end
 
-		if not AddonManager.Favorites or not AddonManager.Favorites.IsLocked() then return end
+		if not AddonManager.Favorites or not AddonManager.Favorites.IsLocked() then
+			return
+		end
 
 		AddonManager.Favorites.EnforceLock()
 
@@ -784,14 +823,20 @@ function Enhance.Setup()
 	if Menu and Menu.ModifyMenu then
 		Menu.ModifyMenu('MENU_ADDON_LIST_ENTRY', function(owner, rootDescription)
 			local node = lastRightClickedNode
-			if not node or not AddonManager.Favorites then return end
+			if not node or not AddonManager.Favorites then
+				return
+			end
 
 			local data = node.treeNode and node.treeNode:GetData()
 			local addonIndex = data and data.addonIndex
-			if not addonIndex then return end
+			if not addonIndex then
+				return
+			end
 
 			local name = C_AddOns.GetAddOnName(addonIndex)
-			if not name then return end
+			if not name then
+				return
+			end
 
 			rootDescription:CreateDivider()
 
@@ -799,13 +844,17 @@ function Enhance.Setup()
 				rootDescription:CreateButton('Remove from Favorites', function()
 					AddonManager.Favorites.RemoveFavorite(name)
 					RefreshFavoritesList()
-					if AddonList_Update then AddonList_Update() end
+					if AddonList_Update then
+						AddonList_Update()
+					end
 				end)
 			else
 				rootDescription:CreateButton('Add to Favorites', function()
 					AddonManager.Favorites.AddFavorite(name)
 					RefreshFavoritesList()
-					if AddonList_Update then AddonList_Update() end
+					if AddonList_Update then
+						AddonList_Update()
+					end
 				end)
 			end
 		end)

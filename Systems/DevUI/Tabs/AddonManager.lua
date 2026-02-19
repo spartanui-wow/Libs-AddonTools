@@ -177,56 +177,54 @@ function RefreshCategoryList()
 		if count == 0 and category ~= 'All' then
 			-- Skip empty category
 		else
+			local btn = CreateFrame('Button', nil, scrollChild)
+			btn:SetSize(140, 20)
+			btn:SetPoint('TOPLEFT', scrollChild, 'TOPLEFT', 0, yOffset)
 
-		local btn = CreateFrame('Button', nil, scrollChild)
-		btn:SetSize(140, 20)
-		btn:SetPoint('TOPLEFT', scrollChild, 'TOPLEFT', 0, yOffset)
+			-- Background (highlight when selected)
+			btn.bg = btn:CreateTexture(nil, 'BACKGROUND')
+			btn.bg:SetAllPoints()
+			btn.bg:SetColorTexture(0.2, 0.2, 0.2, 0.5)
+			btn.bg:Hide()
 
-		-- Background (highlight when selected)
-		btn.bg = btn:CreateTexture(nil, 'BACKGROUND')
-		btn.bg:SetAllPoints()
-		btn.bg:SetColorTexture(0.2, 0.2, 0.2, 0.5)
-		btn.bg:Hide()
+			-- Text (with count) - smaller font for compact display
+			btn.text = btn:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+			btn.text:SetPoint('LEFT', btn, 'LEFT', 6, 0)
 
-		-- Text (with count) - smaller font for compact display
-		btn.text = btn:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-		btn.text:SetPoint('LEFT', btn, 'LEFT', 6, 0)
+			btn.text:SetText(string.format('%s (%d)', category, count))
+			btn.text:SetJustifyH('LEFT')
 
-		btn.text:SetText(string.format('%s (%d)', category, count))
-		btn.text:SetJustifyH('LEFT')
+			-- Click handler
+			btn:SetScript('OnClick', function()
+				TabState.ActiveCategory = category
+				RefreshCategoryList() -- Update selection highlight
+				RefreshAddonList() -- Filter addons by category
+			end)
 
-		-- Click handler
-		btn:SetScript('OnClick', function()
-			TabState.ActiveCategory = category
-			RefreshCategoryList() -- Update selection highlight
-			RefreshAddonList() -- Filter addons by category
-		end)
+			-- Hover
+			btn:SetScript('OnEnter', function(self)
+				if TabState.ActiveCategory ~= category then
+					self.bg:SetAlpha(0.3)
+					self.bg:Show()
+				end
+			end)
+			btn:SetScript('OnLeave', function(self)
+				if TabState.ActiveCategory ~= category then
+					self.bg:Hide()
+				end
+			end)
 
-		-- Hover
-		btn:SetScript('OnEnter', function(self)
-			if TabState.ActiveCategory ~= category then
-				self.bg:SetAlpha(0.3)
-				self.bg:Show()
+			-- Highlight if active
+			if TabState.ActiveCategory == category then
+				btn.bg:SetAlpha(0.7)
+				btn.bg:Show()
+				btn.text:SetTextColor(1, 1, 0) -- Yellow
+			else
+				btn.text:SetTextColor(1, 1, 1) -- White
 			end
-		end)
-		btn:SetScript('OnLeave', function(self)
-			if TabState.ActiveCategory ~= category then
-				self.bg:Hide()
-			end
-		end)
 
-		-- Highlight if active
-		if TabState.ActiveCategory == category then
-			btn.bg:SetAlpha(0.7)
-			btn.bg:Show()
-			btn.text:SetTextColor(1, 1, 0) -- Yellow
-		else
-			btn.text:SetTextColor(1, 1, 1) -- White
-		end
-
-		table.insert(TabState.CategoryButtons, btn)
-		yOffset = yOffset - 22
-
+			table.insert(TabState.CategoryButtons, btn)
+			yOffset = yOffset - 22
 		end -- end else (non-empty category)
 	end
 
@@ -889,7 +887,9 @@ function RefreshDetailsPanel(addon)
 			GameTooltip:SetText(self:IsFavorite() and 'Remove from Favorites' or 'Add to Favorites', 1, 1, 1)
 			GameTooltip:Show()
 		end)
-		starBtn:SetScript('OnLeave', function() GameTooltip:Hide() end)
+		starBtn:SetScript('OnLeave', function()
+			GameTooltip:Hide()
+		end)
 	end
 
 	-- Version

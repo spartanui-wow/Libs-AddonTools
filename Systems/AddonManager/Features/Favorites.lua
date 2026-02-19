@@ -18,14 +18,18 @@ Favorites.PendingRemovals = {}
 ---@param addonName string
 ---@return boolean
 function Favorites.IsFavorite(addonName)
-	if not AddonManager.GDB then return false end
+	if not AddonManager.GDB then
+		return false
+	end
 	return AddonManager.GDB.favorites[addonName] == true
 end
 
 ---Add an addon to favorites. If the lock is on, also enables the addon immediately.
 ---@param addonName string
 function Favorites.AddFavorite(addonName)
-	if not AddonManager.GDB then return end
+	if not AddonManager.GDB then
+		return
+	end
 	AddonManager.GDB.favorites[addonName] = true
 	Favorites.PendingRemovals[addonName] = nil
 
@@ -47,7 +51,9 @@ end
 ---Remove an addon from favorites (marks as pending removal for UI undo)
 ---@param addonName string
 function Favorites.RemoveFavorite(addonName)
-	if not AddonManager.GDB then return end
+	if not AddonManager.GDB then
+		return
+	end
 	AddonManager.GDB.favorites[addonName] = nil
 	Favorites.PendingRemovals[addonName] = true
 
@@ -64,7 +70,9 @@ end
 ---Get all favorited addon names sorted alphabetically
 ---@return string[]
 function Favorites.GetFavorites()
-	if not AddonManager.GDB then return {} end
+	if not AddonManager.GDB then
+		return {}
+	end
 
 	local names = {}
 	for name in pairs(AddonManager.GDB.favorites) do
@@ -77,7 +85,9 @@ end
 ---Get non-favorited addon names for the "add" dropdown
 ---@return string[]
 function Favorites.GetNonFavorites()
-	if not AddonManager.Core then return {} end
+	if not AddonManager.Core then
+		return {}
+	end
 
 	-- Ensure cache is populated (AddonList can open before PLAYER_LOGIN)
 	if not next(AddonManager.Core.AddonCache) then
@@ -101,14 +111,18 @@ end
 ---Get lock state
 ---@return boolean
 function Favorites.IsLocked()
-	if not AddonManager.GDB then return false end
+	if not AddonManager.GDB then
+		return false
+	end
 	return AddonManager.GDB.lockFavorites == true
 end
 
 ---Set lock state
 ---@param locked boolean
 function Favorites.SetLocked(locked)
-	if not AddonManager.GDB then return end
+	if not AddonManager.GDB then
+		return
+	end
 	AddonManager.GDB.lockFavorites = locked
 
 	if AddonManager.logger then
@@ -120,7 +134,9 @@ end
 ---Called after DisableAll or profile apply when lock is ON. Does NOT rely on
 ---the addon cache because it may be stale after bulk operations like DisableAllAddOns.
 function Favorites.EnforceLock()
-	if not Favorites.IsLocked() or not AddonManager.Core then return end
+	if not Favorites.IsLocked() or not AddonManager.Core then
+		return
+	end
 
 	local enforced = 0
 	for name in pairs(AddonManager.GDB.favorites) do
