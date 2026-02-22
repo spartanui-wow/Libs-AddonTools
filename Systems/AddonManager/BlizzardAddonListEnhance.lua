@@ -9,6 +9,7 @@ local Enhance = {}
 AddonManager.BlizzardEnhance = Enhance
 
 local sidecarPanel
+local driftDetailPopup
 local enhanced = false
 local sessionAddonStates = {} -- Snapshot of addon enabled states at session start (what's actually loaded)
 local lastRightClickedNode = nil -- Captured from OnClick hook for use in Menu.ModifyMenu
@@ -151,6 +152,137 @@ local function GetProfileDrift(profileName)
 	return drift
 end
 
+---Returns a sorted list of addons that differ from the named profile.
+---Each entry: { name, title, willEnable } where willEnable=true means the profile turns it ON.
+local function GetProfileDriftList(profileName)
+	if not AddonManager.Profiles or not AddonManager.Core then
+		return {}
+	end
+
+	local profile = AddonManager.Profiles.GetProfile(profileName)
+	local list = {}
+
+	for _, addon in pairs(AddonManager.Core.AddonCache) do
+		local liveEnabled = (C_AddOns.GetAddOnEnableState(addon.index) > 0)
+		local profileEnabled
+		if profile and profile.enabled then
+			profileEnabled = profile.enabled[addon.name]
+			if profileEnabled == nil then
+				profileEnabled = true
+			end
+		else
+			profileEnabled = true
+		end
+		if liveEnabled ~= profileEnabled then
+			table.insert(list, {
+				name = addon.name,
+				title = addon.title or addon.name,
+				willEnable = profileEnabled,
+			})
+		end
+	end
+
+	table.sort(list, function(a, b)
+		if a.willEnable ~= b.willEnable then
+			return a.willEnable
+		end
+		return a.title < b.title
+	end)
+
+	return list
+end
+
+local function UpdateDriftDetailPopup(profileName)
+	if not driftDetailPopup then
+		return
+	end
+
+	local child = driftDetailPopup.scrollChild
+	local pool = driftDetailPopup.rowPool
+	local list = GetProfileDriftList(profileName)
+
+	for _, row in ipairs(pool) do
+		row:Hide()
+	end
+
+	local yOffset = 0
+	for i, entry in ipairs(list) do
+		local row = pool[i]
+		if not row then
+			row = CreateFrame('Frame', nil, child)
+			row:SetHeight(18)
+
+			local icon = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+			icon:SetPoint('LEFT', row, 'LEFT', 2, 0)
+			icon:SetWidth(12)
+			row.icon = icon
+
+			local label = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+			label:SetPoint('LEFT', icon, 'RIGHT', 3, 0)
+			label:SetPoint('RIGHT', row, 'RIGHT', -2, 0)
+			label:SetJustifyH('LEFT')
+			label:SetWordWrap(false)
+			row.label = label
+
+			table.insert(pool, row)
+		end
+
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', child, 'TOPLEFT', 4, -yOffset)
+		row:SetWidth(child:GetWidth() - 4)
+
+		if entry.willEnable then
+			row.icon:SetText('|cff00cc00+|r')
+		else
+			row.icon:SetText('|cffcc0000-|r')
+		end
+		row.label:SetText(entry.title)
+		row:Show()
+
+		yOffset = yOffset + 18
+	end
+
+	child:SetHeight(math.max(yOffset, 1))
+end
+
+local function CreateDriftDetailPopup()
+	if driftDetailPopup then
+		return driftDetailPopup
+	end
+
+	driftDetailPopup = CreateFrame('Frame', 'SUIAddonDriftDetail', UIParent, 'BackdropTemplate')
+	driftDetailPopup:SetSize(160, 200)
+	driftDetailPopup:SetFrameStrata('DIALOG')
+	driftDetailPopup:SetBackdrop({
+		bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background',
+		edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border',
+		tile = true,
+		tileSize = 32,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
+	driftDetailPopup:Hide()
+	driftDetailPopup:SetClampedToScreen(true)
+	driftDetailPopup.rowPool = {}
+
+	local title = driftDetailPopup:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	title:SetPoint('TOPLEFT', driftDetailPopup, 'TOPLEFT', 8, -8)
+	title:SetText('|cffffd100Profile differences:|r')
+
+	local scrollFrame = LibAT.UI.CreateScrollFrame(driftDetailPopup)
+	scrollFrame:SetPoint('TOPLEFT', title, 'BOTTOMLEFT', 0, -4)
+	scrollFrame:SetPoint('BOTTOMRIGHT', driftDetailPopup, 'BOTTOMRIGHT', -6, 8)
+
+	local scrollChild = CreateFrame('Frame', nil, scrollFrame)
+	scrollFrame:SetScrollChild(scrollChild)
+	scrollChild:SetWidth(130)
+	driftDetailPopup.scrollChild = scrollChild
+
+	tinsert(UISpecialFrames, 'SUIAddonDriftDetail')
+
+	return driftDetailPopup
+end
+
 local function UpdateSidecarStatus()
 	if not sidecarPanel or not sidecarPanel.statusText then
 		return
@@ -174,15 +306,27 @@ local function UpdateSidecarStatus()
 		if sidecarPanel.reloadBtn then
 			sidecarPanel.reloadBtn:Show()
 		end
+		if sidecarPanel.infoBtn then
+			sidecarPanel.infoBtn:Show()
+		end
 	elseif hasDrift then
 		sidecarPanel.statusText:SetText(string.format('|cffff9900%d addon(s) differ from profile|r', drift))
 		if sidecarPanel.reloadBtn then
 			sidecarPanel.reloadBtn:Hide()
 		end
+		if sidecarPanel.infoBtn then
+			sidecarPanel.infoBtn:Show()
+		end
 	else
 		sidecarPanel.statusText:SetText('')
 		if sidecarPanel.reloadBtn then
 			sidecarPanel.reloadBtn:Hide()
+		end
+		if sidecarPanel.infoBtn then
+			sidecarPanel.infoBtn:Hide()
+			if driftDetailPopup and driftDetailPopup:IsShown() then
+				driftDetailPopup:Hide()
+			end
 		end
 	end
 end
@@ -449,6 +593,41 @@ local function CreateSidecarPanel()
 				}
 				StaticPopup_Show('LIBAT_SIDECAR_CREATE_PROFILE')
 			end)
+
+			local deletableProfiles = {}
+			for _, profileName in ipairs(profiles) do
+				if profileName ~= 'Default' then
+					table.insert(deletableProfiles, profileName)
+				end
+			end
+			if #deletableProfiles > 0 then
+				rootDescription:CreateDivider()
+				for _, profileName in ipairs(deletableProfiles) do
+					local nameForClosure = profileName
+					rootDescription:CreateButton(string.format('Delete "%s"', nameForClosure), function()
+						StaticPopupDialogs['LIBAT_SIDECAR_DELETE_PROFILE'] = {
+							text = string.format('Delete profile "%s"?', nameForClosure),
+							button1 = 'Delete',
+							button2 = 'Cancel',
+							OnAccept = function()
+								if not AddonManager.Profiles then
+									return
+								end
+								AddonManager.Profiles.DeleteProfile(nameForClosure)
+								if sidecarPanel.selectedProfile == nameForClosure then
+									sidecarPanel.selectedProfile = 'Default'
+									profileDropdown:SetText('Default')
+									ApplyProfileToBlizzardList('Default')
+								end
+							end,
+							timeout = 0,
+							whileDead = true,
+							hideOnEscape = true,
+						}
+						StaticPopup_Show('LIBAT_SIDECAR_DELETE_PROFILE')
+					end)
+				end
+			end
 		end)
 	end
 
@@ -456,10 +635,29 @@ local function CreateSidecarPanel()
 	local statusText = sidecarPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
 	statusText:SetPoint('TOP', profileDropdown, 'BOTTOM', 0, -6)
 	statusText:SetPoint('LEFT', sidecarPanel, 'LEFT', 15, 0)
-	statusText:SetPoint('RIGHT', sidecarPanel, 'RIGHT', -15, 0)
+	statusText:SetPoint('RIGHT', sidecarPanel, 'RIGHT', -30, 0)
 	statusText:SetJustifyH('CENTER')
 	statusText:SetText('')
 	sidecarPanel.statusText = statusText
+
+	-- Info button: shows which addons differ from the profile
+	local infoBtn = LibAT.UI.CreateInfoButton(sidecarPanel, 'Profile differences', 'Click to see which addons differ', 14)
+	infoBtn:SetPoint('LEFT', statusText, 'RIGHT', 2, 0)
+	infoBtn:SetPoint('TOP', statusText, 'TOP', 0, 1)
+	infoBtn:Hide()
+	infoBtn:SetScript('OnClick', function()
+		CreateDriftDetailPopup()
+		if driftDetailPopup:IsShown() then
+			driftDetailPopup:Hide()
+		else
+			local profileName = sidecarPanel.selectedProfile or 'Default'
+			UpdateDriftDetailPopup(profileName)
+			driftDetailPopup:ClearAllPoints()
+			driftDetailPopup:SetPoint('TOPLEFT', sidecarPanel, 'TOPRIGHT', 4, -80)
+			driftDetailPopup:Show()
+		end
+	end)
+	sidecarPanel.infoBtn = infoBtn
 
 	-- Apply Profile button (re-applies profile when live state has drifted)
 	local applyBtn = LibAT.UI.CreateButton(sidecarPanel, 170, 24, 'Apply Profile')

@@ -16,7 +16,7 @@ function AddonManager:OnInitialize()
 	local defaults = {
 		global = {
 			favorites = {}, -- { [addonName] = true }
-			lockFavorites = false, -- when true, favorites are forced ON during profile apply
+			lockFavorites = true, -- when true, favorites are forced ON during profile apply
 		},
 		profile = {
 			profiles = {
