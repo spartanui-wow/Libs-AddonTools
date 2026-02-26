@@ -917,6 +917,8 @@ function ProfileManager:DoExport()
 	-- (addon, timestamp, etc. are in the comment header to avoid duplication)
 	local exportData = {
 		version = '3.0.0',
+		addonId = addon.id,
+		gameVersion = select(4, GetBuildInfo()),
 		data = {},
 	}
 
