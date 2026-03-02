@@ -125,12 +125,13 @@ end
 ----------------------------------------------------------------------------------------------------
 
 ---Check if live addon states differ from the selected profile. Returns drift count.
-local function GetProfileDrift(profileName)
+---@param profileId number
+local function GetProfileDrift(profileId)
 	if not AddonManager.Profiles or not AddonManager.Core then
 		return 0
 	end
 
-	local profile = AddonManager.Profiles.GetProfile(profileName)
+	local profile = AddonManager.Profiles.GetProfile(profileId)
 	local drift = 0
 
 	for _, addon in pairs(AddonManager.Core.AddonCache) do
@@ -152,14 +153,15 @@ local function GetProfileDrift(profileName)
 	return drift
 end
 
----Returns a sorted list of addons that differ from the named profile.
+---Returns a sorted list of addons that differ from the given profile.
 ---Each entry: { name, title, willEnable } where willEnable=true means the profile turns it ON.
-local function GetProfileDriftList(profileName)
+---@param profileId number
+local function GetProfileDriftList(profileId)
 	if not AddonManager.Profiles or not AddonManager.Core then
 		return {}
 	end
 
-	local profile = AddonManager.Profiles.GetProfile(profileName)
+	local profile = AddonManager.Profiles.GetProfile(profileId)
 	local list = {}
 
 	for _, addon in pairs(AddonManager.Core.AddonCache) do
@@ -192,14 +194,14 @@ local function GetProfileDriftList(profileName)
 	return list
 end
 
-local function UpdateDriftDetailPopup(profileName)
+local function UpdateDriftDetailPopup(profileId)
 	if not driftDetailPopup then
 		return
 	end
 
 	local child = driftDetailPopup.scrollChild
 	local pool = driftDetailPopup.rowPool
-	local list = GetProfileDriftList(profileName)
+	local list = GetProfileDriftList(profileId)
 
 	for _, row in ipairs(pool) do
 		row:Hide()
@@ -288,8 +290,8 @@ local function UpdateSidecarStatus()
 		return
 	end
 
-	local profileName = sidecarPanel.selectedProfile or 'Default'
-	local drift = GetProfileDrift(profileName)
+	local profileId = sidecarPanel.selectedProfile or 1
+	local drift = GetProfileDrift(profileId)
 	local hasDrift = drift > 0
 
 	if sidecarPanel.applyBtn then
@@ -335,22 +337,22 @@ local function RefreshSidecarDropdown()
 	if not sidecarPanel or not sidecarPanel.profileDropdown or not AddonManager.Profiles then
 		return
 	end
-	local activeProfile = AddonManager.Profiles.GetActiveProfile() or 'Default'
-	sidecarPanel.selectedProfile = activeProfile
-	sidecarPanel.profileDropdown:SetText(activeProfile)
+	local activeId = AddonManager.Profiles.GetActiveProfile()
+	sidecarPanel.selectedProfile = activeId
+	sidecarPanel.profileDropdown:SetText(AddonManager.Profiles.GetDisplayName(activeId))
 	sidecarPanel.pendingReload = false
 	sidecarPanel.changeCount = 0
 	UpdateSidecarStatus()
 end
 
 ---Apply a profile's addon states immediately via C_AddOns APIs and refresh Blizzard's AddonList
----@param profileName string
-local function ApplyProfileToBlizzardList(profileName)
+---@param profileId number
+local function ApplyProfileToBlizzardList(profileId)
 	if not AddonManager.Profiles or not AddonManager.Core then
 		return
 	end
 
-	local profile = AddonManager.Profiles.GetProfile(profileName)
+	local profile = AddonManager.Profiles.GetProfile(profileId)
 
 	-- Apply addon states directly via C_AddOns (changes WoW's pending state)
 	local changeCount = 0
@@ -383,7 +385,7 @@ local function ApplyProfileToBlizzardList(profileName)
 	end
 
 	-- Set as active profile
-	AddonManager.Profiles.SetActiveProfile(profileName)
+	AddonManager.Profiles.SetActiveProfile(profileId)
 
 	-- Refresh Blizzard's addon list UI
 	if AddonList_Update then
@@ -405,7 +407,8 @@ local function ApplyProfileToBlizzardList(profileName)
 	UpdateSidecarStatus()
 
 	if AddonManager.logger then
-		AddonManager.logger.info(string.format('Applied profile "%s" to AddonList: %d switched, %d differ from session', profileName, changeCount, reloadCount))
+		local displayName = AddonManager.Profiles.GetDisplayName(profileId)
+		AddonManager.logger.info(string.format('Applied profile "%s" to AddonList: %d switched, %d differ from session', displayName, changeCount, reloadCount))
 	end
 end
 
@@ -542,16 +545,18 @@ local function CreateSidecarPanel()
 				return
 			end
 
-			local profiles = AddonManager.Profiles.GetProfileNames()
-			local activeProfile = AddonManager.Profiles.GetActiveProfile()
+			local profiles = AddonManager.Profiles.GetProfiles()
+			local activeId = AddonManager.Profiles.GetActiveProfile()
 
-			for _, profileName in ipairs(profiles) do
-				rootDescription:CreateRadio(profileName, function()
-					return profileName == (sidecarPanel.selectedProfile or activeProfile)
+			for _, entry in ipairs(profiles) do
+				local entryId = entry.id
+				local entryScope = entry.scope
+				rootDescription:CreateRadio(entry.displayName, function()
+					return entryId == (sidecarPanel.selectedProfile or activeId) and entryScope == 'global'
 				end, function()
-					sidecarPanel.selectedProfile = profileName
-					profileDropdown:SetText(profileName)
-					ApplyProfileToBlizzardList(profileName)
+					sidecarPanel.selectedProfile = entryId
+					profileDropdown:SetText(entry.displayName)
+					ApplyProfileToBlizzardList(entryId)
 				end)
 			end
 
@@ -564,23 +569,23 @@ local function CreateSidecarPanel()
 					button2 = 'Cancel',
 					hasEditBox = true,
 					OnAccept = function(dialog)
-						local name = dialog:GetEditBox():GetText()
-						if name and name ~= '' then
+						local displayName = dialog:GetEditBox():GetText()
+						if displayName and displayName ~= '' then
 							AddonManager.Core.ScanAddons()
-							AddonManager.Profiles.CreateProfile(name)
-							sidecarPanel.selectedProfile = name
-							profileDropdown:SetText(name)
-							AddonManager.Profiles.SetActiveProfile(name)
+							local newId = AddonManager.Profiles.CreateProfile(displayName)
+							sidecarPanel.selectedProfile = newId
+							profileDropdown:SetText(displayName)
+							AddonManager.Profiles.SetActiveProfile(newId)
 						end
 					end,
 					EditBoxOnEnterPressed = function(editBox)
-						local name = editBox:GetText()
-						if name and name ~= '' then
+						local displayName = editBox:GetText()
+						if displayName and displayName ~= '' then
 							AddonManager.Core.ScanAddons()
-							AddonManager.Profiles.CreateProfile(name)
-							sidecarPanel.selectedProfile = name
-							profileDropdown:SetText(name)
-							AddonManager.Profiles.SetActiveProfile(name)
+							local newId = AddonManager.Profiles.CreateProfile(displayName)
+							sidecarPanel.selectedProfile = newId
+							profileDropdown:SetText(displayName)
+							AddonManager.Profiles.SetActiveProfile(newId)
 						end
 						editBox:GetParent():Hide()
 					end,
@@ -595,29 +600,30 @@ local function CreateSidecarPanel()
 			end)
 
 			local deletableProfiles = {}
-			for _, profileName in ipairs(profiles) do
-				if profileName ~= 'Default' then
-					table.insert(deletableProfiles, profileName)
+			for _, entry in ipairs(profiles) do
+				if not AddonManager.Profiles.IsProtectedProfile(entry.id) or entry.scope ~= 'global' then
+					table.insert(deletableProfiles, entry)
 				end
 			end
 			if #deletableProfiles > 0 then
 				rootDescription:CreateDivider()
-				for _, profileName in ipairs(deletableProfiles) do
-					local nameForClosure = profileName
-					rootDescription:CreateButton(string.format('Delete "%s"', nameForClosure), function()
+				for _, entry in ipairs(deletableProfiles) do
+					local deleteId = entry.id
+					local deleteName = entry.displayName
+					rootDescription:CreateButton(string.format('Delete "%s"', deleteName), function()
 						StaticPopupDialogs['LIBAT_SIDECAR_DELETE_PROFILE'] = {
-							text = string.format('Delete profile "%s"?', nameForClosure),
+							text = string.format('Delete profile "%s"?', deleteName),
 							button1 = 'Delete',
 							button2 = 'Cancel',
 							OnAccept = function()
 								if not AddonManager.Profiles then
 									return
 								end
-								AddonManager.Profiles.DeleteProfile(nameForClosure)
-								if sidecarPanel.selectedProfile == nameForClosure then
-									sidecarPanel.selectedProfile = 'Default'
-									profileDropdown:SetText('Default')
-									ApplyProfileToBlizzardList('Default')
+								AddonManager.Profiles.DeleteProfile(deleteId)
+								if sidecarPanel.selectedProfile == deleteId then
+									sidecarPanel.selectedProfile = 1
+									profileDropdown:SetText(AddonManager.Profiles.GetDisplayName(1))
+									ApplyProfileToBlizzardList(1)
 								end
 							end,
 							timeout = 0,
@@ -650,8 +656,8 @@ local function CreateSidecarPanel()
 		if driftDetailPopup:IsShown() then
 			driftDetailPopup:Hide()
 		else
-			local profileName = sidecarPanel.selectedProfile or 'Default'
-			UpdateDriftDetailPopup(profileName)
+			local profileId = sidecarPanel.selectedProfile or 1
+			UpdateDriftDetailPopup(profileId)
 			driftDetailPopup:ClearAllPoints()
 			driftDetailPopup:SetPoint('TOPLEFT', sidecarPanel, 'TOPRIGHT', 4, -80)
 			driftDetailPopup:Show()
@@ -663,8 +669,8 @@ local function CreateSidecarPanel()
 	local applyBtn = LibAT.UI.CreateButton(sidecarPanel, 170, 24, 'Apply Profile')
 	applyBtn:SetPoint('TOP', statusText, 'BOTTOM', 0, -4)
 	applyBtn:SetScript('OnClick', function()
-		local profileName = sidecarPanel.selectedProfile or 'Default'
-		ApplyProfileToBlizzardList(profileName)
+		local profileId = sidecarPanel.selectedProfile or 1
+		ApplyProfileToBlizzardList(profileId)
 	end)
 	applyBtn:Hide()
 	sidecarPanel.applyBtn = applyBtn
@@ -685,13 +691,14 @@ local function CreateSidecarPanel()
 		if not AddonManager.Profiles or not AddonManager.Core then
 			return
 		end
-		local profileName = sidecarPanel.selectedProfile or 'Default'
+		local profileId = sidecarPanel.selectedProfile or 1
 		-- Rescan so cache matches what Blizzard's list currently shows
 		AddonManager.Core.ScanAddons()
-		AddonManager.Profiles.SaveProfile(profileName)
+		AddonManager.Profiles.SaveProfile(profileId)
 		UpdateSidecarStatus()
 		if AddonManager.logger then
-			AddonManager.logger.info(string.format('Saved current addon states to profile: %s', profileName))
+			local displayName = AddonManager.Profiles.GetDisplayName(profileId)
+			AddonManager.logger.info(string.format('Saved current addon states to profile: %s', displayName))
 		end
 	end)
 
@@ -879,7 +886,7 @@ local function CreateSidecarPanel()
 		picker:Hide()
 	end)
 
-	sidecarPanel.selectedProfile = AddonManager.Profiles and AddonManager.Profiles.GetActiveProfile() or 'Default'
+	sidecarPanel.selectedProfile = AddonManager.Profiles and AddonManager.Profiles.GetActiveProfile() or 1
 	sidecarPanel.pendingReload = false
 	sidecarPanel.changeCount = 0
 
