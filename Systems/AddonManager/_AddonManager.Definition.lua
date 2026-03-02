@@ -105,8 +105,9 @@ local LibAT = LibAT
 ---@field enabled table<string, boolean> Map of addon names to enabled state
 
 ---@class LibAT.AddonManager.DBProfile
----@field profiles table<string, LibAT.AddonManager.Profile> Named profiles
----@field activeProfile string Currently active profile name
+---@field profiles table<number, LibAT.AddonManager.ProfileData> Int-keyed profiles
+---@field nextProfileId number Next available profile ID
+---@field activeProfile number Currently active profile ID
 ---@field categories table Categories configuration
 ---@field categories.custom table<string, string[]> Custom category assignments
 ---@field perCharacter table<string, table> Per-character settings
@@ -134,7 +135,7 @@ local LibAT = LibAT
 ----------------------------------------------------------------------------------------------------
 
 ---@class LibAT.AddonManager.ProfileData
----@field name string Profile name
+---@field displayName string Profile display name
 ---@field enabled table<string, boolean> Map of addon names to enabled state
 ---@field created number Timestamp of creation
 ---@field modified number Timestamp of last modification
@@ -146,7 +147,7 @@ local LibAT = LibAT
 ---@alias LibAT.AddonManager.ChangeCallback fun(addonName: string, enabled: boolean)
 ---Callback when addon enable state changes
 
----@alias LibAT.AddonManager.ProfileCallback fun(profileName: string)
+---@alias LibAT.AddonManager.ProfileCallback fun(profileId: number)
 ---Callback when active profile changes
 
 ----------------------------------------------------------------------------------------------------
