@@ -51,7 +51,8 @@ local TabState = {
 
 	-- Profile dropdown
 	ProfileDropdown = nil,
-	SelectedProfile = nil, -- Profile selected in dropdown (not yet applied)
+	SelectedProfile = nil, -- Profile ID selected in dropdown (not yet applied)
+	ProfilePopup = nil, -- Custom profile popup frame
 
 	-- Collapse/expand state
 	CollapsedAddons = {}, -- { [addonName] = true } for collapsed parent addons
@@ -1009,15 +1010,16 @@ function BuildFooterPanel(parent)
 	local saveProfileBtn = LibAT.UI.CreateButton(footer, 100, 24, 'Save Profile')
 	saveProfileBtn:SetPoint('LEFT', profileDropdown, 'RIGHT', 8, 0)
 	saveProfileBtn:SetScript('OnClick', function()
-		local profileName = TabState.SelectedProfile or AddonManager.Profiles.GetActiveProfile() or 'Default'
+		local profileId = TabState.SelectedProfile or AddonManager.Profiles.GetActiveProfile()
 		-- Apply pending changes first
 		ApplyChanges()
 		-- Then save current states to the profile
-		AddonManager.Profiles.SaveProfile(profileName)
+		AddonManager.Profiles.SaveProfile(profileId)
 		UpdateChangeIndicator()
 		RefreshAddonList()
 		if AddonManager.logger then
-			AddonManager.logger.info(string.format('Saved current addon states to profile: %s', profileName))
+			local name = AddonManager.Profiles.GetDisplayName(profileId)
+			AddonManager.logger.info(string.format('Saved current addon states to profile: %s (ID %d)', name, profileId))
 		end
 	end)
 	TabState.SaveProfileButton = saveProfileBtn
@@ -1026,7 +1028,8 @@ function BuildFooterPanel(parent)
 	local applyProfileBtn = LibAT.UI.CreateButton(footer, 100, 24, 'Apply Profile')
 	applyProfileBtn:SetPoint('LEFT', saveProfileBtn, 'RIGHT', 4, 0)
 	applyProfileBtn:SetScript('OnClick', function()
-		local profileName = TabState.SelectedProfile or AddonManager.Profiles.GetActiveProfile() or 'Default'
+		local profileId = TabState.SelectedProfile or AddonManager.Profiles.GetActiveProfile()
+		local displayName = AddonManager.Profiles.GetDisplayName(profileId)
 
 		-- Count pending changes for the confirm message
 		local count = 0
@@ -1036,17 +1039,17 @@ function BuildFooterPanel(parent)
 
 		if count == 0 then
 			-- No changes to apply, just set active profile
-			AddonManager.Profiles.SetActiveProfile(profileName)
+			AddonManager.Profiles.SetActiveProfile(profileId)
 			return
 		end
 
 		StaticPopupDialogs['LIBAT_ADDONMANAGER_APPLY_PROFILE'] = {
-			text = string.format('Apply profile "%s"?\n%d addon(s) will change. This requires a UI reload.', profileName, count),
+			text = string.format('Apply profile "%s"?\n%d addon(s) will change. This requires a UI reload.', displayName, count),
 			button1 = 'Reload UI',
 			button2 = 'Cancel',
 			OnAccept = function()
 				ApplyChanges()
-				AddonManager.Profiles.SetActiveProfile(profileName)
+				AddonManager.Profiles.SetActiveProfile(profileId)
 				LibAT:SafeReloadUI()
 			end,
 			timeout = 0,
@@ -1078,10 +1081,10 @@ function BuildFooterPanel(parent)
 	cancelBtn:SetScript('OnClick', function()
 		wipe(TabState.PendingChanges)
 		-- Reset dropdown to the actual active profile
-		local activeProfile = AddonManager.Profiles.GetActiveProfile() or 'Default'
-		TabState.SelectedProfile = activeProfile
+		local activeId = AddonManager.Profiles.GetActiveProfile()
+		TabState.SelectedProfile = activeId
 		if TabState.ProfileDropdown then
-			TabState.ProfileDropdown:SetText(activeProfile)
+			TabState.ProfileDropdown:SetText(AddonManager.Profiles.GetDisplayName(activeId))
 		end
 		UpdateChangeIndicator()
 		RefreshAddonList()
@@ -1125,9 +1128,10 @@ function SetupProfileDropdown(dropdown)
 	end
 
 	-- Set initial text to active profile
-	local activeProfile = AddonManager.Profiles.GetActiveProfile() or 'Default'
-	dropdown:SetText(activeProfile)
-	TabState.SelectedProfile = activeProfile
+	local activeId = AddonManager.Profiles.GetActiveProfile()
+	local activeName = AddonManager.Profiles.GetDisplayName(activeId)
+	dropdown:SetText(activeName)
+	TabState.SelectedProfile = activeId
 
 	-- Set click handler
 	dropdown:SetScript('OnMouseDown', function(self)
@@ -1137,8 +1141,8 @@ end
 
 ---Preview a profile by computing the diff against current addon states
 ---and populating PendingChanges so the checkbox list updates
----@param profileName string Profile name to preview
-function PreviewProfile(profileName)
+---@param profileId number Profile ID to preview
+function PreviewProfile(profileId)
 	if not AddonManager.Profiles or not AddonManager.Core then
 		return
 	end
@@ -1146,7 +1150,7 @@ function PreviewProfile(profileName)
 	-- Clear existing pending changes
 	wipe(TabState.PendingChanges)
 
-	local profile = AddonManager.Profiles.GetProfile(profileName)
+	local profile = AddonManager.Profiles.GetProfile(profileId)
 	if not profile or not profile.enabled then
 		-- No profile data - just refresh to show current state
 		UpdateChangeIndicator()
@@ -1167,82 +1171,285 @@ function PreviewProfile(profileName)
 	RefreshAddonList()
 end
 
+local function RefreshProfilePopup(popup)
+	if not popup or not AddonManager.Profiles then
+		return
+	end
+
+	-- Hide all existing rows
+	for _, row in ipairs(popup.rowPool) do
+		row:Hide()
+	end
+
+	local profiles = AddonManager.Profiles.GetProfiles()
+	local activeId = AddonManager.Profiles.GetActiveProfile()
+	local yOffset = 0
+	local ROW_HEIGHT = 24
+
+	for i, entry in ipairs(profiles) do
+		local row = popup.rowPool[i]
+		if not row then
+			row = CreateFrame('Button', nil, popup.scrollChild)
+			row:SetHeight(ROW_HEIGHT)
+			row:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight', 'ADD')
+
+			-- Checkmark icon (left)
+			row.checkIcon = row:CreateTexture(nil, 'ARTWORK')
+			row.checkIcon:SetSize(14, 14)
+			row.checkIcon:SetPoint('LEFT', row, 'LEFT', 4, 0)
+			row.checkIcon:SetAtlas('housing-dashboard-small-checkmark')
+
+			-- Profile name label
+			row.label = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+			row.label:SetPoint('LEFT', row, 'LEFT', 22, 0)
+			row.label:SetPoint('RIGHT', row, 'RIGHT', -40, 0)
+			row.label:SetJustifyH('LEFT')
+			row.label:SetWordWrap(false)
+
+			-- Rename edit box (hidden by default)
+			row.editBox = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
+			row.editBox:SetSize(100, 18)
+			row.editBox:SetPoint('LEFT', row, 'LEFT', 22, 0)
+			row.editBox:SetPoint('RIGHT', row, 'RIGHT', -40, 0)
+			row.editBox:SetAutoFocus(false)
+			row.editBox:SetFontObject('GameFontHighlight')
+			row.editBox:Hide()
+
+			-- Edit (rename) button
+			row.editBtn = CreateFrame('Button', nil, row)
+			row.editBtn:SetSize(14, 14)
+			row.editBtn:SetPoint('RIGHT', row, 'RIGHT', -22, 0)
+			row.editBtn:SetNormalAtlas('communities-icon-editnote')
+			row.editBtn:SetHighlightAtlas('communities-icon-editnote')
+			row.editBtn:Hide()
+
+			-- Delete button
+			row.deleteBtn = CreateFrame('Button', nil, row)
+			row.deleteBtn:SetSize(14, 14)
+			row.deleteBtn:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
+			row.deleteBtn:SetNormalAtlas('common-icon-redx')
+			row.deleteBtn:SetHighlightAtlas('common-icon-redx')
+			row.deleteBtn:Hide()
+
+			-- Show edit/delete on hover for non-protected profiles
+			row:SetScript('OnEnter', function(self)
+				if not self.isProtected then
+					self.editBtn:Show()
+					self.deleteBtn:Show()
+				end
+			end)
+			row:SetScript('OnLeave', function(self)
+				if not self.isEditing then
+					self.editBtn:Hide()
+					self.deleteBtn:Hide()
+				end
+			end)
+
+			table.insert(popup.rowPool, row)
+		end
+
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', popup.scrollChild, 'TOPLEFT', 0, -yOffset)
+		row:SetPoint('RIGHT', popup.scrollChild, 'RIGHT', 0, 0)
+		row:Show()
+
+		local isActive = (entry.id == activeId)
+		local isProtected = AddonManager.Profiles.IsProtectedProfile(entry.id) and entry.scope == 'global'
+		row.profileId = entry.id
+		row.profileScope = entry.scope
+		row.isProtected = isProtected
+		row.isEditing = false
+
+		-- Checkmark visibility
+		if isActive then
+			row.checkIcon:Show()
+		else
+			row.checkIcon:Hide()
+		end
+
+		-- Label
+		row.label:SetText(entry.displayName)
+		row.label:Show()
+		row.editBox:Hide()
+
+		-- Hide action buttons by default (shown on hover)
+		row.editBtn:Hide()
+		row.deleteBtn:Hide()
+
+		-- Row click = select profile
+		row:SetScript('OnClick', function(self)
+			if self.isEditing then
+				return
+			end
+			TabState.SelectedProfile = self.profileId
+			if TabState.ProfileDropdown then
+				TabState.ProfileDropdown:SetText(entry.displayName)
+			end
+			PreviewProfile(self.profileId)
+			popup:Hide()
+		end)
+
+		-- Edit button click = inline rename
+		row.editBtn:SetScript('OnClick', function()
+			row.isEditing = true
+			row.label:Hide()
+			row.editBox:SetText(entry.displayName)
+			row.editBox:Show()
+			row.editBox:SetFocus()
+		end)
+
+		row.editBox:SetScript('OnEnterPressed', function(self)
+			local newName = self:GetText()
+			if newName and newName ~= '' and newName ~= entry.displayName then
+				AddonManager.Profiles.RenameProfile(entry.id, newName)
+				-- Update dropdown text if this is the selected profile
+				if TabState.SelectedProfile == entry.id and TabState.ProfileDropdown then
+					TabState.ProfileDropdown:SetText(newName)
+				end
+			end
+			row.isEditing = false
+			self:Hide()
+			row.label:Show()
+			RefreshProfilePopup(popup)
+		end)
+
+		row.editBox:SetScript('OnEscapePressed', function(self)
+			row.isEditing = false
+			self:Hide()
+			row.label:Show()
+			row.editBtn:Hide()
+			row.deleteBtn:Hide()
+		end)
+
+		-- Delete button click
+		row.deleteBtn:SetScript('OnClick', function()
+			DeleteProfileWithConfirm(entry.id, entry.displayName, popup)
+		end)
+
+		yOffset = yOffset + ROW_HEIGHT
+	end
+
+	-- Separator
+	if not popup.separator then
+		popup.separator = popup.scrollChild:CreateTexture(nil, 'ARTWORK')
+		popup.separator:SetHeight(1)
+		popup.separator:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+	end
+	popup.separator:ClearAllPoints()
+	popup.separator:SetPoint('TOPLEFT', popup.scrollChild, 'TOPLEFT', 4, -(yOffset + 2))
+	popup.separator:SetPoint('RIGHT', popup.scrollChild, 'RIGHT', -4, 0)
+	popup.separator:Show()
+	yOffset = yOffset + 5
+
+	-- "Create New" row
+	if not popup.createRow then
+		popup.createRow = CreateFrame('Button', nil, popup.scrollChild)
+		popup.createRow:SetHeight(ROW_HEIGHT)
+		popup.createRow:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight', 'ADD')
+
+		popup.createRow.label = popup.createRow:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+		popup.createRow.label:SetPoint('LEFT', popup.createRow, 'LEFT', 22, 0)
+		popup.createRow.label:SetText('|cff00cc00+ Create New|r')
+		popup.createRow.label:SetJustifyH('LEFT')
+
+		popup.createRow:SetScript('OnClick', function()
+			popup:Hide()
+			ShowCreateProfileDialog()
+		end)
+	end
+	popup.createRow:ClearAllPoints()
+	popup.createRow:SetPoint('TOPLEFT', popup.scrollChild, 'TOPLEFT', 0, -(yOffset))
+	popup.createRow:SetPoint('RIGHT', popup.scrollChild, 'RIGHT', 0, 0)
+	popup.createRow:Show()
+	yOffset = yOffset + ROW_HEIGHT
+
+	popup.scrollChild:SetHeight(math.max(yOffset, 1))
+
+	-- Resize popup to fit content (min 140, max 300)
+	local totalHeight = yOffset + 16
+	popup:SetHeight(math.min(math.max(totalHeight, 60), 300))
+end
+
+local function CreateProfilePopup()
+	if TabState.ProfilePopup then
+		return TabState.ProfilePopup
+	end
+
+	local popup = CreateFrame('Frame', 'LibAT_ProfilePopup', UIParent, 'BackdropTemplate')
+	popup:SetSize(200, 150)
+	popup:SetFrameStrata('DIALOG')
+	popup:SetBackdrop({
+		bgFile = 'Interface\\DialogFrame\\UI-DialogBox-Background',
+		edgeFile = 'Interface\\DialogFrame\\UI-DialogBox-Border',
+		tile = true,
+		tileSize = 32,
+		edgeSize = 16,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
+	popup:Hide()
+	popup:SetClampedToScreen(true)
+	popup.rowPool = {}
+
+	local scrollFrame = LibAT.UI.CreateScrollFrame(popup)
+	scrollFrame:SetPoint('TOPLEFT', popup, 'TOPLEFT', 6, -6)
+	scrollFrame:SetPoint('BOTTOMRIGHT', popup, 'BOTTOMRIGHT', -6, 6)
+
+	local scrollChild = CreateFrame('Frame', nil, scrollFrame)
+	scrollFrame:SetScrollChild(scrollChild)
+	scrollChild:SetWidth(180)
+	popup.scrollChild = scrollChild
+
+	-- Close on outside click
+	popup:SetScript('OnShow', function()
+		popup:RegisterEvent('GLOBAL_MOUSE_DOWN')
+	end)
+	popup:SetScript('OnHide', function()
+		popup:UnregisterEvent('GLOBAL_MOUSE_DOWN')
+	end)
+	popup:SetScript('OnEvent', function(self, event)
+		if event == 'GLOBAL_MOUSE_DOWN' then
+			if not self:IsMouseOver() then
+				self:Hide()
+			end
+		end
+	end)
+
+	TabState.ProfilePopup = popup
+	return popup
+end
+
 function ShowProfileMenu(anchorFrame)
 	if not AddonManager.Profiles then
 		return
 	end
 
-	local L = LibAT.L or {}
+	local popup = CreateProfilePopup()
+	RefreshProfilePopup(popup)
 
-	-- Create dropdown menu
-	local menu = CreateFrame('Frame', 'LibAT_AddonManager_ProfileMenu', UIParent, 'UIDropDownMenuTemplate')
-	UIDropDownMenu_Initialize(menu, function(self, level)
-		local info = UIDropDownMenu_CreateInfo()
+	if popup:IsShown() then
+		popup:Hide()
+		return
+	end
 
-		-- Get profile list
-		local profiles = AddonManager.Profiles.GetProfileNames()
-		local activeProfile = AddonManager.Profiles.GetActiveProfile()
-
-		-- Add profile entries (selecting previews the profile's addon states as pending changes)
-		for _, profileName in ipairs(profiles) do
-			info.text = profileName
-			info.func = function()
-				TabState.SelectedProfile = profileName
-				if TabState.ProfileDropdown then
-					TabState.ProfileDropdown:SetText(profileName)
-				end
-				PreviewProfile(profileName)
-				CloseDropDownMenus()
-			end
-			info.checked = (profileName == activeProfile)
-			UIDropDownMenu_AddButton(info, level)
-		end
-
-		-- Separator
-		info = UIDropDownMenu_CreateInfo()
-		info.isTitle = true
-		info.notCheckable = true
-		UIDropDownMenu_AddButton(info, level)
-
-		-- Create new profile
-		info = UIDropDownMenu_CreateInfo()
-		info.text = L['Create Profile'] or 'Create Profile'
-		info.func = function()
-			ShowCreateProfileDialog()
-			CloseDropDownMenus()
-		end
-		info.notCheckable = true
-		UIDropDownMenu_AddButton(info, level)
-
-		-- Delete profile
-		if activeProfile ~= 'Default' then
-			info = UIDropDownMenu_CreateInfo()
-			info.text = L['Delete Profile'] or 'Delete Profile'
-			info.func = function()
-				DeleteProfileWithConfirm(activeProfile)
-				CloseDropDownMenus()
-			end
-			info.notCheckable = true
-			UIDropDownMenu_AddButton(info, level)
-		end
-	end, 'MENU')
-
-	ToggleDropDownMenu(1, nil, menu, anchorFrame, 0, 0)
+	popup:ClearAllPoints()
+	popup:SetPoint('TOP', anchorFrame, 'BOTTOM', 0, -2)
+	popup:Show()
 end
 
-function LoadProfileWithConfirm(profileName)
+function LoadProfileWithConfirm(profileId)
 	if not AddonManager.Profiles then
 		return
 	end
 
 	local L = LibAT.L or {}
+	local displayName = AddonManager.Profiles.GetDisplayName(profileId)
 
 	StaticPopupDialogs['LIBAT_ADDONMANAGER_LOAD_PROFILE'] = {
-		text = string.format('Load profile "%s"? This will change addon states and reload the UI.', profileName),
+		text = string.format('Load profile "%s"? This will change addon states and reload the UI.', displayName),
 		button1 = L['Reload UI'] or 'Reload UI',
 		button2 = L['Cancel'] or 'Cancel',
 		OnAccept = function()
-			AddonManager.Profiles.LoadProfile(profileName)
+			AddonManager.Profiles.LoadProfile(profileId)
 			LibAT:SafeReloadUI()
 		end,
 		timeout = 0,
@@ -1266,17 +1473,25 @@ function ShowCreateProfileDialog()
 		button2 = L['Cancel'] or 'Cancel',
 		hasEditBox = true,
 		OnAccept = function(self)
-			local profileName = self:GetEditBox():GetText()
-			if profileName and profileName ~= '' then
-				AddonManager.Profiles.CreateProfile(profileName)
-				UpdateProfileDropdown()
+			local displayName = self:GetEditBox():GetText()
+			if displayName and displayName ~= '' then
+				local newId = AddonManager.Profiles.CreateProfile(displayName)
+				TabState.SelectedProfile = newId
+				if TabState.ProfileDropdown then
+					TabState.ProfileDropdown:SetText(displayName)
+				end
+				PreviewProfile(newId)
 			end
 		end,
 		EditBoxOnEnterPressed = function(self)
-			local profileName = self:GetText()
-			if profileName and profileName ~= '' then
-				AddonManager.Profiles.CreateProfile(profileName)
-				UpdateProfileDropdown()
+			local displayName = self:GetText()
+			if displayName and displayName ~= '' then
+				local newId = AddonManager.Profiles.CreateProfile(displayName)
+				TabState.SelectedProfile = newId
+				if TabState.ProfileDropdown then
+					TabState.ProfileDropdown:SetText(displayName)
+				end
+				PreviewProfile(newId)
 			end
 			self:GetParent():Hide()
 		end,
@@ -1291,19 +1506,32 @@ function ShowCreateProfileDialog()
 	StaticPopup_Show('LIBAT_ADDONMANAGER_CREATE_PROFILE')
 end
 
-function DeleteProfileWithConfirm(profileName)
+function DeleteProfileWithConfirm(profileId, displayName, popup)
 	if not AddonManager.Profiles then
 		return
 	end
 
 	local L = LibAT.L or {}
+	displayName = displayName or AddonManager.Profiles.GetDisplayName(profileId)
 
 	StaticPopupDialogs['LIBAT_ADDONMANAGER_DELETE_PROFILE'] = {
-		text = string.format('Delete profile "%s"? This cannot be undone.', profileName),
+		text = string.format('Delete profile "%s"? This cannot be undone.', displayName),
 		button1 = L['Delete Profile'] or 'Delete',
 		button2 = L['Cancel'] or 'Cancel',
 		OnAccept = function()
-			AddonManager.Profiles.DeleteProfile(profileName)
+			AddonManager.Profiles.DeleteProfile(profileId)
+			-- If deleted profile was selected, reset to Default
+			if TabState.SelectedProfile == profileId then
+				TabState.SelectedProfile = 1
+				if TabState.ProfileDropdown then
+					TabState.ProfileDropdown:SetText(AddonManager.Profiles.GetDisplayName(1))
+				end
+				PreviewProfile(1)
+			end
+			-- Refresh popup if still showing
+			if popup and popup:IsShown() then
+				RefreshProfilePopup(popup)
+			end
 			UpdateProfileDropdown()
 		end,
 		timeout = 0,
@@ -1319,8 +1547,8 @@ function UpdateProfileDropdown()
 		return
 	end
 
-	local activeProfile = AddonManager.Profiles.GetActiveProfile()
-	TabState.ProfileDropdown:SetText(activeProfile)
+	local activeId = AddonManager.Profiles.GetActiveProfile()
+	TabState.ProfileDropdown:SetText(AddonManager.Profiles.GetDisplayName(activeId))
 end
 
 ----------------------------------------------------------------------------------------------------
