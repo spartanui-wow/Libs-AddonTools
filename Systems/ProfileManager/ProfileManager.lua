@@ -498,11 +498,12 @@ local function BuildAddonCategories()
 		local addon = ProfileManagerState.registeredAddons[addonId]
 		local categoryKey = 'Addons.' .. addonId
 
-		-- Apply visibility filters
+		-- Apply visibility filters (skip for manually-registered addons)
 		local shouldHide = false
+		local isManuallyRegistered = not addon.autoDiscovered
 
 		-- Filter: Hide addons set to Default profile
-		if ProfileManagerState.filters.hideAddonsSetToDefault then
+		if not isManuallyRegistered and ProfileManagerState.filters.hideAddonsSetToDefault then
 			local currentProfile = addon.db and addon.db.keys and addon.db.keys.profile or 'Default'
 			if currentProfile == 'Default' then
 				shouldHide = true
@@ -510,7 +511,7 @@ local function BuildAddonCategories()
 		end
 
 		-- Filter: Hide addons where all alts use the same profile
-		if not shouldHide and ProfileManagerState.filters.hideAddonsWithAllAltsUsingSameProfile then
+		if not shouldHide and not isManuallyRegistered and ProfileManagerState.filters.hideAddonsWithAllAltsUsingSameProfile then
 			if addon.db and addon.db.sv and addon.db.sv.profileKeys then
 				local profileKeys = addon.db.sv.profileKeys
 				local firstProfile = nil
@@ -530,7 +531,7 @@ local function BuildAddonCategories()
 		end
 
 		-- Filter: Hide addons where all alts use character-specific profiles
-		if not shouldHide and ProfileManagerState.filters.hideAddonsWithAllAltsUsingCharProfile then
+		if not shouldHide and not isManuallyRegistered and ProfileManagerState.filters.hideAddonsWithAllAltsUsingCharProfile then
 			if addon.db and addon.db.sv and addon.db.sv.profileKeys then
 				local profileKeys = addon.db.sv.profileKeys
 				local allCharSpecific = true

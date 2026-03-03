@@ -1358,7 +1358,7 @@ local function RefreshProfilePopup(popup)
 		end)
 	end
 	popup.createRow:ClearAllPoints()
-	popup.createRow:SetPoint('TOPLEFT', popup.scrollChild, 'TOPLEFT', 0, -(yOffset))
+	popup.createRow:SetPoint('TOPLEFT', popup.scrollChild, 'TOPLEFT', 0, -yOffset)
 	popup.createRow:SetPoint('RIGHT', popup.scrollChild, 'RIGHT', 0, 0)
 	popup.createRow:Show()
 	yOffset = yOffset + ROW_HEIGHT

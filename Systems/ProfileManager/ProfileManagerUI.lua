@@ -622,23 +622,38 @@ function ProfileManager.UpdateWindowForMode()
 		local hasComposite = ProfileManagerState.window.activeAddonId and ProfileManagerState.window.activeCompositeId and not ProfileManagerState.window.activeNamespace
 
 		if ProfileManagerState.window.activeAddonId then
-			-- Hide default elements
-			ProfileManagerState.window.Description:Hide()
+			-- Show description for namespace exports, hide for profile-level exports (dropdown replaces it)
+			local activeNS = ProfileManagerState.window.activeNamespace
+			local showSourceDropdown = activeNS == '__COREDB__' or activeNS == nil
+			if showSourceDropdown then
+				ProfileManagerState.window.Description:Hide()
+			else
+				ProfileManagerState.window.Description:SetText('Export ' .. sectionName .. ' namespace data. Click Export to generate the string.')
+				ProfileManagerState.window.Description:Show()
+			end
 			if ProfileManagerState.window.TextPanel then
 				ProfileManagerState.window.TextPanel:Hide()
 			end
-
-			-- Show export source dropdown only when exporting profile-level data (Core DB or All Namespaces)
-			local activeNS = ProfileManagerState.window.activeNamespace
-			if ProfileManagerState.window.ExportSourceFrame and (activeNS == '__COREDB__' or activeNS == nil) then
-				ProfileManagerState.window.ExportSourceFrame:Show()
-				UpdateExportSourceDropdown()
-			elseif ProfileManagerState.window.ExportSourceFrame then
-				ProfileManagerState.window.ExportSourceFrame:Hide()
+			if ProfileManagerState.window.ExportSourceFrame then
+				if showSourceDropdown then
+					ProfileManagerState.window.ExportSourceFrame:Show()
+					UpdateExportSourceDropdown()
+				else
+					ProfileManagerState.window.ExportSourceFrame:Hide()
+				end
 			end
 
-			-- Always show export button
+			-- Always show export button (re-parent when source frame is hidden)
 			if ProfileManagerState.window.ExportActionButton then
+				if showSourceDropdown then
+					ProfileManagerState.window.ExportActionButton:SetParent(ProfileManagerState.window.ExportSourceFrame)
+					ProfileManagerState.window.ExportActionButton:ClearAllPoints()
+					ProfileManagerState.window.ExportActionButton:SetPoint('TOPRIGHT', ProfileManagerState.window.ExportSourceFrame, 'TOPRIGHT', 0, 2)
+				else
+					ProfileManagerState.window.ExportActionButton:SetParent(ProfileManagerState.window.RightPanel)
+					ProfileManagerState.window.ExportActionButton:ClearAllPoints()
+					ProfileManagerState.window.ExportActionButton:SetPoint('TOP', ProfileManagerState.window.Description, 'BOTTOM', 0, -10)
+				end
 				ProfileManagerState.window.ExportActionButton:Show()
 			end
 
