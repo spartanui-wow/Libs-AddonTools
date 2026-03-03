@@ -29,6 +29,65 @@ Core.SaveAddOns = C_AddOns.SaveAddOns
 Core.ResetAddOns = C_AddOns.ResetAddOns
 
 ----------------------------------------------------------------------------------------------------
+-- Character Context
+----------------------------------------------------------------------------------------------------
+
+-- nil = ALL characters, string = specific character name
+Core.SelectedCharacter = nil
+
+---Set the character context for enable/disable operations
+---@param charName? string Character name or nil for ALL
+function Core.SetSelectedCharacter(charName)
+	Core.SelectedCharacter = charName
+end
+
+---Get the current character context
+---@return string|nil charName Current character name or nil for ALL
+function Core.GetSelectedCharacter()
+	return Core.SelectedCharacter
+end
+
+---Get ordered character list: ALL first, then current char, then alphabetical alts on same realm
+---@return table[] characters List of { label, value, class } entries (value=nil for ALL, string for specific char)
+function Core.GetCharacterList()
+	local results = {}
+	table.insert(results, { label = 'All Characters', value = nil, class = nil })
+
+	local currentChar = UnitName('player')
+	local currentRealm = GetRealmName()
+
+	-- Current character first
+	local _, currentClass = UnitClass('player')
+	table.insert(results, { label = currentChar, value = currentChar, class = currentClass, isCurrent = true })
+
+	-- Other characters on same realm, alphabetically
+	local alts = {}
+	if AddonManager.DB and AddonManager.DB.characterList and AddonManager.DB.characterList[currentRealm] then
+		for charName, charData in pairs(AddonManager.DB.characterList[currentRealm]) do
+			if charName ~= currentChar then
+				table.insert(alts, { label = charName, value = charName, class = charData.class })
+			end
+		end
+	end
+	table.sort(alts, function(a, b)
+		return a.label < b.label
+	end)
+	for _, alt in ipairs(alts) do
+		table.insert(results, alt)
+	end
+
+	return results
+end
+
+---Check if an addon is enabled for a specific character
+---@param addonIndex number Addon index
+---@param charName? string Character name or nil for ALL
+---@return number enableState Raw Enum.AddOnEnableState value (0=None, 1=Some, 2=All)
+function Core.GetEnableStateForCharacter(addonIndex, charName)
+	return Core.GetAddOnEnableState(addonIndex, charName)
+end
+
+----------------------------------------------------------------------------------------------------
 -- Addon Metadata Cache
 ----------------------------------------------------------------------------------------------------
 
@@ -104,8 +163,9 @@ function Core.ScanAddons()
 				end
 			end
 
-			-- Get enable state
+			-- Get enable state (raw value for tri-state checkbox support)
 			local enableState = Core.GetAddOnEnableState(i)
+			metadata.enableState = enableState -- Raw: 0=None, 1=Some, 2=All
 			metadata.enabled = (enableState > 0) -- 0=disabled, >0=enabled (1=some chars, 2=all chars)
 
 			-- Debug: Log first 5 addon enable states
@@ -158,35 +218,51 @@ end
 
 ---Enable an addon for the specified character
 ---@param addonIndex number Addon index
----@param character? string Character name (defaults to current character)
+---@param character? string|false Character name, nil to use SelectedCharacter, false for explicit nil (ALL)
 function Core.EnableAddon(addonIndex, character)
+	-- false = explicit ALL, nil = use SelectedCharacter context
+	if character == false then
+		character = nil
+	elseif character == nil then
+		character = Core.SelectedCharacter
+	end
 	Core.EnableAddOn(addonIndex, character)
 
 	-- Update cache
 	if Core.AddonCache[addonIndex] then
-		Core.AddonCache[addonIndex].enabled = true
+		local newState = Core.GetAddOnEnableState(addonIndex)
+		Core.AddonCache[addonIndex].enableState = newState
+		Core.AddonCache[addonIndex].enabled = (newState > 0)
 	end
 
 	if AddonManager.logger then
 		local name = Core.AddonCache[addonIndex] and Core.AddonCache[addonIndex].name or tostring(addonIndex)
-		AddonManager.logger.debug(string.format('Enabled addon: %s', name))
+		AddonManager.logger.debug(string.format('Enabled addon: %s (character: %s)', name, tostring(character) or 'ALL'))
 	end
 end
 
 ---Disable an addon for the specified character
 ---@param addonIndex number Addon index
----@param character? string Character name (defaults to current character)
+---@param character? string|false Character name, nil to use SelectedCharacter, false for explicit nil (ALL)
 function Core.DisableAddon(addonIndex, character)
+	-- false = explicit ALL, nil = use SelectedCharacter context
+	if character == false then
+		character = nil
+	elseif character == nil then
+		character = Core.SelectedCharacter
+	end
 	Core.DisableAddOn(addonIndex, character)
 
 	-- Update cache
 	if Core.AddonCache[addonIndex] then
-		Core.AddonCache[addonIndex].enabled = false
+		local newState = Core.GetAddOnEnableState(addonIndex)
+		Core.AddonCache[addonIndex].enableState = newState
+		Core.AddonCache[addonIndex].enabled = (newState > 0)
 	end
 
 	if AddonManager.logger then
 		local name = Core.AddonCache[addonIndex] and Core.AddonCache[addonIndex].name or tostring(addonIndex)
-		AddonManager.logger.debug(string.format('Disabled addon: %s', name))
+		AddonManager.logger.debug(string.format('Disabled addon: %s (character: %s)', name, tostring(character) or 'ALL'))
 	end
 end
 

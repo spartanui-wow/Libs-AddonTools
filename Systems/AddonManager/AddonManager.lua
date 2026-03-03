@@ -30,6 +30,7 @@ function AddonManager:OnInitialize()
 			},
 			perCharacter = {}, -- { [characterName] = { activeProfile = profileId, profiles = {}, nextProfileId = n } }
 			addonListPosition = nil, -- { point, relPoint, x, y, width, height } saved AddonList position/size
+			characterList = {}, -- { [realmName] = { [charName] = { name, class, guid } } }
 		},
 	}
 	AddonManager.Database = LibAT.Database:RegisterNamespace('AddonManager', defaults)
@@ -237,6 +238,13 @@ function AddonManager:OnAddonLoaded(event, addonName)
 end
 
 function AddonManager:OnPlayerLogin()
+	-- Record current character for the character selector
+	local realm = GetRealmName()
+	local name = UnitName('player')
+	local _, class = UnitClass('player')
+	AddonManager.DB.characterList[realm] = AddonManager.DB.characterList[realm] or {}
+	AddonManager.DB.characterList[realm][name] = { name = name, class = class }
+
 	-- Scan all installed addons and build metadata cache
 	if AddonManager.Core then
 		AddonManager.Core.ScanAddons()

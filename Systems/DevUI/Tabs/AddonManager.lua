@@ -15,6 +15,7 @@ local RefreshAddonList
 local RefreshCategoryList
 local RefreshDetailsPanel
 local ApplyChanges
+local SetupCharacterDropdown
 
 -- Tab-local state (separate from AddonManager module state)
 local TabState = {
@@ -43,11 +44,15 @@ local TabState = {
 	SelectedAddon = nil, -- AddonMetadata object
 
 	-- Pending changes (not yet applied)
-	PendingChanges = {}, -- { [addonName] = { enabled = true/false } }
+	PendingChanges = {}, -- { [addonName] = { enabled = bool, character = charName|nil } }
 	ChangesLabel = nil,
 	ReloadButton = nil,
 	ApplyButton = nil,
 	CancelButton = nil,
+
+	-- Character selector
+	CharacterDropdown = nil,
+	SelectedCharacter = nil, -- nil = ALL characters, string = specific character name
 
 	-- Profile dropdown
 	ProfileDropdown = nil,
@@ -75,6 +80,10 @@ function LibAT.DevUI.InitAddonManager(devUIModule, state)
 			-- Refresh all panels when tab becomes visible
 			if AddonManager.logger then
 				AddonManager.logger.info('AddonManager tab OnActivate fired')
+			end
+			-- Re-setup character dropdown in case Core wasn't ready during BuildContent
+			if TabState.CharacterDropdown then
+				SetupCharacterDropdown(TabState.CharacterDropdown)
 			end
 			RefreshCategoryList()
 			RefreshAddonList()
@@ -234,6 +243,153 @@ function RefreshCategoryList()
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Character Selector
+----------------------------------------------------------------------------------------------------
+
+function SetupCharacterDropdown(dropdown)
+	if not dropdown or not AddonManager or not AddonManager.Core then
+		return
+	end
+
+	dropdown:SetText('All Characters')
+	TabState.SelectedCharacter = nil
+
+	dropdown:SetScript('OnMouseDown', function(self)
+		ShowCharacterMenu(self)
+	end)
+end
+
+local characterMenuPopup
+
+function ShowCharacterMenu(anchorFrame)
+	if not AddonManager or not AddonManager.Core then
+		return
+	end
+
+	if not characterMenuPopup then
+		characterMenuPopup = CreateFrame('Frame', 'LibAT_CharacterMenu', UIParent, 'BackdropTemplate')
+		characterMenuPopup:SetBackdrop({
+			bgFile = 'Interface\\Buttons\\WHITE8x8',
+			edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+			edgeSize = 12,
+			insets = { left = 2, right = 2, top = 2, bottom = 2 },
+		})
+		characterMenuPopup:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+		characterMenuPopup:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+		characterMenuPopup:SetFrameStrata('DIALOG')
+		characterMenuPopup:SetClampedToScreen(true)
+		characterMenuPopup:Hide()
+		characterMenuPopup.rowPool = {}
+
+		characterMenuPopup:SetScript('OnShow', function(self)
+			self:SetScript('OnUpdate', function(s)
+				if not s:IsMouseOver() and not anchorFrame:IsMouseOver() then
+					s:Hide()
+				end
+			end)
+		end)
+		characterMenuPopup:SetScript('OnHide', function(self)
+			self:SetScript('OnUpdate', nil)
+		end)
+	end
+
+	if characterMenuPopup:IsShown() then
+		characterMenuPopup:Hide()
+		return
+	end
+
+	-- Hide existing rows
+	for _, row in ipairs(characterMenuPopup.rowPool) do
+		row:Hide()
+	end
+
+	local characters = AddonManager.Core.GetCharacterList()
+	local ROW_HEIGHT = 22
+	local POPUP_WIDTH = 150
+	local yOffset = -4
+
+	for i, charEntry in ipairs(characters) do
+		local row = characterMenuPopup.rowPool[i]
+		if not row then
+			row = CreateFrame('Button', nil, characterMenuPopup)
+			row:SetHeight(ROW_HEIGHT)
+			row:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight', 'ADD')
+
+			row.checkIcon = row:CreateTexture(nil, 'ARTWORK')
+			row.checkIcon:SetSize(14, 14)
+			row.checkIcon:SetPoint('LEFT', row, 'LEFT', 4, 0)
+			row.checkIcon:SetAtlas('housing-dashboard-small-checkmark')
+
+			row.label = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+			row.label:SetPoint('LEFT', row, 'LEFT', 22, 0)
+			row.label:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
+			row.label:SetJustifyH('LEFT')
+			row.label:SetWordWrap(false)
+
+			characterMenuPopup.rowPool[i] = row
+		end
+
+		row:SetPoint('TOPLEFT', characterMenuPopup, 'TOPLEFT', 4, yOffset)
+		row:SetPoint('TOPRIGHT', characterMenuPopup, 'TOPRIGHT', -4, yOffset)
+
+		-- Show checkmark for selected character
+		local isSelected = (TabState.SelectedCharacter == charEntry.value)
+		row.checkIcon:SetShown(isSelected)
+
+		-- Class-colored label for characters, plain for "All Characters"
+		if charEntry.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[charEntry.class] then
+			local color = RAID_CLASS_COLORS[charEntry.class]
+			local suffix = charEntry.isCurrent and ' (you)' or ''
+			row.label:SetText(string.format('|cff%02x%02x%02x%s|r%s', color.r * 255, color.g * 255, color.b * 255, charEntry.label, suffix))
+		else
+			row.label:SetText(charEntry.label)
+		end
+
+		row:SetScript('OnClick', function()
+			local hasChanges = false
+			for _ in pairs(TabState.PendingChanges) do
+				hasChanges = true
+				break
+			end
+
+			if hasChanges then
+				StaticPopupDialogs['LIBAT_ADDONMANAGER_SWITCH_CHAR'] = {
+					text = 'Switching characters will discard your pending changes. Continue?',
+					button1 = 'Switch',
+					button2 = 'Cancel',
+					OnAccept = function()
+						wipe(TabState.PendingChanges)
+						TabState.SelectedCharacter = charEntry.value
+						AddonManager.Core.SetSelectedCharacter(charEntry.value)
+						TabState.CharacterDropdown:SetText(charEntry.value or 'All Characters')
+						UpdateChangeIndicator()
+						RefreshAddonList()
+					end,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+				}
+				StaticPopup_Show('LIBAT_ADDONMANAGER_SWITCH_CHAR')
+			else
+				TabState.SelectedCharacter = charEntry.value
+				AddonManager.Core.SetSelectedCharacter(charEntry.value)
+				TabState.CharacterDropdown:SetText(charEntry.value or 'All Characters')
+				RefreshAddonList()
+			end
+			characterMenuPopup:Hide()
+		end)
+
+		row:Show()
+		yOffset = yOffset - ROW_HEIGHT
+	end
+
+	characterMenuPopup:SetSize(POPUP_WIDTH, math.abs(yOffset) + 8)
+	characterMenuPopup:ClearAllPoints()
+	characterMenuPopup:SetPoint('TOP', anchorFrame, 'BOTTOM', 0, -2)
+	characterMenuPopup:Show()
+end
+
+----------------------------------------------------------------------------------------------------
 -- Addon List Panel (Center)
 ----------------------------------------------------------------------------------------------------
 
@@ -250,10 +406,16 @@ function BuildAddonListPanel(parent)
 	})
 	header:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
 
-	-- Search box (left-aligned in header, larger)
+	-- Character dropdown (left-aligned in header)
+	local charDropdown = LibAT.UI.CreateDropdown(header, 'All Characters', 130, 24)
+	charDropdown:SetPoint('LEFT', header, 'LEFT', 4, 0)
+	TabState.CharacterDropdown = charDropdown
+	SetupCharacterDropdown(charDropdown)
+
+	-- Search box (after character dropdown)
 	local searchBox = CreateFrame('EditBox', nil, header, 'SearchBoxTemplate')
-	searchBox:SetPoint('LEFT', header, 'LEFT', 8, 0)
-	searchBox:SetSize(160, 24)
+	searchBox:SetPoint('LEFT', charDropdown, 'RIGHT', 4, 0)
+	searchBox:SetSize(120, 24)
 	searchBox:SetAutoFocus(false)
 	searchBox:SetScript('OnTextChanged', function(self)
 		TabState.CurrentSearchTerm = self:GetText()
@@ -413,36 +575,40 @@ function RefreshAddonList()
 			btn.hasChildren = hasChildren
 			btn.dependents = dependents
 
-			-- Get enable state for tri-state checkbox
-			-- Check global enable state (all characters)
+			-- Get enable state based on selected character context
+			local selectedChar = TabState.SelectedCharacter
 			local enableStateGlobal = AddonManager.Core and AddonManager.Core.GetAddOnEnableState(addon.index) or 0
-
-			-- Check enable state for current character specifically
 			local currentChar = UnitName('player')
-			local enableStateChar = AddonManager.Core and AddonManager.Core.GetAddOnEnableState(addon.index, currentChar) or 0
 
-			local isEnabled = (enableStateChar > 0)
+			local isEnabled
 			local showGrayCheck = false
 
-			-- Check for pending changes
+			-- Check for pending changes first
 			if TabState.PendingChanges[addon.name] ~= nil then
 				isEnabled = TabState.PendingChanges[addon.name].enabled
-				enableStateChar = isEnabled and 2 or 0
-				enableStateGlobal = isEnabled and 2 or 0
+			elseif selectedChar then
+				-- Per-character mode: simple on/off for the selected character
+				local charState = AddonManager.Core and AddonManager.Core.GetAddOnEnableState(addon.index, selectedChar) or 0
+				isEnabled = (charState > 0)
+			else
+				-- ALL mode: use global state with tri-state
+				local enableStateChar = AddonManager.Core and AddonManager.Core.GetAddOnEnableState(addon.index, currentChar) or 0
+				isEnabled = (enableStateChar > 0)
+
+				-- Tri-state: gray check when disabled for current char but enabled for some
+				if enableStateChar == 0 and enableStateGlobal > 0 then
+					showGrayCheck = true
+				end
 			end
 
-			-- Tri-state logic:
-			-- - Normal yellow check: enabled for current character
-			-- - Gray check: disabled for current character but enabled for other characters
-			-- - Unchecked: disabled for all characters
-			if enableStateChar == 0 and enableStateGlobal > 0 then
-				-- Disabled for current character, but enabled for others
+			-- Tri-state visual logic:
+			-- ALL mode: solid check = enabled for me, gray check = enabled for others but not me, unchecked = none
+			-- Per-char mode: simple on/off
+			if showGrayCheck then
 				btn:SetChecked(true)
 				btn:SetCheckedTexture('Interface\\Buttons\\UI-CheckBox-Check-Disabled')
 				btn.tooltip = 'Disabled for this character, but enabled for other characters'
-				showGrayCheck = true
 			else
-				-- Normal state: enabled or fully disabled
 				btn:SetChecked(isEnabled)
 				btn:SetCheckedTexture('Interface\\Buttons\\UI-CheckBox-Check')
 				btn.tooltip = nil
@@ -497,23 +663,28 @@ function RefreshAddonList()
 				end
 
 				local newState = self:GetChecked()
+				local charContext = TabState.SelectedCharacter
 
 				-- If unchecking a parent addon with children, uncheck all dependents
 				if not newState and self.hasChildren then
 					for _, depName in ipairs(self.dependents) do
-						-- Mark dependent as disabled
-						TabState.PendingChanges[depName] = { enabled = false }
+						TabState.PendingChanges[depName] = { enabled = false, character = charContext }
 					end
 				end
 
 				-- Check if this reverts to original state
-				local originalState = self.addon.enabled
-				if newState == originalState then
-					-- Remove from pending changes (reverted to original)
+				local originalEnabled
+				if charContext then
+					local charState = AddonManager.Core and AddonManager.Core.GetAddOnEnableState(self.addon.index, charContext) or 0
+					originalEnabled = (charState > 0)
+				else
+					originalEnabled = self.addon.enabled
+				end
+
+				if newState == originalEnabled then
 					TabState.PendingChanges[self.addon.name] = nil
 				else
-					-- Store change
-					TabState.PendingChanges[self.addon.name] = { enabled = newState }
+					TabState.PendingChanges[self.addon.name] = { enabled = newState, character = charContext }
 				end
 
 				UpdateChangeIndicator()
@@ -1557,12 +1728,13 @@ end
 
 function BulkSelectAll(enabled)
 	local addons = GetFilteredAddonList()
+	local charContext = TabState.SelectedCharacter
 
 	for _, addon in ipairs(addons) do
 		-- Skip protected addons when disabling
 		local isProtected = AddonManager.SpecialCases and AddonManager.SpecialCases.IsProtectedAddon(addon.name)
 		if enabled or not isProtected then
-			TabState.PendingChanges[addon.name] = { enabled = enabled }
+			TabState.PendingChanges[addon.name] = { enabled = enabled, character = charContext }
 		end
 	end
 
@@ -1579,9 +1751,14 @@ function ApplyChanges()
 		return
 	end
 
+	-- Temporarily save and restore SelectedCharacter so each change uses its own context
+	local savedChar = AddonManager.Core.GetSelectedCharacter()
+
 	for addonName, change in pairs(TabState.PendingChanges) do
 		local addon = AddonManager.Core.GetAddonByName(addonName)
 		if addon then
+			-- Set the character context for this specific change
+			AddonManager.Core.SetSelectedCharacter(change.character)
 			if change.enabled then
 				AddonManager.Core.EnableAddon(addon.index)
 			else
@@ -1589,6 +1766,9 @@ function ApplyChanges()
 			end
 		end
 	end
+
+	-- Restore the selected character context
+	AddonManager.Core.SetSelectedCharacter(savedChar)
 
 	-- Save changes
 	if AddonManager.Core.SaveAddOns then
