@@ -212,7 +212,6 @@ end
 
 function AddonManager:OnEnable()
 	-- Register events
-	self:RegisterEvent('ADDON_LOADED', 'OnAddonLoaded')
 	self:RegisterEvent('PLAYER_LOGIN', 'OnPlayerLogin')
 
 	if AddonManager.logger then
@@ -231,11 +230,6 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Event Handlers
 ----------------------------------------------------------------------------------------------------
-
-function AddonManager:OnAddonLoaded(event, addonName)
-	-- Track addon loading for performance metrics (used by Performance system)
-	-- This is just a placeholder for future integration
-end
 
 function AddonManager:OnPlayerLogin()
 	-- Record current character for the character selector
