@@ -767,9 +767,6 @@ function ProfileManager:ShowCompositeExport(compositeId)
 		return
 	end
 
-	-- Hide the choice buttons and question text
-	ProfileManager.HideExportChoiceButtons()
-
 	-- Create side panel if it doesn't exist (using ButtonFrameTemplate like contributor list)
 	if not win.CompositePanel then
 		win.CompositePanel = CreateFrame('Frame', 'LibAT_CompositePanel', UIParent, 'ButtonFrameTemplate')
