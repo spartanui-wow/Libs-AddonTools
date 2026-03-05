@@ -8,8 +8,11 @@ local LibAT = LibAT
 ---@class SetupWizardPage
 ---@field id string Unique page identifier
 ---@field name string Display name for nav tree
+---@field order? number Sort order (lower = earlier). Pages without order sort by registration order.
 ---@field builder function(contentFrame: Frame) Populates the right panel content
 ---@field isComplete? function(): boolean Dynamic completion check (returns true if page setup is done)
+---@field onLeave? function() Called when navigating away from this page
+---@field children? SetupWizardPage[] Optional child pages (shown as sub-subcategories in nav tree)
 
 ---@class SetupWizardAddonConfig
 ---@field name string Display name for the addon
@@ -29,10 +32,40 @@ local SetupWizard = LibAT.SetupWizard
 -- Internal storage
 SetupWizard.registeredAddons = {} ---@type table<string, SetupWizardAddonEntry>
 SetupWizard.registrationOrder = 0
+SetupWizard.viewedPages = {} ---@type table<string, boolean> In-memory viewed tracking (resets on /rl)
 
 ----------------------------------------------------------------------------------------------------
 -- Registration API
 ----------------------------------------------------------------------------------------------------
+
+---Validate a page table has required fields
+---@param page SetupWizardPage
+---@param index number
+---@param addonId string
+---@return boolean valid
+local function ValidatePage(page, index, addonId)
+	if not page.id then
+		LibAT:Print('SetupWizard: page ' .. index .. ' missing id for addon ' .. tostring(addonId))
+		return false
+	end
+	if not page.name then
+		LibAT:Print('SetupWizard: page ' .. index .. ' missing name for addon ' .. tostring(addonId))
+		return false
+	end
+	if not page.builder then
+		LibAT:Print('SetupWizard: page ' .. index .. ' missing builder for addon ' .. tostring(addonId))
+		return false
+	end
+	-- Validate children recursively
+	if page.children then
+		for ci, child in ipairs(page.children) do
+			if not ValidatePage(child, ci, addonId) then
+				return false
+			end
+		end
+	end
+	return true
+end
 
 ---Register an addon with the Setup Wizard
 ---@param addonId string Unique identifier for the addon (e.g., 'libs-timeplayed')
@@ -48,23 +81,13 @@ function SetupWizard:RegisterAddon(addonId, config)
 		return
 	end
 
-	if not config.pages or #config.pages == 0 then
-		LibAT:Print('SetupWizard: config.pages is required and must not be empty for addon ' .. tostring(addonId))
-		return
+	if not config.pages then
+		config.pages = {}
 	end
 
 	-- Validate each page
 	for i, page in ipairs(config.pages) do
-		if not page.id then
-			LibAT:Print('SetupWizard: page ' .. i .. ' missing id for addon ' .. tostring(addonId))
-			return
-		end
-		if not page.name then
-			LibAT:Print('SetupWizard: page ' .. i .. ' missing name for addon ' .. tostring(addonId))
-			return
-		end
-		if not page.builder then
-			LibAT:Print('SetupWizard: page ' .. i .. ' missing builder for addon ' .. tostring(addonId))
+		if not ValidatePage(page, i, addonId) then
 			return
 		end
 	end
@@ -85,6 +108,78 @@ function SetupWizard:RegisterAddon(addonId, config)
 	end
 end
 
+---Add a page to an already-registered addon
+---@param addonId string Registered addon key (e.g., 'spartanui')
+---@param page SetupWizardPage Page table to add
+---@param parentPageId? string If provided, adds as child of that page
+function SetupWizard:AddPage(addonId, page, parentPageId)
+	local entry = self.registeredAddons[addonId]
+	if not entry then
+		LibAT:Print('SetupWizard: AddPage - addon "' .. tostring(addonId) .. '" not registered')
+		return
+	end
+
+	if not ValidatePage(page, #entry.config.pages + 1, addonId) then
+		return
+	end
+
+	if parentPageId then
+		-- Find parent page and add as child
+		local parent = self:GetPage(addonId, parentPageId)
+		if not parent then
+			LibAT:Print('SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
+			return
+		end
+		if not parent.children then
+			parent.children = {}
+		end
+		table.insert(parent.children, page)
+	else
+		table.insert(entry.config.pages, page)
+	end
+
+	-- Re-sort pages by order field
+	self:SortPages(addonId)
+
+	LibAT:Debug('SetupWizard: Added page "' .. page.name .. '" to addon "' .. addonId .. '"')
+
+	if self.window and self.RefreshNavTree then
+		self:RefreshNavTree()
+	end
+end
+
+---Sort an addon's pages by their order field
+---@param addonId string
+function SetupWizard:SortPages(addonId)
+	local entry = self.registeredAddons[addonId]
+	if not entry then
+		return
+	end
+
+	table.sort(entry.config.pages, function(a, b)
+		local orderA = a.order or 999
+		local orderB = b.order or 999
+		if orderA == orderB then
+			return false
+		end
+		return orderA < orderB
+	end)
+
+	-- Sort children within each page
+	for _, page in ipairs(entry.config.pages) do
+		if page.children and #page.children > 1 then
+			table.sort(page.children, function(a, b)
+				local orderA = a.order or 999
+				local orderB = b.order or 999
+				if orderA == orderB then
+					return false
+				end
+				return orderA < orderB
+			end)
+		end
+	end
+end
+
 ---Unregister an addon from the Setup Wizard
 ---@param addonId string Addon identifier to remove
 function SetupWizard:UnregisterAddon(addonId)
@@ -100,27 +195,50 @@ function SetupWizard:UnregisterAddon(addonId)
 end
 
 ----------------------------------------------------------------------------------------------------
+-- Viewed Tracking (in-memory, resets on /rl)
+----------------------------------------------------------------------------------------------------
+
+---Mark a page as viewed
+---@param addonId string
+---@param pageId string
+function SetupWizard:MarkPageViewed(addonId, pageId)
+	self.viewedPages[addonId .. '.' .. pageId] = true
+end
+
+---Check if a page has been viewed this session
+---@param addonId string
+---@param pageId string
+---@return boolean
+function SetupWizard:IsPageViewed(addonId, pageId)
+	return self.viewedPages[addonId .. '.' .. pageId] == true
+end
+
+----------------------------------------------------------------------------------------------------
 -- Completion Tracking
 ----------------------------------------------------------------------------------------------------
 
----Check if a specific page is complete
+---Check if a specific page is complete (isComplete returns true OR page has been viewed)
 ---@param addonId string Addon identifier
 ---@param pageId string Page identifier
 ---@return boolean isComplete
 function SetupWizard:IsPageComplete(addonId, pageId)
+	-- Viewed pages count as complete
+	if self:IsPageViewed(addonId, pageId) then
+		return true
+	end
+
 	local entry = self.registeredAddons[addonId]
 	if not entry then
 		return false
 	end
 
-	for _, page in ipairs(entry.config.pages) do
-		if page.id == pageId then
-			if page.isComplete then
-				return page.isComplete()
-			end
-			-- No isComplete function means always incomplete (user must visit)
-			return false
+	-- Search top-level pages and children
+	local page = self:GetPage(addonId, pageId)
+	if page then
+		if page.isComplete then
+			return page.isComplete()
 		end
+		return false
 	end
 
 	return false
@@ -136,8 +254,16 @@ function SetupWizard:IsAddonComplete(addonId)
 	end
 
 	for _, page in ipairs(entry.config.pages) do
-		if page.isComplete and not page.isComplete() then
+		if not self:IsPageComplete(addonId, page.id) then
 			return false
+		end
+		-- Check children too
+		if page.children then
+			for _, child in ipairs(page.children) do
+				if not self:IsPageComplete(addonId, child.id) then
+					return false
+				end
+			end
 		end
 	end
 
@@ -180,7 +306,7 @@ function SetupWizard:GetAddonCount()
 	return count
 end
 
----Get a specific page from an addon
+---Get a specific page from an addon (searches top-level and children)
 ---@param addonId string Addon identifier
 ---@param pageId string Page identifier
 ---@return SetupWizardPage|nil page
@@ -194,12 +320,40 @@ function SetupWizard:GetPage(addonId, pageId)
 		if page.id == pageId then
 			return page
 		end
+		if page.children then
+			for _, child in ipairs(page.children) do
+				if child.id == pageId then
+					return child
+				end
+			end
+		end
 	end
 
 	return nil
 end
 
----Get the next page after the current one (across addons if needed)
+---Build a flat list of all pages (including children) for navigation
+---@param addonId string
+---@return table[] flatPages Array of {id=pageId} in display order
+function SetupWizard:GetFlatPageList(addonId)
+	local entry = self.registeredAddons[addonId]
+	if not entry then
+		return {}
+	end
+
+	local flat = {}
+	for _, page in ipairs(entry.config.pages) do
+		table.insert(flat, { id = page.id })
+		if page.children then
+			for _, child in ipairs(page.children) do
+				table.insert(flat, { id = child.id })
+			end
+		end
+	end
+	return flat
+end
+
+---Get the next page after the current one (across addons if needed), walking into children
 ---@param addonId string Current addon identifier
 ---@param pageId string Current page identifier
 ---@return string|nil nextAddonId Next addon ID (nil if at end)
@@ -210,10 +364,11 @@ function SetupWizard:GetNextPage(addonId, pageId)
 		return nil, nil
 	end
 
-	-- Find current page index
+	-- Build flat list and find current position
+	local flat = self:GetFlatPageList(addonId)
 	local currentIndex = nil
-	for i, page in ipairs(entry.config.pages) do
-		if page.id == pageId then
+	for i, item in ipairs(flat) do
+		if item.id == pageId then
 			currentIndex = i
 			break
 		end
@@ -223,9 +378,9 @@ function SetupWizard:GetNextPage(addonId, pageId)
 		return nil, nil
 	end
 
-	-- Try next page in same addon
-	if currentIndex < #entry.config.pages then
-		return addonId, entry.config.pages[currentIndex + 1].id
+	-- Try next page in same addon (flat list includes children)
+	if currentIndex < #flat then
+		return addonId, flat[currentIndex + 1].id
 	end
 
 	-- Try first page of next addon
@@ -233,9 +388,9 @@ function SetupWizard:GetNextPage(addonId, pageId)
 	local foundCurrent = false
 	for _, id in ipairs(sortedIds) do
 		if foundCurrent then
-			local nextEntry = self.registeredAddons[id]
-			if nextEntry and #nextEntry.config.pages > 0 then
-				return id, nextEntry.config.pages[1].id
+			local nextFlat = self:GetFlatPageList(id)
+			if #nextFlat > 0 then
+				return id, nextFlat[1].id
 			end
 		end
 		if id == addonId then
@@ -246,7 +401,7 @@ function SetupWizard:GetNextPage(addonId, pageId)
 	return nil, nil
 end
 
----Get the previous page before the current one (across addons if needed)
+---Get the previous page before the current one (across addons if needed), walking into children
 ---@param addonId string Current addon identifier
 ---@param pageId string Current page identifier
 ---@return string|nil prevAddonId Previous addon ID (nil if at start)
@@ -257,10 +412,11 @@ function SetupWizard:GetPreviousPage(addonId, pageId)
 		return nil, nil
 	end
 
-	-- Find current page index
+	-- Build flat list and find current position
+	local flat = self:GetFlatPageList(addonId)
 	local currentIndex = nil
-	for i, page in ipairs(entry.config.pages) do
-		if page.id == pageId then
+	for i, item in ipairs(flat) do
+		if item.id == pageId then
 			currentIndex = i
 			break
 		end
@@ -270,9 +426,9 @@ function SetupWizard:GetPreviousPage(addonId, pageId)
 		return nil, nil
 	end
 
-	-- Try previous page in same addon
+	-- Try previous page in same addon (flat list includes children)
 	if currentIndex > 1 then
-		return addonId, entry.config.pages[currentIndex - 1].id
+		return addonId, flat[currentIndex - 1].id
 	end
 
 	-- Try last page of previous addon
@@ -286,9 +442,9 @@ function SetupWizard:GetPreviousPage(addonId, pageId)
 	end
 
 	if previousAddonId then
-		local prevEntry = self.registeredAddons[previousAddonId]
-		if prevEntry and #prevEntry.config.pages > 0 then
-			return previousAddonId, prevEntry.config.pages[#prevEntry.config.pages].id
+		local prevFlat = self:GetFlatPageList(previousAddonId)
+		if #prevFlat > 0 then
+			return previousAddonId, prevFlat[#prevFlat].id
 		end
 	end
 

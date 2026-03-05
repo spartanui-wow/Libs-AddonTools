@@ -34,19 +34,45 @@ local function BuildNavCategories()
 				local pageKey = addonId .. '.' .. page.id
 				local pageComplete = SetupWizard:IsPageComplete(addonId, page.id)
 
-				-- Add checkmark to completed pages
 				local displayName = page.name
 				if pageComplete then
 					displayName = '|cff00ff00' .. displayName .. '|r |A:common-icon-checkmark:0:0|a'
 				end
 
-				subCategories[page.id] = {
+				local subCat = {
 					name = displayName,
 					key = pageKey,
 					onSelect = function()
 						SetupWizard:ShowPage(addonId, page.id)
 					end,
 				}
+
+				-- Build sub-subcategories from children
+				if page.children and #page.children > 0 then
+					subCat.expanded = (SetupWizard.currentAddonId == addonId)
+					subCat.subSubCategories = {}
+					subCat.sortedKeys = {}
+					for _, child in ipairs(page.children) do
+						local childKey = addonId .. '.' .. child.id
+						local childComplete = SetupWizard:IsPageComplete(addonId, child.id)
+
+						local childDisplayName = child.name
+						if childComplete then
+							childDisplayName = '|cff00ff00' .. childDisplayName .. '|r |A:common-icon-checkmark:0:0|a'
+						end
+
+						subCat.subSubCategories[child.id] = {
+							name = childDisplayName,
+							key = childKey,
+							onSelect = function()
+								SetupWizard:ShowPage(addonId, child.id)
+							end,
+						}
+						table.insert(subCat.sortedKeys, child.id)
+					end
+				end
+
+				subCategories[page.id] = subCat
 				table.insert(sortedPageKeys, page.id)
 			end
 
@@ -120,9 +146,20 @@ function SetupWizard:ShowPage(addonId, pageId)
 		return
 	end
 
+	-- Call onLeave on current page before switching
+	if self.currentAddonId and self.currentPageId then
+		local currentPage = self:GetPage(self.currentAddonId, self.currentPageId)
+		if currentPage and currentPage.onLeave then
+			currentPage.onLeave()
+		end
+	end
+
 	-- Update current state
 	self.currentAddonId = addonId
 	self.currentPageId = pageId
+
+	-- Mark as viewed
+	self:MarkPageViewed(addonId, pageId)
 
 	-- Clear existing content
 	ClearContentPanel()
@@ -278,7 +315,13 @@ function SetupWizard:CreateWindow()
 		if nextAddon and nextPage then
 			SetupWizard:ShowPage(nextAddon, nextPage)
 		else
-			-- Last page — close the wizard
+			-- Last page — call onLeave then close
+			if SetupWizard.currentAddonId and SetupWizard.currentPageId then
+				local currentPage = SetupWizard:GetPage(SetupWizard.currentAddonId, SetupWizard.currentPageId)
+				if currentPage and currentPage.onLeave then
+					currentPage.onLeave()
+				end
+			end
 			SetupWizard:CloseWindow()
 		end
 	end)
@@ -287,6 +330,13 @@ function SetupWizard:CreateWindow()
 	self.window.BottomCloseButton = LibAT.UI.CreateButton(bottomBar, 70, 22, 'Close')
 	self.window.BottomCloseButton:SetPoint('RIGHT', self.window.NextButton, 'LEFT', -5, 0)
 	self.window.BottomCloseButton:SetScript('OnClick', function()
+		-- Call onLeave on current page
+		if SetupWizard.currentAddonId and SetupWizard.currentPageId then
+			local currentPage = SetupWizard:GetPage(SetupWizard.currentAddonId, SetupWizard.currentPageId)
+			if currentPage and currentPage.onLeave then
+				currentPage.onLeave()
+			end
+		end
 		SetupWizard:CloseWindow()
 	end)
 
@@ -314,22 +364,20 @@ function SetupWizard:OpenWindow()
 	if not self.currentPageId then
 		local sortedIds = self:GetSortedAddonIds()
 		for _, addonId in ipairs(sortedIds) do
-			local entry = self.registeredAddons[addonId]
-			if entry then
-				for _, page in ipairs(entry.config.pages) do
-					if not page.isComplete or not page.isComplete() then
-						self:ShowPage(addonId, page.id)
-						return
-					end
+			local flat = self:GetFlatPageList(addonId)
+			for _, item in ipairs(flat) do
+				if not self:IsPageComplete(addonId, item.id) then
+					self:ShowPage(addonId, item.id)
+					return
 				end
 			end
 		end
 
 		-- All complete or no pages — just show first available
 		if sortedIds[1] then
-			local entry = self.registeredAddons[sortedIds[1]]
-			if entry and #entry.config.pages > 0 then
-				self:ShowPage(sortedIds[1], entry.config.pages[1].id)
+			local flat = self:GetFlatPageList(sortedIds[1])
+			if #flat > 0 then
+				self:ShowPage(sortedIds[1], flat[1].id)
 			end
 		end
 	end
