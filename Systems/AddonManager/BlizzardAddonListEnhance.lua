@@ -946,6 +946,16 @@ function Enhance.Setup()
 		end
 	end
 
+	-- Fix Blizzard bug: OnLoad captures startStatus with character=nil (ALL),
+	-- but the dropdown defaults to the current player GUID. This mismatch causes
+	-- false "Reload UI" when per-character addon states differ from global state.
+	if AddonList and AddonList.startStatus then
+		local playerGUID = UnitGUID('player')
+		for i = 1, C_AddOns.GetNumAddOns() do
+			AddonList.startStatus[i] = (C_AddOns.GetAddOnEnableState(i, playerGUID) > 0)
+		end
+	end
+
 	-- Create sidecar panel
 	CreateSidecarPanel()
 	RefreshSidecarDropdown()
