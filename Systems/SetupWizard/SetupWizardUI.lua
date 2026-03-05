@@ -415,9 +415,13 @@ function SetupWizard:CheckFirstRun()
 		return
 	end
 
+	-- Build addon list for the prompt
+	local addonNames = self:GetUncompletedAddonNames()
+	local addonList = table.concat(addonNames, ', ')
+
 	-- Show static popup prompt
 	StaticPopupDialogs['LIBAT_SETUP_WIZARD_PROMPT'] = {
-		text = 'Libs-AddonTools has detected addons that need setup.\n\nWould you like to open the Setup Wizard?',
+		text = 'The following addons have setup pages to review:\n\n' .. addonList .. '\n\nWould you like to open the Setup Wizard?',
 		button1 = 'Open Wizard',
 		button2 = 'Not Now',
 		button3 = "Don't Ask Again",

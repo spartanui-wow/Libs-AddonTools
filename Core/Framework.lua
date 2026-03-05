@@ -232,6 +232,7 @@ function LibAT:OnInitialize()
 	local defaults = {
 		global = {
 			setupWizardDismissed = false,
+			setupWizardCompleted = {},
 		},
 		profile = {
 			errorDisplay = {

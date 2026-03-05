@@ -195,34 +195,62 @@ function SetupWizard:UnregisterAddon(addonId)
 end
 
 ----------------------------------------------------------------------------------------------------
--- Viewed Tracking (in-memory, resets on /rl)
+-- Completion Tracking (persistent via SavedVariables + in-memory session tracking)
 ----------------------------------------------------------------------------------------------------
 
----Mark a page as viewed
+---Get the persistent completion table from LibAT's database
+---@return table<string, boolean>|nil
+local function GetPersistentCompletionTable()
+	if LibAT.Database and LibAT.Database.global then
+		if not LibAT.Database.global.setupWizardCompleted then
+			LibAT.Database.global.setupWizardCompleted = {}
+		end
+		return LibAT.Database.global.setupWizardCompleted
+	end
+	return nil
+end
+
+---Mark a page as viewed (persists across /rl via SavedVariables)
 ---@param addonId string
 ---@param pageId string
 function SetupWizard:MarkPageViewed(addonId, pageId)
-	self.viewedPages[addonId .. '.' .. pageId] = true
+	local key = addonId .. '.' .. pageId
+	self.viewedPages[key] = true
+
+	-- Persist to SavedVariables
+	local completed = GetPersistentCompletionTable()
+	if completed then
+		completed[key] = true
+	end
 end
 
----Check if a page has been viewed this session
+---Check if a page has been viewed (this session or previously)
 ---@param addonId string
 ---@param pageId string
 ---@return boolean
 function SetupWizard:IsPageViewed(addonId, pageId)
-	return self.viewedPages[addonId .. '.' .. pageId] == true
+	local key = addonId .. '.' .. pageId
+
+	-- Check in-memory first
+	if self.viewedPages[key] then
+		return true
+	end
+
+	-- Check persistent storage
+	local completed = GetPersistentCompletionTable()
+	if completed and completed[key] then
+		return true
+	end
+
+	return false
 end
 
-----------------------------------------------------------------------------------------------------
--- Completion Tracking
-----------------------------------------------------------------------------------------------------
-
----Check if a specific page is complete (isComplete returns true OR page has been viewed)
+---Check if a specific page is complete (isComplete callback, viewed this session, or previously completed)
 ---@param addonId string Addon identifier
 ---@param pageId string Page identifier
 ---@return boolean isComplete
 function SetupWizard:IsPageComplete(addonId, pageId)
-	-- Viewed pages count as complete
+	-- Check persistent/session viewed state
 	if self:IsPageViewed(addonId, pageId) then
 		return true
 	end
@@ -232,7 +260,7 @@ function SetupWizard:IsPageComplete(addonId, pageId)
 		return false
 	end
 
-	-- Search top-level pages and children
+	-- Check page's own isComplete callback
 	local page = self:GetPage(addonId, pageId)
 	if page then
 		if page.isComplete then
@@ -279,6 +307,22 @@ function SetupWizard:HasUncompletedAddons()
 		end
 	end
 	return false
+end
+
+---Get a list of addon names that have uncompleted setup pages
+---@return string[] addonNames
+function SetupWizard:GetUncompletedAddonNames()
+	local names = {}
+	local sortedIds = self:GetSortedAddonIds()
+	for _, addonId in ipairs(sortedIds) do
+		if not self:IsAddonComplete(addonId) then
+			local entry = self.registeredAddons[addonId]
+			if entry then
+				table.insert(names, entry.config.name)
+			end
+		end
+	end
+	return names
 end
 
 ---Get a sorted list of registered addon IDs (by registration order)
