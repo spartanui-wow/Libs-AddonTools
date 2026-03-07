@@ -259,13 +259,13 @@ function SetupWizard:CreateWindow()
 
 	-- Create scrollable content area inside right panel
 	self.window.ContentScroll = CreateFrame('ScrollFrame', nil, self.window.RightPanel)
-	self.window.ContentScroll:SetPoint('TOPLEFT', self.window.RightPanel, 'TOPLEFT', 8, -8)
+	self.window.ContentScroll:SetPoint('TOPLEFT', self.window.RightPanel, 'TOPLEFT', 8, -28)
 	self.window.ContentScroll:SetPoint('BOTTOMRIGHT', self.window.RightPanel, 'BOTTOMRIGHT', -8, 8)
 
-	-- Create minimal scrollbar
+	-- Create minimal scrollbar (offset 15px right so it clears the border)
 	self.window.ContentScroll.ScrollBar = CreateFrame('EventFrame', nil, self.window.ContentScroll, 'MinimalScrollBar')
-	self.window.ContentScroll.ScrollBar:SetPoint('TOPLEFT', self.window.ContentScroll, 'TOPRIGHT', 2, 0)
-	self.window.ContentScroll.ScrollBar:SetPoint('BOTTOMLEFT', self.window.ContentScroll, 'BOTTOMRIGHT', 2, 0)
+	self.window.ContentScroll.ScrollBar:SetPoint('TOPLEFT', self.window.ContentScroll, 'TOPRIGHT', 17, 0)
+	self.window.ContentScroll.ScrollBar:SetPoint('BOTTOMLEFT', self.window.ContentScroll, 'BOTTOMRIGHT', 17, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(self.window.ContentScroll, self.window.ContentScroll.ScrollBar)
 
 	-- Create scroll child (this is what page builders populate)
@@ -298,7 +298,7 @@ function SetupWizard:CreateWindow()
 
 	-- Previous button
 	self.window.PrevButton = LibAT.UI.CreateButton(bottomBar, 100, 22, 'Previous')
-	self.window.PrevButton:SetPoint('LEFT', bottomBar, 'LEFT', 180, 0)
+	self.window.PrevButton:SetPoint('LEFT', bottomBar, 'LEFT', 180, -4)
 	self.window.PrevButton:Disable()
 	self.window.PrevButton:SetScript('OnClick', function()
 		local prevAddon, prevPage = SetupWizard:GetPreviousPage(SetupWizard.currentAddonId, SetupWizard.currentPageId)
@@ -309,7 +309,7 @@ function SetupWizard:CreateWindow()
 
 	-- Next button
 	self.window.NextButton = LibAT.UI.CreateButton(bottomBar, 100, 22, 'Next')
-	self.window.NextButton:SetPoint('RIGHT', bottomBar, 'RIGHT', -10, 0)
+	self.window.NextButton:SetPoint('RIGHT', bottomBar, 'RIGHT', -10, -4)
 	self.window.NextButton:SetScript('OnClick', function()
 		local nextAddon, nextPage = SetupWizard:GetNextPage(SetupWizard.currentAddonId, SetupWizard.currentPageId)
 		if nextAddon and nextPage then
@@ -328,7 +328,7 @@ function SetupWizard:CreateWindow()
 
 	-- Close button in bottom bar
 	self.window.BottomCloseButton = LibAT.UI.CreateButton(bottomBar, 70, 22, 'Close')
-	self.window.BottomCloseButton:SetPoint('RIGHT', self.window.NextButton, 'LEFT', -5, 0)
+	self.window.BottomCloseButton:SetPoint('RIGHT', self.window.NextButton, 'LEFT', -5, -4)
 	self.window.BottomCloseButton:SetScript('OnClick', function()
 		-- Call onLeave on current page
 		if SetupWizard.currentAddonId and SetupWizard.currentPageId then
