@@ -264,8 +264,8 @@ function SetupWizard:CreateWindow()
 
 	-- Create minimal scrollbar (offset 15px right so it clears the border)
 	self.window.ContentScroll.ScrollBar = CreateFrame('EventFrame', nil, self.window.ContentScroll, 'MinimalScrollBar')
-	self.window.ContentScroll.ScrollBar:SetPoint('TOPLEFT', self.window.ContentScroll, 'TOPRIGHT', 17, 0)
-	self.window.ContentScroll.ScrollBar:SetPoint('BOTTOMLEFT', self.window.ContentScroll, 'BOTTOMRIGHT', 17, 0)
+	self.window.ContentScroll.ScrollBar:SetPoint('TOPLEFT', self.window.ContentScroll, 'TOPRIGHT', 13, 0)
+	self.window.ContentScroll.ScrollBar:SetPoint('BOTTOMLEFT', self.window.ContentScroll, 'BOTTOMRIGHT', 13, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(self.window.ContentScroll, self.window.ContentScroll.ScrollBar)
 
 	-- Create scroll child (this is what page builders populate)
@@ -328,7 +328,7 @@ function SetupWizard:CreateWindow()
 
 	-- Close button in bottom bar
 	self.window.BottomCloseButton = LibAT.UI.CreateButton(bottomBar, 70, 22, 'Close')
-	self.window.BottomCloseButton:SetPoint('RIGHT', self.window.NextButton, 'LEFT', -5, -4)
+	self.window.BottomCloseButton:SetPoint('RIGHT', self.window.NextButton, 'LEFT', -5, 0)
 	self.window.BottomCloseButton:SetScript('OnClick', function()
 		-- Call onLeave on current page
 		if SetupWizard.currentAddonId and SetupWizard.currentPageId then
