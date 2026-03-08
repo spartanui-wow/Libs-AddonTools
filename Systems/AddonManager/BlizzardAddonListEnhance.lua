@@ -897,8 +897,17 @@ end
 -- Enhancement Setup
 ----------------------------------------------------------------------------------------------------
 
+function Enhance.Teardown()
+	if sidecarPanel then
+		sidecarPanel:Hide()
+	end
+end
+
 function Enhance.Setup()
 	if enhanced or not AddonList then
+		return
+	end
+	if AddonManager.DB and AddonManager.DB.enabled == false then
 		return
 	end
 	enhanced = true
@@ -1104,6 +1113,9 @@ end
 local function TryHook()
 	if AddonList then
 		AddonList:HookScript('OnShow', function()
+			if AddonManager.DB and AddonManager.DB.enabled == false then
+				return
+			end
 			if not enhanced then
 				Enhance.Setup()
 			end

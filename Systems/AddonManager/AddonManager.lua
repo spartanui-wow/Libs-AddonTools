@@ -15,6 +15,7 @@ function AddonManager:OnInitialize()
 	-- Register database namespace
 	local defaults = {
 		global = {
+			enabled = true, -- when false, the AddonList enhancements and sidecar are disabled
 			favorites = {}, -- { [addonName] = true }
 			lockFavorites = true, -- when true, favorites are forced ON during profile apply
 			profiles = {
@@ -203,6 +204,35 @@ function AddonManager:OnInitialize()
 		AddonManager.logger.info('Migrated AddonManager profiles from string keys to int IDs')
 		AddonManager._migratedIntId = nil
 	end
+
+	-- Register options
+	local options = {
+		type = 'group',
+		name = 'Addon Manager',
+		args = {
+			enabled = {
+				name = 'Enable Addon Manager',
+				desc = 'Adds a sidecar panel to the Blizzard addon list with profile switching and favorites. Requires a UI reload to take effect.',
+				type = 'toggle',
+				order = 1,
+				width = 'full',
+				get = function()
+					return AddonManager.DB.enabled ~= false
+				end,
+				set = function(_, val)
+					AddonManager.DB.enabled = val
+					if val then
+						LibAT:SafeReloadUI()
+					else
+						if AddonManager.BlizzardEnhance then
+							AddonManager.BlizzardEnhance.Teardown()
+						end
+					end
+				end,
+			},
+		},
+	}
+	LibAT.Options:AddOptions(options, 'Addon Manager', 'Libs-AddonTools')
 
 	-- Initialize Core (API compatibility layer)
 	if AddonManager.logger then
