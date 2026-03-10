@@ -45,15 +45,21 @@ SetupWizard.viewedPages = {} ---@type table<string, boolean> In-memory viewed tr
 ---@return boolean valid
 local function ValidatePage(page, index, addonId)
 	if not page.id then
-		LibAT:Print('SetupWizard: page ' .. index .. ' missing id for addon ' .. tostring(addonId))
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: page ' .. index .. ' missing id for addon ' .. tostring(addonId))
+		end
 		return false
 	end
 	if not page.name then
-		LibAT:Print('SetupWizard: page ' .. index .. ' missing name for addon ' .. tostring(addonId))
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: page ' .. index .. ' missing name for addon ' .. tostring(addonId))
+		end
 		return false
 	end
 	if not page.builder then
-		LibAT:Print('SetupWizard: page ' .. index .. ' missing builder for addon ' .. tostring(addonId))
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: page ' .. index .. ' missing builder for addon ' .. tostring(addonId))
+		end
 		return false
 	end
 	-- Validate children recursively
@@ -72,12 +78,16 @@ end
 ---@param config SetupWizardAddonConfig Addon configuration with pages
 function SetupWizard:RegisterAddon(addonId, config)
 	if not addonId or not config then
-		LibAT:Print('SetupWizard: RegisterAddon requires addonId and config')
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: RegisterAddon requires addonId and config')
+		end
 		return
 	end
 
 	if not config.name then
-		LibAT:Print('SetupWizard: config.name is required for addon ' .. tostring(addonId))
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: config.name is required for addon ' .. tostring(addonId))
+		end
 		return
 	end
 
@@ -100,7 +110,9 @@ function SetupWizard:RegisterAddon(addonId, config)
 		order = self.registrationOrder,
 	}
 
-	LibAT:Debug('SetupWizard: Registered addon ' .. config.name .. ' with ' .. #config.pages .. ' pages')
+	if LibAT.InternalLog then
+		LibAT.InternalLog.debug('SetupWizard: Registered addon ' .. config.name .. ' with ' .. #config.pages .. ' pages')
+	end
 
 	-- If the wizard window is already open, refresh the nav tree
 	if self.RefreshNavTree then
@@ -115,7 +127,9 @@ end
 function SetupWizard:AddPage(addonId, page, parentPageId)
 	local entry = self.registeredAddons[addonId]
 	if not entry then
-		LibAT:Print('SetupWizard: AddPage - addon "' .. tostring(addonId) .. '" not registered')
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: AddPage - addon "' .. tostring(addonId) .. '" not registered')
+		end
 		return
 	end
 
@@ -127,7 +141,9 @@ function SetupWizard:AddPage(addonId, page, parentPageId)
 		-- Find parent page and add as child
 		local parent = self:GetPage(addonId, parentPageId)
 		if not parent then
-			LibAT:Print('SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
+			if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
+		end
 			return
 		end
 		if not parent.children then
@@ -141,7 +157,9 @@ function SetupWizard:AddPage(addonId, page, parentPageId)
 	-- Re-sort pages by order field
 	self:SortPages(addonId)
 
-	LibAT:Debug('SetupWizard: Added page "' .. page.name .. '" to addon "' .. addonId .. '"')
+	if LibAT.InternalLog then
+		LibAT.InternalLog.debug('SetupWizard: Added page "' .. page.name .. '" to addon "' .. addonId .. '"')
+	end
 
 	if self.window and self.RefreshNavTree then
 		self:RefreshNavTree()
@@ -185,7 +203,9 @@ end
 function SetupWizard:UnregisterAddon(addonId)
 	if self.registeredAddons[addonId] then
 		self.registeredAddons[addonId] = nil
-		LibAT:Debug('SetupWizard: Unregistered addon ' .. tostring(addonId))
+		if LibAT.InternalLog then
+			LibAT.InternalLog.debug('SetupWizard: Unregistered addon ' .. tostring(addonId))
+		end
 
 		-- Refresh nav tree if window is open
 		if self.RefreshNavTree then

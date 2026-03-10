@@ -142,7 +142,9 @@ end
 function SetupWizard:ShowPage(addonId, pageId)
 	local page = self:GetPage(addonId, pageId)
 	if not page then
-		LibAT:Print('SetupWizard: Page not found: ' .. tostring(addonId) .. '.' .. tostring(pageId))
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetupWizard: Page not found: ' .. tostring(addonId) .. '.' .. tostring(pageId))
+		end
 		return
 	end
 
