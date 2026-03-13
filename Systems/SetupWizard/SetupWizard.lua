@@ -142,8 +142,8 @@ function SetupWizard:AddPage(addonId, page, parentPageId)
 		local parent = self:GetPage(addonId, parentPageId)
 		if not parent then
 			if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
-		end
+				LibAT.InternalLog.warning('SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
+			end
 			return
 		end
 		if not parent.children then

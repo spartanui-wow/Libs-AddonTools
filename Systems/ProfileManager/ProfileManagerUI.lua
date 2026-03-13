@@ -907,7 +907,7 @@ function ProfileManager:ShowCompositeExport(compositeId)
 		checkbox:SetEnabled(available)
 
 		-- Auto-update export when checkbox changes
-		checkbox.checkbox:SetScript('OnClick', function()
+		checkbox:SetScript('OnClick', function()
 			RegenerateExport()
 		end)
 

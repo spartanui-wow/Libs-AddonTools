@@ -2,6 +2,7 @@
 local LibAT = LibAT
 ---@class LibAT.ProfileManager
 local ProfileManager = LibAT.ProfileManager
+local ProfileManagerState = ProfileManager.ProfileManagerState
 
 ----------------------------------------------------------------------------------------------------
 -- Utility Functions
@@ -503,6 +504,7 @@ function ProfileManager:CreateCompositeExport(compositeId, selectedComponents)
 		version = '4.0.0',
 		format = 'ProfileManager_Composite',
 		compositeId = compositeId,
+		timestamp = date('%Y-%m-%d %H:%M:%S'),
 		components = {},
 		included = {},
 	}

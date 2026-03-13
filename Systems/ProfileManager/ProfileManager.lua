@@ -707,6 +707,11 @@ local function StripDefaults(data, defaults)
 		end
 	end
 
+	-- If defaults is not a table, data (which IS a table) differs from it entirely
+	if type(defaults) ~= 'table' then
+		return data
+	end
+
 	-- Both are tables, compare recursively
 	local result = {}
 	local hasChanges = false
