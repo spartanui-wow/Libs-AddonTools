@@ -186,20 +186,19 @@ local compositeId = LibAT.ProfileManager:GetCompositeForAddon(addonId)
 
     components = {
         spartanui = {
-            version = '3.0.0',
+            version = '3.1.0',
             addon = 'SpartanUI',
             addonId = 'spartanui',
-            data = { ... },  -- All SUI namespaces
-            profiles = { ... },
-            activeProfile = 'Default',
+            data = { ... },  -- All SUI namespaces (profileData per namespace)
+            profileData = { ... },  -- Core profile data (flat, no profile name)
         },
 
         bartender4 = {
-            version = '3.0.0',
+            version = '3.1.0',
             addon = 'Bartender4',
             addonId = 'discovered_bartender4',
             data = { ... },
-            profiles = { ... },
+            profileData = { ... },
         },
 
         editmode = {

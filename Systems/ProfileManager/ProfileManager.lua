@@ -842,24 +842,43 @@ local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 			-- SV key is "profiles" (plural), defaults key is "profile" (singular)
 			local profileDefaults = nsDefaults.profile
 			if profileDefaults then
-				local strippedProfiles = {}
-				local hasProfiles = false
-				for profileName, profileData in pairs(value) do
-					if not exportProfileKey or profileName == exportProfileKey then
+				if exportProfileKey then
+					-- Single-profile export: output flat profileData (no profile name key)
+					local profileData = value[exportProfileKey]
+					if profileData then
+						local stripped = StripDefaults(profileData, profileDefaults)
+						if stripped ~= nil then
+							result.profileData = stripped
+							hasContent = true
+						end
+					end
+				else
+					-- No specific profile requested: include all profiles
+					local strippedProfiles = {}
+					local hasProfiles = false
+					for profileName, profileData in pairs(value) do
 						local stripped = StripDefaults(profileData, profileDefaults)
 						if stripped ~= nil then
 							strippedProfiles[profileName] = stripped
 							hasProfiles = true
 						end
 					end
-				end
-				if hasProfiles then
-					result.profiles = strippedProfiles
-					hasContent = true
+					if hasProfiles then
+						result.profiles = strippedProfiles
+						hasContent = true
+					end
 				end
 			else
-				result.profiles = value
-				hasContent = true
+				if exportProfileKey then
+					local profileData = value[exportProfileKey]
+					if profileData then
+						result.profileData = profileData
+						hasContent = true
+					end
+				else
+					result.profiles = value
+					hasContent = true
+				end
 			end
 		elseif key == 'global' and nsDefaults.global then
 			local stripped = StripDefaults(value, nsDefaults.global)
@@ -922,7 +941,7 @@ function ProfileManager:DoExport()
 	-- Metadata is minimal: version, data, and optional profile/namespace markers
 	-- (addon, timestamp, etc. are in the comment header to avoid duplication)
 	local exportData = {
-		version = '3.0.0',
+		version = '3.1.0',
 		addonId = addon.id,
 		gameVersion = select(4, GetBuildInfo()),
 		data = {},
@@ -993,13 +1012,10 @@ function ProfileManager:DoExport()
 				local strippedData = StripDefaults(db.sv.profiles[exportProfileKey], profileDefaults)
 				local pruned = PruneEmptyTables(strippedData)
 				if pruned then
-					exportData.profiles = { [exportProfileKey] = pruned }
+					exportData.profileData = pruned
 				end
 			end
 		end
-
-		-- Record which profile was exported
-		exportData.activeProfile = exportProfileKey
 	end
 
 	-- Encode using base64 pipeline
@@ -1174,7 +1190,6 @@ function ProfileManager:DoImport()
 		end
 	else
 		-- Import all namespaces — merge source profile into target profile
-		local sourceProfileKey = importData.activeProfile
 
 		if importData.data then
 			if not db.sv.namespaces then
@@ -1187,51 +1202,61 @@ function ProfileManager:DoImport()
 					end
 					-- Copy non-profile keys (globals, etc.) directly
 					for key, value in pairs(nsData) do
-						if key ~= 'profiles' then
+						if key ~= 'profiles' and key ~= 'profileData' then
 							db.sv.namespaces[namespace][key] = value
 						end
 					end
-					-- Merge profiles: map source's active profile into target profile
-					if nsData.profiles then
-						if not db.sv.namespaces[namespace].profiles then
-							db.sv.namespaces[namespace].profiles = {}
-						end
-						-- Find source profile data: prefer activeProfile key, fall back to first available
-						local sourceData = sourceProfileKey and nsData.profiles[sourceProfileKey]
+					-- Merge profile data into target profile
+					local sourceData
+					if nsData.profileData then
+						-- v3.1.0+ format: flat profileData (no profile name key)
+						sourceData = nsData.profileData
+					elseif nsData.profiles then
+						-- v3.0.0 backward compat: profiles = { [name] = data }
+						local sourceProfileKey = importData.activeProfile
+						sourceData = sourceProfileKey and nsData.profiles[sourceProfileKey]
 						if not sourceData then
 							local firstKey = next(nsData.profiles)
 							if firstKey then
 								sourceData = nsData.profiles[firstKey]
 							end
 						end
-						if sourceData then
-							db.sv.namespaces[namespace].profiles[targetProfileKey] = sourceData
+					end
+					if sourceData then
+						if not db.sv.namespaces[namespace].profiles then
+							db.sv.namespaces[namespace].profiles = {}
 						end
+						db.sv.namespaces[namespace].profiles[targetProfileKey] = sourceData
 					end
 					importCount = importCount + 1
 				end
 			end
 		end
 
-		-- Import profiles: merge source's active profile into target profile
-		if importData.profiles then
-			if not db.sv.profiles then
-				db.sv.profiles = {}
-			end
-			-- Find source profile data: prefer activeProfile key, fall back to first available
-			local sourceProfileData = sourceProfileKey and importData.profiles[sourceProfileKey]
+		-- Import core profile data
+		local sourceProfileData
+		if importData.profileData then
+			-- v3.1.0+ format: flat profileData (no profile name key)
+			sourceProfileData = importData.profileData
+		elseif importData.profiles then
+			-- v3.0.0 backward compat: profiles = { [name] = data }
+			local sourceProfileKey = importData.activeProfile
+			sourceProfileData = sourceProfileKey and importData.profiles[sourceProfileKey]
 			if not sourceProfileData then
 				local firstKey = next(importData.profiles)
 				if firstKey then
 					sourceProfileData = importData.profiles[firstKey]
 				end
 			end
-			if sourceProfileData then
-				db.sv.profiles[targetProfileKey] = sourceProfileData
-				-- Prevent setup wizard from showing after import
-				if type(sourceProfileData.SetupWizard) == 'table' then
-					sourceProfileData.SetupWizard.FirstLaunch = false
-				end
+		end
+		if sourceProfileData then
+			if not db.sv.profiles then
+				db.sv.profiles = {}
+			end
+			db.sv.profiles[targetProfileKey] = sourceProfileData
+			-- Prevent setup wizard from showing after import
+			if type(sourceProfileData.SetupWizard) == 'table' then
+				sourceProfileData.SetupWizard.FirstLaunch = false
 			end
 		end
 	end

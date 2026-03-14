@@ -338,12 +338,14 @@ local function ExportRegisteredAddon(addonId)
 
 	-- Build export data (minimal metadata to reduce size)
 	local exportData = {
-		version = '3.0.0',
+		version = '3.1.0',
 		data = {},
 	}
 
 	-- Get defaults from AceDB for stripping (Configuration Override Pattern)
 	local profileDefaults = db.defaults and db.defaults.profile
+
+	local currentProfileKey = db.keys and db.keys.profile or 'Default'
 
 	-- Export all namespaces (excluding blacklist)
 	if db.sv.namespaces then
@@ -351,7 +353,7 @@ local function ExportRegisteredAddon(addonId)
 			if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
 				-- Get namespace defaults from AceDB child DB
 				local nsDefaults = ProfileManagerState.GetNamespaceDefaults(db, namespace)
-				local strippedData = ProfileManagerState.StripNamespaceData(nsData, nsDefaults)
+				local strippedData = ProfileManagerState.StripNamespaceData(nsData, nsDefaults, currentProfileKey)
 				-- Pass namespace as path prefix for blacklist checking
 				local pruned = PruneEmptyTables(strippedData, namespace)
 				if pruned then
@@ -364,19 +366,15 @@ local function ExportRegisteredAddon(addonId)
 	-- Export only the ACTIVE profile (not all profiles)
 	-- This prevents bloat from exporting unused character profiles
 	if db.sv.profiles then
-		local currentProfileKey = db.keys and db.keys.profile or 'Default'
 		if db.sv.profiles[currentProfileKey] then
 			-- Strip defaults first, then prune empty tables
 			local strippedData = StripDefaults(db.sv.profiles[currentProfileKey], profileDefaults)
 			local pruned = PruneEmptyTables(strippedData)
 			if pruned then
-				exportData.profiles = { [currentProfileKey] = pruned }
+				exportData.profileData = pruned
 			end
 		end
 	end
-
-	-- Record which profile was active at export time
-	exportData.activeProfile = db.keys and db.keys.profile or 'Default'
 
 	return exportData
 end
@@ -407,20 +405,40 @@ local function ImportRegisteredAddon(addonId, data)
 		if not db.sv.namespaces then
 			db.sv.namespaces = {}
 		end
+		local targetProfileKey = db.keys and db.keys.profile or 'Default'
 
 		for namespace, nsData in pairs(data.data) do
 			if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-				db.sv.namespaces[namespace] = nsData
+				if nsData.profileData then
+					-- v3.1.0+ format: convert flat profileData back to AceDB profiles structure
+					local converted = {}
+					for key, value in pairs(nsData) do
+						if key ~= 'profileData' then
+							converted[key] = value
+						end
+					end
+					converted.profiles = { [targetProfileKey] = nsData.profileData }
+					db.sv.namespaces[namespace] = converted
+				else
+					db.sv.namespaces[namespace] = nsData
+				end
 			end
 		end
 	end
 
-	-- Import profiles if present
-	if data.profiles and type(data.profiles) == 'table' then
+	-- Import core profile data
+	if data.profileData then
+		-- v3.1.0+ format: flat profileData (no profile name key)
 		if not db.sv.profiles then
 			db.sv.profiles = {}
 		end
-
+		local targetProfileKey = db.keys and db.keys.profile or 'Default'
+		db.sv.profiles[targetProfileKey] = data.profileData
+	elseif data.profiles and type(data.profiles) == 'table' then
+		-- v3.0.0 backward compat: profiles = { [name] = data }
+		if not db.sv.profiles then
+			db.sv.profiles = {}
+		end
 		for profileName, profileData in pairs(data.profiles) do
 			db.sv.profiles[profileName] = profileData
 		end
