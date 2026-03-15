@@ -159,13 +159,16 @@ function ErrorDisplay.ErrorHandler:Initialize()
 	-- Use BugGrabber's session ID directly
 	currentSession = BugGrabber:GetSessionId()
 
-	-- Ensure BugGrabber's CallbackHandler is initialized (it's lazy-loaded)
-	if BugGrabber.setupCallbacks then
-		BugGrabber.setupCallbacks()
-	end
-
 	-- Register with BugGrabber to get notified of new errors
-	if BugGrabber.RegisterCallback then
+	-- Modern BugGrabber uses EventRegistry, legacy uses CallbackHandler
+	if EventRegistry and EventRegistry.RegisterCallback then
+		local callbackTable = {}
+		EventRegistry:RegisterCallback('BugGrabber.BugGrabbed', function()
+			self:OnBugGrabbed()
+		end, callbackTable)
+		-- Signal that a display addon is handling errors (suppresses BugGrabber chat output)
+		EventRegistry:TriggerEvent('BugGrabber.DisplayRegistered')
+	elseif BugGrabber.RegisterCallback then
 		BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
 	end
 
@@ -182,12 +185,9 @@ function ErrorDisplay.ErrorHandler:ColorText(text)
 	return text
 end
 
-function ErrorDisplay.ErrorHandler:OnBugGrabbed(callback, errorObject)
+function ErrorDisplay.ErrorHandler:OnBugGrabbed()
 	-- Update current session in case it changed
 	currentSession = BugGrabber:GetSessionId()
-
-	-- Debug: Show that we're capturing a new error
-	LibAT:Debug('New error captured in session #' .. errorObject.session)
 
 	-- Trigger updates (BugGrabber already stored the error)
 	if ErrorDisplay.OnError then
