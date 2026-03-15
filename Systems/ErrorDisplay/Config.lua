@@ -1,5 +1,6 @@
 ---@class LibATErrorDisplay
 local ErrorDisplay = _G.LibATErrorDisplay
+if not ErrorDisplay then return end
 
 ErrorDisplay.Config = {}
 

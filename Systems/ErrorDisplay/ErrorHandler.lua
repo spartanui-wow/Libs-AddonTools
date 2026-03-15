@@ -1,5 +1,6 @@
 ---@class LibATErrorDisplay
 local ErrorDisplay = _G.LibATErrorDisplay
+if not ErrorDisplay then return end
 
 -- Localization
 local L = {
@@ -158,8 +159,15 @@ function ErrorDisplay.ErrorHandler:Initialize()
 	-- Use BugGrabber's session ID directly
 	currentSession = BugGrabber:GetSessionId()
 
+	-- Ensure BugGrabber's CallbackHandler is initialized (it's lazy-loaded)
+	if BugGrabber.setupCallbacks then
+		BugGrabber.setupCallbacks()
+	end
+
 	-- Register with BugGrabber to get notified of new errors
-	BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
+	if BugGrabber.RegisterCallback then
+		BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
+	end
 
 	-- Trigger display update if there are existing errors in current session
 	local currentErrors = self:GetErrors(currentSession)

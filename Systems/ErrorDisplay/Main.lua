@@ -1,3 +1,20 @@
+-- Check for conflicting error display addons before doing anything
+-- Must use IsAddOnLoaded, not GetAddOnInfo - loadable doesn't mean enabled
+local function HasConflictingAddon()
+	local conflictingAddons = { 'BugSack', '!ImprovedErrorFrame', '!Swatter' }
+	for _, name in ipairs(conflictingAddons) do
+		local loaded = C_AddOns.IsAddOnLoaded(name)
+		if loaded then
+			return true
+		end
+	end
+	return false
+end
+
+if HasConflictingAddon() then
+	return
+end
+
 ---@class LibATErrorDisplay
 local ErrorDisplay = {}
 
@@ -108,23 +125,6 @@ function ErrorDisplay:Initialize()
 	if not BugGrabber then
 		print(L['BugGrabber is required for LibAT error handling.'])
 		return
-	end
-
-	-- Check if BugSack or other display addon is present
-	-- local name, _, _, enabled = C_AddOns.GetAddOnInfo('BugSack')
-	-- if name and enabled then
-	-- 	print('LibAT Error Display: BugSack detected, disabling to avoid conflicts.')
-	-- 	return
-	-- end
-
-	-- Check for other common error display addons
-	local conflictingAddons = { '!ImprovedErrorFrame', '!Swatter' }
-	for _, addonName in ipairs(conflictingAddons) do
-		local name, _, _, enabled = C_AddOns.GetAddOnInfo(addonName)
-		if name and enabled then
-			LibAT:Debug('Error Display: ' .. addonName .. ' detected, disabling to avoid conflicts.')
-			return
-		end
 	end
 
 	-- Wait for all components to load
