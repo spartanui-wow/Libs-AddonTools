@@ -829,7 +829,6 @@ end
 ---@return table|nil strippedData The namespace data with defaults removed, or nil if empty
 local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 	if not nsDefaults then
-		-- No defaults available, fall back to unstripped data
 		return nsData
 	end
 
@@ -838,22 +837,21 @@ local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 
 	for key, value in pairs(nsData) do
 		if key == 'profiles' and type(value) == 'table' then
-			-- Strip profile defaults from each profile entry
-			-- SV key is "profiles" (plural), defaults key is "profile" (singular)
 			local profileDefaults = nsDefaults.profile
 			if profileDefaults then
 				if exportProfileKey then
-					-- Single-profile export: output flat profileData (no profile name key)
 					local profileData = value[exportProfileKey]
 					if profileData then
 						local stripped = StripDefaults(profileData, profileDefaults)
 						if stripped ~= nil then
-							result.profileData = stripped
-							hasContent = true
+							-- Merge profile data directly into result (flat, no wrapper)
+							for k, v in pairs(stripped) do
+								result[k] = v
+								hasContent = true
+							end
 						end
 					end
 				else
-					-- No specific profile requested: include all profiles
 					local strippedProfiles = {}
 					local hasProfiles = false
 					for profileName, profileData in pairs(value) do
@@ -872,24 +870,28 @@ local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 				if exportProfileKey then
 					local profileData = value[exportProfileKey]
 					if profileData then
-						result.profileData = profileData
-						hasContent = true
+						for k, v in pairs(profileData) do
+							result[k] = v
+							hasContent = true
+						end
 					end
 				else
 					result.profiles = value
 					hasContent = true
 				end
 			end
-		elseif key == 'global' and nsDefaults.global then
-			local stripped = StripDefaults(value, nsDefaults.global)
-			if stripped ~= nil then
-				result[key] = stripped
+		elseif key == 'global' then
+			local globalData = value
+			if nsDefaults.global then
+				globalData = StripDefaults(value, nsDefaults.global)
+			end
+			if globalData ~= nil then
+				result['$global'] = globalData
 				hasContent = true
 			end
 		elseif key == 'profileKeys' or key == 'char' or key == 'realm' or key == 'factionrealm' or key == 'class' then
 			-- Skip per-character/realm data and AceDB internal bookkeeping
 		else
-			-- Other sections (global, etc.)
 			local sectionDefaults = nsDefaults[key]
 			if sectionDefaults and type(value) == 'table' then
 				local stripped = StripDefaults(value, sectionDefaults)
@@ -944,7 +946,7 @@ function ProfileManager:DoExport()
 		version = '3.1.0',
 		addonId = addon.id,
 		gameVersion = select(4, GetBuildInfo()),
-		data = {},
+		Namespaces = {},
 	}
 
 	-- Determine which profile to export (from dropdown or current)
@@ -952,6 +954,7 @@ function ProfileManager:DoExport()
 
 	-- Get defaults from AceDB for stripping (Configuration Override Pattern)
 	local profileDefaults = db.defaults and db.defaults.profile
+	local globalDefaults = db.defaults and db.defaults.global
 
 	-- Export based on namespace selection
 	local activeNS = ProfileManagerState.window.activeNamespace
@@ -960,9 +963,8 @@ function ProfileManager:DoExport()
 		exportData.namespace = '__COREDB__'
 		if db.sv.profiles then
 			if db.sv.profiles[exportProfileKey] then
-				-- Strip defaults first, then prune empty tables
 				local strippedData = StripDefaults(db.sv.profiles[exportProfileKey], profileDefaults)
-				exportData.data = PruneEmptyTables(strippedData) or {}
+				exportData.BaseDB = PruneEmptyTables(strippedData) or {}
 			else
 				LibAT:Print('|cffff0000Error:|r Profile "' .. exportProfileKey .. '" not found in database')
 				return
@@ -974,13 +976,11 @@ function ProfileManager:DoExport()
 	elseif activeNS then
 		-- Export single namespace
 		if db.sv.namespaces and db.sv.namespaces[activeNS] then
-			-- Get namespace defaults from AceDB child DB
 			local nsDefaults = GetNamespaceDefaults(db, activeNS)
 			local strippedData = StripNamespaceData(db.sv.namespaces[activeNS], nsDefaults)
-			-- Pass namespace as path prefix for blacklist checking
 			local pruned = PruneEmptyTables(strippedData, activeNS)
 			if pruned then
-				exportData.data[activeNS] = pruned
+				exportData.Namespaces[activeNS] = pruned
 			end
 			exportData.namespace = activeNS
 		else
@@ -992,28 +992,33 @@ function ProfileManager:DoExport()
 		if db.sv.namespaces then
 			for namespace, nsData in pairs(db.sv.namespaces) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					-- Get namespace defaults from AceDB child DB
 					local nsDefaults = GetNamespaceDefaults(db, namespace)
 					local strippedData = StripNamespaceData(nsData, nsDefaults, exportProfileKey)
-					-- Pass namespace as path prefix for blacklist checking
 					local pruned = PruneEmptyTables(strippedData, namespace)
 					if pruned then
-						exportData.data[namespace] = pruned
+						exportData.Namespaces[namespace] = pruned
 					end
 				end
 			end
 		end
 
-		-- Export only the SELECTED profile (from dropdown)
-		-- This prevents bloat from exporting unused character profiles
+		-- Export core profile (BaseDB)
 		if db.sv.profiles then
 			if db.sv.profiles[exportProfileKey] then
-				-- Strip defaults first, then prune empty tables
 				local strippedData = StripDefaults(db.sv.profiles[exportProfileKey], profileDefaults)
 				local pruned = PruneEmptyTables(strippedData)
 				if pruned then
-					exportData.profileData = pruned
+					exportData.BaseDB = pruned
 				end
+			end
+		end
+
+		-- Export core global (GlobalDB)
+		if db.sv.global then
+			local strippedGlobal = globalDefaults and StripDefaults(db.sv.global, globalDefaults) or db.sv.global
+			local pruned = PruneEmptyTables(strippedGlobal)
+			if pruned then
+				exportData.GlobalDB = pruned
 			end
 		end
 	end
@@ -1158,11 +1163,11 @@ function ProfileManager:DoImport()
 
 	if activeNS == '__COREDB__' then
 		-- Import Core DB to the target profile
-		if importData.namespace == '__COREDB__' and importData.data then
+		if importData.namespace == '__COREDB__' and importData.BaseDB then
 			if not db.sv.profiles then
 				db.sv.profiles = {}
 			end
-			db.sv.profiles[targetProfileKey] = importData.data
+			db.sv.profiles[targetProfileKey] = importData.BaseDB
 			importCount = 1
 		else
 			LibAT:Print('|cffff0000Error:|r Import data is not a Core DB export')
@@ -1171,93 +1176,79 @@ function ProfileManager:DoImport()
 	elseif activeNS then
 		-- Import single namespace
 		local nsData
-		if importData.data and importData.data[activeNS] then
-			nsData = importData.data[activeNS]
-		elseif importData.namespace == activeNS and importData.data then
-			-- Data might be directly in importData.data if it was a single namespace export
-			nsData = importData.data[activeNS] or importData.data
+		if importData.Namespaces and importData.Namespaces[activeNS] then
+			nsData = importData.Namespaces[activeNS]
+		elseif importData.namespace == activeNS and importData.Namespaces then
+			nsData = importData.Namespaces[activeNS] or importData.Namespaces
 		end
 
 		if nsData then
 			if not db.sv.namespaces then
 				db.sv.namespaces = {}
 			end
-			db.sv.namespaces[activeNS] = nsData
+			-- Reconstruct AceDB namespace structure from flat export
+			local reconstructed = {}
+			local profileData = {}
+			for key, value in pairs(nsData) do
+				if key == '$global' then
+					reconstructed.global = value
+				else
+					profileData[key] = value
+				end
+			end
+			reconstructed.profiles = { [targetProfileKey] = profileData }
+			db.sv.namespaces[activeNS] = reconstructed
 			importCount = 1
 		else
 			LibAT:Print('|cffff0000Error:|r Import data does not contain namespace "' .. activeNS .. '"')
 			return
 		end
 	else
-		-- Import all namespaces — merge source profile into target profile
+		-- Import all namespaces
 
-		if importData.data then
+		if importData.Namespaces then
 			if not db.sv.namespaces then
 				db.sv.namespaces = {}
 			end
-			for namespace, nsData in pairs(importData.data) do
+			for namespace, nsData in pairs(importData.Namespaces) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
 					if not db.sv.namespaces[namespace] then
 						db.sv.namespaces[namespace] = {}
 					end
-					-- Copy non-profile keys (globals, etc.) directly
+					-- Extract $global and profile data from flat namespace
+					local profileData = {}
 					for key, value in pairs(nsData) do
-						if key ~= 'profiles' and key ~= 'profileData' then
-							db.sv.namespaces[namespace][key] = value
+						if key == '$global' then
+							db.sv.namespaces[namespace].global = value
+						elseif key ~= 'profiles' then
+							profileData[key] = value
 						end
 					end
-					-- Merge profile data into target profile
-					local sourceData
-					if nsData.profileData then
-						-- v3.1.0+ format: flat profileData (no profile name key)
-						sourceData = nsData.profileData
-					elseif nsData.profiles then
-						-- v3.0.0 backward compat: profiles = { [name] = data }
-						local sourceProfileKey = importData.activeProfile
-						sourceData = sourceProfileKey and nsData.profiles[sourceProfileKey]
-						if not sourceData then
-							local firstKey = next(nsData.profiles)
-							if firstKey then
-								sourceData = nsData.profiles[firstKey]
-							end
-						end
-					end
-					if sourceData then
+					if next(profileData) then
 						if not db.sv.namespaces[namespace].profiles then
 							db.sv.namespaces[namespace].profiles = {}
 						end
-						db.sv.namespaces[namespace].profiles[targetProfileKey] = sourceData
+						db.sv.namespaces[namespace].profiles[targetProfileKey] = profileData
 					end
 					importCount = importCount + 1
 				end
 			end
 		end
 
-		-- Import core profile data
-		local sourceProfileData
-		if importData.profileData then
-			-- v3.1.0+ format: flat profileData (no profile name key)
-			sourceProfileData = importData.profileData
-		elseif importData.profiles then
-			-- v3.0.0 backward compat: profiles = { [name] = data }
-			local sourceProfileKey = importData.activeProfile
-			sourceProfileData = sourceProfileKey and importData.profiles[sourceProfileKey]
-			if not sourceProfileData then
-				local firstKey = next(importData.profiles)
-				if firstKey then
-					sourceProfileData = importData.profiles[firstKey]
-				end
-			end
-		end
-		if sourceProfileData then
+		-- Import core profile data (BaseDB)
+		if importData.BaseDB then
 			if not db.sv.profiles then
 				db.sv.profiles = {}
 			end
-			db.sv.profiles[targetProfileKey] = sourceProfileData
-			-- Prevent setup wizard from showing after import
-			if type(sourceProfileData.SetupWizard) == 'table' then
-				sourceProfileData.SetupWizard.FirstLaunch = false
+			db.sv.profiles[targetProfileKey] = importData.BaseDB
+			if type(importData.BaseDB.SetupWizard) == 'table' then
+				importData.BaseDB.SetupWizard.FirstLaunch = false
 			end
+		end
+
+		-- Import core global data (GlobalDB)
+		if importData.GlobalDB then
+			db.sv.global = importData.GlobalDB
 		end
 	end
 
