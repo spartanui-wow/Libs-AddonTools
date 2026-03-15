@@ -886,10 +886,10 @@ local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 				result[key] = stripped
 				hasContent = true
 			end
-		elseif key == 'profileKeys' then
-			-- Skip profileKeys - AceDB internal bookkeeping
+		elseif key == 'profileKeys' or key == 'char' or key == 'realm' or key == 'factionrealm' or key == 'class' then
+			-- Skip per-character/realm data and AceDB internal bookkeeping
 		else
-			-- Other sections (char, realm, etc.)
+			-- Other sections (global, etc.)
 			local sectionDefaults = nsDefaults[key]
 			if sectionDefaults and type(value) == 'table' then
 				local stripped = StripDefaults(value, sectionDefaults)
