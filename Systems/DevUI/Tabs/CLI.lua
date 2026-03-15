@@ -30,7 +30,7 @@ function LibAT.DevUI.InitCLI(devUIModule, state)
 	DevUIState = state
 
 	-- Register this tab with DevUI
-	DevUIState.TabModules[2] = {
+	DevUIState.TabModules[DevUIState.GetTabIndex('CLI')] = {
 		BuildContent = BuildContent,
 		OnActivate = function()
 			RebuildScriptList()

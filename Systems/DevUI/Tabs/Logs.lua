@@ -49,7 +49,7 @@ function LibAT.DevUI.InitLogs(devUIModule, state)
 	DevUIState = state
 
 	-- Register this tab with DevUI
-	DevUIState.TabModules[1] = {
+	DevUIState.TabModules[DevUIState.GetTabIndex('Logs')] = {
 		BuildContent = BuildContent,
 		OnActivate = function()
 			-- Refresh LoggerState reference

@@ -73,8 +73,7 @@ function LibAT.DevUI.InitAddonManager(devUIModule, state)
 	-- Get AddonManager module reference
 	AddonManager = LibAT:GetModule('Handler.AddonManager')
 
-	-- Register this tab with DevUI (tab index 5)
-	DevUIState.TabModules[5] = {
+	DevUIState.TabModules[DevUIState.GetTabIndex('Addons')] = {
 		BuildContent = BuildContent,
 		OnActivate = function()
 			-- Refresh all panels when tab becomes visible

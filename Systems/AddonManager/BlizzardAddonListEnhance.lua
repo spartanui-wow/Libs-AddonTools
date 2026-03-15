@@ -873,8 +873,8 @@ local function CreateSidecarPanel()
 	openBtn:SetPoint('BOTTOM', sidecarPanel, 'BOTTOM', 0, 12)
 	openBtn:SetScript('OnClick', function()
 		local DevUI = LibAT:GetModule('Handler.DevUI', true)
-		if DevUI and DevUI.ShowTab then
-			DevUI.ShowTab(5)
+		if DevUI and DevUI.ShowTab and DevUI.GetTabIndex then
+			DevUI.ShowTab(DevUI.GetTabIndex('Addons'))
 		end
 	end)
 

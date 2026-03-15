@@ -38,7 +38,7 @@ function LibAT.DevUI.InitErrors(devUIModule, state)
 	DevUIState = state
 
 	-- Register this tab with DevUI
-	DevUIState.TabModules[3] = {
+	DevUIState.TabModules[DevUIState.GetTabIndex('Errors')] = {
 		BuildContent = BuildContent,
 		OnActivate = function()
 			RebuildErrorList()

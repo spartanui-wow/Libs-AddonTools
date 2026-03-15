@@ -14,17 +14,40 @@ local DevUIState = {
 	ActiveTab = 1, ---@type number
 	TabModules = {}, ---@type table[]
 	MonoFont = nil, ---@type Font|nil
+	TabConfig = nil, ---@type table Reference to TAB_CONFIG for index lookups
 }
+
+---Look up a tab's index by its key name
+---@param key string The tab key (e.g. 'Logs', 'Errors', 'Macros')
+---@return number|nil index The tab index, or nil if not found
+local function GetTabIndex(key)
+	if not DevUIState.TabConfig then
+		return nil
+	end
+	for i, config in ipairs(DevUIState.TabConfig) do
+		if config.key == key then
+			return i
+		end
+	end
+	return nil
+end
 
 -- Tab definitions
 local TAB_CONFIG = {
 	{ key = 'Logs', tooltipText = 'Logs', icon = 'Interface\\AddOns\\libsaddontools\\Images\\logs.png' },
 	{ key = 'CLI', tooltipText = 'CLI', icon = 'Interface\\AddOns\\libsaddontools\\Images\\cli.png' },
-	{ key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\libsaddontools\\Images\\errors.png' },
 	{ key = 'Macros', tooltipText = 'Macros', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Macros.png' },
 	{ key = 'Addons', tooltipText = 'Addon Manager', icon = 'Interface\\AddOns\\libsaddontools\\Images\\Addons.png' },
 	{ key = 'Performance', tooltipText = 'Performance', icon = 'Interface\\AddOns\\libsaddontools\\Images\\performance.png' },
 }
+
+-- Insert Errors tab only when ErrorDisplay is active (not disabled by BugSack etc.)
+if _G.LibATErrorDisplay then
+	table.insert(TAB_CONFIG, 3, { key = 'Errors', tooltipText = 'Errors', icon = 'Interface\\AddOns\\libsaddontools\\Images\\errors.png' })
+end
+
+DevUIState.TabConfig = TAB_CONFIG
+DevUIState.GetTabIndex = GetTabIndex
 
 ----------------------------------------------------------------------------------------------------
 -- Side Tab Creation (Blizzard LargeSideTabButtonTemplate pattern)
@@ -214,6 +237,8 @@ end
 
 ---Show the DevUI window on a specific tab
 ---@param tabIndex number The tab to show (1-4)
+DevUI.GetTabIndex = GetTabIndex
+
 function DevUI.ShowTab(tabIndex)
 	CreateDevUIWindow()
 
@@ -258,7 +283,9 @@ function DevUI:OnInitialize()
 	LibAT.DevUI = LibAT.DevUI or {}
 	LibAT.DevUI.InitLogs(DevUI, DevUIState)
 	LibAT.DevUI.InitCLI(DevUI, DevUIState)
-	LibAT.DevUI.InitErrors(DevUI, DevUIState)
+	if _G.LibATErrorDisplay then
+		LibAT.DevUI.InitErrors(DevUI, DevUIState)
+	end
 	LibAT.DevUI.InitMacros(DevUI, DevUIState)
 	LibAT.DevUI.InitAddonManager(DevUI, DevUIState)
 	LibAT.DevUI.InitPerformance(DevUI, DevUIState)
@@ -268,33 +295,35 @@ function DevUI:OnEnable()
 	-- Register slash commands
 	SLASH_LIBATDEVLOG1 = '/log'
 	SlashCmdList['LIBATDEVLOG'] = function()
-		DevUI.ShowTab(1)
+		DevUI.ShowTab(GetTabIndex('Logs'))
 	end
 
 	SLASH_LIBATDEVLUA1 = '/lua'
 	SLASH_LIBATDEVLUA2 = '/cli'
 	SlashCmdList['LIBATDEVLUA'] = function()
-		DevUI.ShowTab(2)
+		DevUI.ShowTab(GetTabIndex('CLI'))
 	end
 
-	SLASH_LIBATDEVERROR1 = '/error'
-	SlashCmdList['LIBATDEVERROR'] = function()
-		DevUI.ShowTab(3)
+	if GetTabIndex('Errors') then
+		SLASH_LIBATDEVERROR1 = '/error'
+		SlashCmdList['LIBATDEVERROR'] = function()
+			DevUI.ShowTab(GetTabIndex('Errors'))
+		end
 	end
 
 	SLASH_LIBATDEVMACROS1 = '/macros'
 	SlashCmdList['LIBATDEVMACROS'] = function()
-		DevUI.ShowTab(4)
+		DevUI.ShowTab(GetTabIndex('Macros'))
 	end
 
 	SLASH_LIBATDEVADDONS1 = '/addons'
 	SlashCmdList['LIBATDEVADDONS'] = function()
-		DevUI.ShowTab(5)
+		DevUI.ShowTab(GetTabIndex('Addons'))
 	end
 
 	SLASH_LIBATDEVPERF1 = '/perf'
 	SLASH_LIBATDEVPERF2 = '/performance'
 	SlashCmdList['LIBATDEVPERF'] = function()
-		DevUI.ShowTab(6)
+		DevUI.ShowTab(GetTabIndex('Performance'))
 	end
 end

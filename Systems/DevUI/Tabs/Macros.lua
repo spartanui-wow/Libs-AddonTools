@@ -41,7 +41,7 @@ function LibAT.DevUI.InitMacros(devUIModule, state)
 	DevUIState = state
 
 	-- Register this tab with DevUI
-	DevUIState.TabModules[4] = {
+	DevUIState.TabModules[DevUIState.GetTabIndex('Macros')] = {
 		BuildContent = BuildContent,
 		OnActivate = function()
 			RebuildMacroList()

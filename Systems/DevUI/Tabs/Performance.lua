@@ -45,8 +45,7 @@ function LibAT.DevUI.InitPerformance(devUIModule, state)
 	-- Get Performance module reference
 	Performance = LibAT:GetModule('Handler.Performance')
 
-	-- Register this tab with DevUI (tab index 6)
-	DevUIState.TabModules[6] = {
+	DevUIState.TabModules[DevUIState.GetTabIndex('Performance')] = {
 		BuildContent = BuildContent,
 		OnActivate = function()
 			-- START tracking when tab becomes visible
