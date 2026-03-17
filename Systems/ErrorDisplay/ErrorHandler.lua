@@ -159,8 +159,7 @@ function ErrorDisplay.ErrorHandler:Initialize()
 	-- Use BugGrabber's session ID directly
 	currentSession = BugGrabber:GetSessionId()
 
-	-- Register with BugGrabber to get notified of new errors
-	-- Modern BugGrabber uses EventRegistry, legacy uses CallbackHandler
+	-- Register with BugGrabber to get notified of new errors via EventRegistry
 	if EventRegistry and EventRegistry.RegisterCallback then
 		local callbackTable = {}
 		EventRegistry:RegisterCallback('BugGrabber.BugGrabbed', function()
@@ -168,8 +167,6 @@ function ErrorDisplay.ErrorHandler:Initialize()
 		end, callbackTable)
 		-- Signal that a display addon is handling errors (suppresses BugGrabber chat output)
 		EventRegistry:TriggerEvent('BugGrabber.DisplayRegistered')
-	elseif BugGrabber.RegisterCallback then
-		BugGrabber.RegisterCallback(self, 'BugGrabber_BugGrabbed', 'OnBugGrabbed')
 	end
 
 	-- Trigger display update if there are existing errors in current session
