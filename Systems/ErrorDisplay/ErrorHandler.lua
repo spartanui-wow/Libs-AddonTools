@@ -1,6 +1,8 @@
 ---@class LibATErrorDisplay
 local ErrorDisplay = _G.LibATErrorDisplay
-if not ErrorDisplay then return end
+if not ErrorDisplay then
+	return
+end
 
 -- Localization
 local L = {

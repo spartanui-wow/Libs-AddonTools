@@ -106,10 +106,12 @@ function ProfileManager.DiscoverViaRegistry()
 				-- Check if any registered addon is using this same SavedVariables global
 				-- (prevents duplicates when manual adapter and registry both find same addon)
 				if not shouldSkip then
-					local svName = ProfileManager.FindGlobal(db.sv)
+					local svName = ProfileManager.FindGlobal(db.sv, addonName)
 					if svName then
 						for _, registeredAddon in pairs(registeredAddons) do
-							local registeredSvName = ProfileManager.FindGlobal(registeredAddon.db.sv)
+							local registeredMeta = registeredAddon.metadata
+							local registeredAddonName = registeredMeta and registeredMeta.originalAddonName
+							local registeredSvName = ProfileManager.FindGlobal(registeredAddon.db.sv, registeredAddonName)
 							if registeredSvName == svName then
 								-- Same SavedVariables global already registered, skip
 								shouldSkip = true
@@ -128,7 +130,7 @@ function ProfileManager.DiscoverViaRegistry()
 					-- Append SavedVariables suffix if duplicate name detected
 					if duplicateNames[displayName] then
 						-- Find the global SavedVariables name
-						local svName = ProfileManager.FindGlobal(db.sv)
+						local svName = ProfileManager.FindGlobal(db.sv, addonName)
 						if svName then
 							displayName = displayName .. ' (' .. svName .. ')'
 						end
@@ -245,34 +247,66 @@ function ProfileManager.GetDiscoveryAdapters()
 end
 
 ----------------------------------------------------------------------------------------------------
--- Helper: Find Global Variable Name
+-- Helper: Find SavedVariables Global Name
 ----------------------------------------------------------------------------------------------------
 
--- Reverse lookup cache: table reference -> global variable name
--- Built once on first call to avoid repeated _G scans that cause "script ran too long"
-local globalNameCache
-local function BuildGlobalNameCache()
-	globalNameCache = {}
-	for k, v in pairs(_G) do
-		if type(k) == 'string' and type(v) == 'table' then
-			globalNameCache[v] = k
-		end
-	end
-end
+-- Cache: table reference -> SavedVariables global name
+local svNameCache = {}
 
----Find the global variable name for a given value
----@param value any The value to find in global namespace
----@return string|nil globalName The name of the global variable, or nil if not found
-function ProfileManager.FindGlobal(value)
-	if not value then
+---Find the SavedVariables global name for an AceDB sv table by checking the addon's TOC metadata.
+---Falls back to checking all loaded addons if addonName is not provided.
+---@param svTable table The db.sv table reference to find
+---@param addonName? string The addon name (from issecurevariable) to narrow the search
+---@return string|nil globalName The SavedVariables global name, or nil if not found
+function ProfileManager.FindGlobal(svTable, addonName)
+	if not svTable then
 		return nil
 	end
 
-	if not globalNameCache then
-		BuildGlobalNameCache()
+	if svNameCache[svTable] then
+		return svNameCache[svTable]
 	end
 
-	return globalNameCache[value]
+	-- Try the specific addon's SavedVariables from the TOC first
+	if addonName then
+		local svList = C_AddOns.GetAddOnMetadata(addonName, 'SavedVariables')
+		if svList then
+			for svName in svList:gmatch('[^,%s]+') do
+				if _G[svName] == svTable then
+					svNameCache[svTable] = svName
+					return svName
+				end
+			end
+		end
+		local svPerChar = C_AddOns.GetAddOnMetadata(addonName, 'SavedVariablesPerCharacter')
+		if svPerChar then
+			for svName in svPerChar:gmatch('[^,%s]+') do
+				if _G[svName] == svTable then
+					svNameCache[svTable] = svName
+					return svName
+				end
+			end
+		end
+	end
+
+	-- Fallback: check all loaded addons (still much cheaper than scanning _G)
+	local numAddons = C_AddOns.GetNumAddOns()
+	for i = 1, numAddons do
+		local name = C_AddOns.GetAddOnInfo(i)
+		if name and C_AddOns.IsAddOnLoaded(i) then
+			local svList = C_AddOns.GetAddOnMetadata(name, 'SavedVariables')
+			if svList then
+				for svName in svList:gmatch('[^,%s]+') do
+					if _G[svName] == svTable then
+						svNameCache[svTable] = svName
+						return svName
+					end
+				end
+			end
+		end
+	end
+
+	return nil
 end
 
 ----------------------------------------------------------------------------------------------------
