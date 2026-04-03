@@ -248,8 +248,17 @@ end
 -- Helper: Find Global Variable Name
 ----------------------------------------------------------------------------------------------------
 
--- Cache for FindGlobal results to avoid repeated lookups
-local globalNameCache = {}
+-- Reverse lookup cache: table reference -> global variable name
+-- Built once on first call to avoid repeated _G scans that cause "script ran too long"
+local globalNameCache
+local function BuildGlobalNameCache()
+	globalNameCache = {}
+	for k, v in pairs(_G) do
+		if type(k) == 'string' and type(v) == 'table' then
+			globalNameCache[v] = k
+		end
+	end
+end
 
 ---Find the global variable name for a given value
 ---@param value any The value to find in global namespace
@@ -259,20 +268,11 @@ function ProfileManager.FindGlobal(value)
 		return nil
 	end
 
-	-- Check cache first
-	if globalNameCache[value] then
-		return globalNameCache[value]
+	if not globalNameCache then
+		BuildGlobalNameCache()
 	end
 
-	-- Scan global namespace
-	for k, v in pairs(_G) do
-		if value == v and type(k) == 'string' then
-			globalNameCache[value] = k
-			return k
-		end
-	end
-
-	return nil
+	return globalNameCache[value]
 end
 
 ----------------------------------------------------------------------------------------------------
