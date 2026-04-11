@@ -69,6 +69,7 @@ Systems\ProfileManager\ProfileManager.lua
 Systems\ProfileManager\BuiltInSystems.lua
 Systems\ProfileManager\Composite.lua
 Systems\ProfileManager\AddonDiscovery.lua
+Systems\ProfileManager\DesktopImport.lua
 
 # Setup Wizard System
 Systems\SetupWizard\SetupWizard.lua

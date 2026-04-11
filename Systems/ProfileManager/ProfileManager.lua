@@ -1313,6 +1313,17 @@ function ProfileManager:OnInitialize()
 			ProfileManager:ExportUI()
 		elseif msg == 'import' then
 			ProfileManager:ImportUI()
+		elseif msg == 'desktop' or msg == 'import-desktop' then
+			if ProfileManager.CheckDesktopImports then
+				local count = ProfileManager.CheckDesktopImports()
+				if count == 0 then
+					LibAT:Print('No pending desktop imports.')
+				else
+					ProfileManager:ShowDesktopImportReview()
+				end
+			else
+				LibAT:Print('Desktop import system not available.')
+			end
 		elseif msg == 'discover' or msg == 'refresh' then
 			local count = ProfileManager.DiscoverAddons()
 			LibAT:Print('Auto-discovery found ' .. count .. ' new addon(s)')
@@ -1334,6 +1345,12 @@ function ProfileManager:OnInitialize()
 					ProfileManagerState.logger.info('Auto-discovered ' .. count .. ' addon(s)')
 				end
 			end
+			-- Check for desktop-staged imports after discovery completes
+			C_Timer.After(1, function()
+				if ProfileManager.CheckDesktopImports then
+					ProfileManager.CheckDesktopImports()
+				end
+			end)
 		end)
 	end)
 
