@@ -69,9 +69,10 @@ end
 ---Apply decoded import data to a registered addon's AceDB
 ---@param addonId string The registered addon ID
 ---@param importData table The decoded import data table
+---@param targetProfileKeyOverride? string Optional target profile key (nil = current profile)
 ---@return boolean success
 ---@return string|nil error
-local function ApplyImportData(addonId, importData)
+local function ApplyImportData(addonId, importData, targetProfileKeyOverride)
 	local addon = ProfileManagerState.registeredAddons[addonId]
 	if not addon then
 		return false, 'Addon "' .. addonId .. '" is not registered'
@@ -82,7 +83,15 @@ local function ApplyImportData(addonId, importData)
 		return false, 'Invalid AceDB object for ' .. addon.displayName
 	end
 
-	local targetProfileKey = db.keys and db.keys.profile or 'Default'
+	local targetProfileKey
+	if targetProfileKeyOverride and targetProfileKeyOverride ~= '' then
+		targetProfileKey = targetProfileKeyOverride
+		if not db.sv.profiles then
+			db.sv.profiles = {}
+		end
+	else
+		targetProfileKey = db.keys and db.keys.profile or 'Default'
+	end
 	local importCount = 0
 
 	-- Import namespaces
@@ -203,7 +212,7 @@ local function RefreshReviewContent()
 	scrollFrame:SetScrollChild(contentFrame)
 
 	local yOffset = 0
-	local ROW_HEIGHT = 60
+	local ROW_HEIGHT = 88
 
 	for addonName, entry in pairs(pendingImports) do
 		-- Row container
@@ -230,25 +239,103 @@ local function RefreshReviewContent()
 		titleText:SetText(entry.title)
 
 		-- Date
+		local lastAnchor = titleText
 		if entry.imported_at and entry.imported_at ~= '' then
 			local dateText = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
 			dateText:SetPoint('TOPLEFT', titleText, 'BOTTOMLEFT', 0, -2)
 			dateText:SetText('Staged: ' .. entry.imported_at:sub(1, 10))
+			lastAnchor = dateText
+		end
+
+		-- Profile destination dropdown (only when addon is registered)
+		if addonId then
+			local addon = ProfileManagerState.registeredAddons[addonId]
+			local db = addon.db
+			local currentProfileKey = (db and db.keys and db.keys.profile) or 'Default'
+
+			local destLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
+			destLabel:SetPoint('TOPLEFT', lastAnchor, 'BOTTOMLEFT', 0, -4)
+			destLabel:SetText('To:')
+
+			local destDropdown = LibAT.UI.CreateDropdown(row, 'Current (' .. currentProfileKey .. ')', 160, 20)
+			destDropdown:SetPoint('LEFT', destLabel, 'RIGHT', 4, 0)
+
+			-- New profile name input (hidden by default)
+			local newProfileInput = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
+			newProfileInput:SetSize(100, 18)
+			newProfileInput:SetPoint('LEFT', destDropdown, 'RIGHT', 4, 0)
+			newProfileInput:SetAutoFocus(false)
+			newProfileInput:SetFontObject('GameFontHighlightSmall')
+			newProfileInput:SetScript('OnEscapePressed', newProfileInput.ClearFocus)
+			newProfileInput:SetScript('OnTextChanged', function(self)
+				entry.selectedNewName = self:GetText()
+			end)
+			newProfileInput:Hide()
+
+			if destDropdown.SetupMenu then
+				destDropdown:SetupMenu(function(owner, rootDescription)
+					-- Current profile option
+					rootDescription:CreateButton('Current (' .. currentProfileKey .. ')', function()
+						entry.selectedDest = nil
+						entry.selectedNewName = nil
+						destDropdown:SetText('Current (' .. currentProfileKey .. ')')
+						newProfileInput:Hide()
+					end)
+
+					-- Existing profiles
+					if db and db.sv and db.sv.profiles then
+						local sorted = {}
+						for name in pairs(db.sv.profiles) do
+							if name ~= currentProfileKey then
+								table.insert(sorted, name)
+							end
+						end
+						table.sort(sorted)
+						for _, name in ipairs(sorted) do
+							rootDescription:CreateButton(name, function()
+								entry.selectedDest = name
+								entry.selectedNewName = nil
+								destDropdown:SetText(name)
+								newProfileInput:Hide()
+							end)
+						end
+					end
+
+					-- Create New option
+					rootDescription:CreateButton('|cff00ff00Create New...|r', function()
+						entry.selectedDest = '__NEW__'
+						destDropdown:SetText('New Profile:')
+						newProfileInput:Show()
+						newProfileInput:SetFocus()
+					end)
+				end)
+			end
 		end
 
 		-- Apply button
 		if addonId then
 			local applyBtn = LibAT.UI.CreateButton(row, 70, 22, 'Apply')
-			applyBtn:SetPoint('RIGHT', row, 'RIGHT', -80, 0)
+			applyBtn:SetPoint('TOPRIGHT', row, 'TOPRIGHT', -80, -6)
 			applyBtn:SetScript('OnClick', function()
-				ProfileManager:ApplyDesktopImport(addonName)
+				local targetKey
+				if entry.selectedDest == '__NEW__' then
+					local newName = (entry.selectedNewName or ''):match('^%s*(.-)%s*$') or ''
+					if newName == '' then
+						LibAT:Print('|cffff0000Error:|r Please enter a name for the new profile.')
+						return
+					end
+					targetKey = newName
+				elseif entry.selectedDest then
+					targetKey = entry.selectedDest
+				end
+				ProfileManager:ApplyDesktopImport(addonName, targetKey)
 				RefreshReviewContent()
 			end)
 		end
 
 		-- Dismiss button
 		local dismissBtn = LibAT.UI.CreateButton(row, 70, 22, 'Dismiss')
-		dismissBtn:SetPoint('RIGHT', row, 'RIGHT', -5, 0)
+		dismissBtn:SetPoint('TOPRIGHT', row, 'TOPRIGHT', -5, -6)
 		dismissBtn:SetScript('OnClick', function()
 			pendingImports[addonName] = nil
 			if LibAT_ProfileHub_PendingImports then
@@ -279,8 +366,18 @@ local function RefreshReviewContent()
 				for addonName in pairs(pendingImports) do
 					table.insert(names, addonName)
 				end
-				for _, addonName in ipairs(names) do
-					ProfileManager:ApplyDesktopImport(addonName)
+				for _, name in ipairs(names) do
+					local entry = pendingImports[name]
+					local targetKey
+					if entry and entry.selectedDest == '__NEW__' then
+						local newName = (entry.selectedNewName or ''):match('^%s*(.-)%s*$') or ''
+						if newName ~= '' then
+							targetKey = newName
+						end
+					elseif entry and entry.selectedDest then
+						targetKey = entry.selectedDest
+					end
+					ProfileManager:ApplyDesktopImport(name, targetKey)
 				end
 				RefreshReviewContent()
 			end)
@@ -362,8 +459,9 @@ end
 
 ---Apply a single pending import
 ---@param addonName string The addon name key from pending imports
+---@param targetProfileKey? string Optional target profile key (nil = current profile)
 ---@return boolean success
-function ProfileManager:ApplyDesktopImport(addonName)
+function ProfileManager:ApplyDesktopImport(addonName, targetProfileKey)
 	local entry = pendingImports[addonName]
 	if not entry then
 		LibAT:Print('|cffff0000Error:|r No pending import for ' .. addonName)
@@ -377,8 +475,15 @@ function ProfileManager:ApplyDesktopImport(addonName)
 		return false
 	end
 
+	-- Strip comment headers (export strings from the database include metadata headers)
+	local cleanEncoded = ProfileManager.StripExportHeaders(entry.encoded)
+	if not cleanEncoded or cleanEncoded == '' then
+		LibAT:Print('|cffff0000Import failed:|r No data after stripping headers')
+		return false
+	end
+
 	-- Decode the data
-	local importData, decodeErr = ProfileManager.DecodeData(entry.encoded)
+	local importData, decodeErr = ProfileManager.DecodeData(cleanEncoded)
 	if not importData then
 		LibAT:Print('|cffff0000Import failed:|r ' .. tostring(decodeErr))
 		return false
@@ -386,7 +491,7 @@ function ProfileManager:ApplyDesktopImport(addonName)
 
 	-- Handle composite format
 	if importData.format == 'ProfileManager_Composite' then
-		self:ShowCompositeImport(entry.encoded)
+		self:ShowCompositeImport(cleanEncoded)
 		-- Clear from pending after routing to composite UI
 		pendingImports[addonName] = nil
 		if LibAT_ProfileHub_PendingImports then
@@ -396,7 +501,7 @@ function ProfileManager:ApplyDesktopImport(addonName)
 	end
 
 	-- Apply standard import
-	local success, applyErr = ApplyImportData(addonId, importData)
+	local success, applyErr = ApplyImportData(addonId, importData, targetProfileKey)
 	if not success then
 		LibAT:Print('|cffff0000Import failed:|r ' .. tostring(applyErr))
 		return false
@@ -410,7 +515,8 @@ function ProfileManager:ApplyDesktopImport(addonName)
 
 	local addon = ProfileManagerState.registeredAddons[addonId]
 	local displayName = addon and addon.displayName or addonName
-	LibAT:Print('|cff00ff00Profile imported successfully|r for ' .. displayName .. '! |cffff9900Please /reload to apply changes.|r')
+	local profileDisplay = targetProfileKey or (addon.db and addon.db.keys and addon.db.keys.profile) or 'Default'
+	LibAT:Print('|cff00ff00Profile imported successfully|r for ' .. displayName .. ' (profile: ' .. profileDisplay .. ')! |cffff9900Please /reload to apply changes.|r')
 
 	return true
 end

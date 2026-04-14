@@ -106,3 +106,11 @@ function ProfileManager.DecodeData(encodedString)
 
 	return data
 end
+
+---Strip comment header lines (-- ...) from an export string
+---@param input string Raw export string (may include comment headers)
+---@return string cleaned The input with comment lines and surrounding whitespace removed
+function ProfileManager.StripExportHeaders(input)
+	local stripped = input:gsub('%-%-[^\n]*\n', '')
+	return stripped:match('^%s*(.-)%s*$') or ''
+end

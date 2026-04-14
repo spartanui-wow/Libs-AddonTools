@@ -1078,8 +1078,7 @@ function ProfileManager:DoImport()
 	end
 
 	-- Strip comment header lines
-	local dataText = importText:gsub('%-%-[^\n]*\n', '')
-	dataText = dataText:match('^%s*(.-)%s*$') -- trim whitespace
+	local dataText = ProfileManager.StripExportHeaders(importText)
 
 	if not dataText or dataText == '' then
 		LibAT:Print('|cffff0000Invalid profile data. No content after stripping headers.|r')
