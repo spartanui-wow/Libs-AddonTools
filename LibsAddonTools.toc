@@ -90,7 +90,6 @@ Systems\DevUI\Tabs\AddonManager.lua
 Systems\DevUI\Tabs\Performance.lua
 
 # AddonManager System
-Systems\AddonManager\_AddonManager.Definition.lua
 Systems\AddonManager\AddonManager.lua
 Systems\AddonManager\Core.lua
 Systems\AddonManager\Data\SpecialCases.lua
@@ -104,5 +103,4 @@ Systems\AddonManager\Features\Favorites.lua
 Systems\AddonManager\BlizzardAddonListEnhance.lua
 
 # Performance System
-Systems\Performance\_Performance.Definition.lua
 Systems\Performance\Performance.lua
