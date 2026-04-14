@@ -1,0 +1,9 @@
+## Interface: 120001, 120005, 50503, 38000, 20505, 11508
+## Title: LibAT Profile Hub
+## Notes: Desktop companion helper for Lib's Addon Tools Profile Manager
+## Author: wutname1
+## IconTexture: Interface/Addons/LibsAddonTools/Logo-Icon
+## SavedVariables: LibAT_ProfileHub_PendingImports
+## RequiredDeps: LibsAddonTools
+
+Core.lua

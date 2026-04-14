@@ -3,3 +3,10 @@ package-as: LibsAddonTools
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
+
+ignore:
+  - "*.md"
+  - "*.Definition.lua"
+
+move-folders:
+  Plugins/LibsAddonTools-ProfileHub: LibsAddonTools-ProfileHub
