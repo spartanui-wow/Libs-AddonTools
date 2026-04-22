@@ -59,17 +59,27 @@ local function updateDisplay(forceRefresh)
 		if #currentErrorList > 0 then
 			local showLocals = window.Buttons.ShowLocals:GetChecked()
 
-			-- Add debug header at the top
-			local allErrors = ErrorDisplay.ErrorHandler:GenerateDebugHeader()
-			allErrors = allErrors .. '=================================\n\n'
+			-- Build the combined error text with table.concat (avoids quadratic string concatenation)
+			local parts = {
+				ErrorDisplay.ErrorHandler:GenerateDebugHeader(),
+				'=================================\n\n',
+			}
 
 			for i, err in ipairs(currentErrorList) do
-				allErrors = allErrors
-					.. string.format(
-						'---------------------------------\n                  Error #%d\n---------------------------------\n\n```lua\n%s\n```\n\n',
-						i,
-						ErrorDisplay.ErrorHandler:FormatError(err, showLocals)
-					)
+				parts[#parts + 1] = string.format(
+					'---------------------------------\n                  Error #%d\n---------------------------------\n\n```lua\n%s\n```\n\n',
+					i,
+					ErrorDisplay.ErrorHandler:FormatError(err, showLocals)
+				)
+			end
+
+			local allErrors = table.concat(parts)
+
+			-- Guard against exceeding the EditBox's max letters (silently blanks the field otherwise)
+			local maxLetters = textArea:GetMaxLetters()
+			if maxLetters > 0 and #allErrors > maxLetters then
+				allErrors = string.sub(allErrors, 1, maxLetters - 200)
+					.. '\n\n[... output truncated: exceeds display limit. Use Previous/Next to view individual errors. ...]'
 			end
 
 			textArea:SetText(allErrors)
@@ -82,6 +92,17 @@ local function updateDisplay(forceRefresh)
 			window.Buttons.Prev:SetEnabled(false)
 			countLabel:SetText(string.format('All (%d)', #currentErrorList))
 			sessionLabel:SetText('Multiple Errors')
+		else
+			textArea:SetText(L['You have no errors, yay!'])
+			window.scrollFrame:UpdateScrollChildRect()
+			window.Buttons.ShowAll:SetEnabled(false)
+			window.Buttons.Ignore:SetEnabled(false)
+			window.Buttons.ClearAll:SetEnabled(false)
+			window.Buttons.ShowLocals:Disable()
+			window.Buttons.Next:SetEnabled(false)
+			window.Buttons.Prev:SetEnabled(false)
+			countLabel:SetText('0/0')
+			sessionLabel:SetText(L['No errors'])
 		end
 		return
 	end
