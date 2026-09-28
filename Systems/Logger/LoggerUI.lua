@@ -129,15 +129,27 @@ function CreateCategoryTree(sortedCategories)
 		return
 	end
 
-	-- Clear existing buttons
-	for _, button in pairs(LoggerState.LogWindow.categoryButtons) do
-		button:Hide()
-		button:SetParent(nil)
+	-- Tree buttons are pooled; each rebuild takes them from the start of the pool again
+	LoggerState.LogWindow.treePool = LoggerState.LogWindow.treePool or {}
+	local pool = LoggerState.LogWindow.treePool
+	local used = 0
+	local function AcquireTreeButton()
+		used = used + 1
+		local button = pool[used]
+		if not button then
+			button = LibAT.UI.CreateFilterButton(LoggerState.LogWindow.ModuleTree, nil)
+			button.indicator = button:CreateTexture(nil, 'OVERLAY')
+			pool[used] = button
+		end
+		button:ClearAllPoints()
+		button.indicator:Hide()
+		button.SelectedTexture:Hide()
+		button.HighlightTexture:Hide()
+		button.Text:SetFontObject(GameFontNormalSmall)
+		button:Show()
+		return button
 	end
-	for _, button in pairs(LoggerState.LogWindow.moduleButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
+
 	LoggerState.LogWindow.categoryButtons = {}
 	LoggerState.LogWindow.moduleButtons = {}
 
@@ -166,7 +178,7 @@ function CreateCategoryTree(sortedCategories)
 		if isCoreOnly then
 			-- Create a directly selectable button (top-level category style, but selectable)
 			local coreSubCategory = categoryData.subCategories['Core']
-			local categoryButton = LibAT.UI.CreateFilterButton(LoggerState.LogWindow.ModuleTree, nil)
+			local categoryButton = AcquireTreeButton()
 			categoryButton:SetPoint('TOPLEFT', LoggerState.LogWindow.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 			local categoryInfo = {
@@ -207,7 +219,7 @@ function CreateCategoryTree(sortedCategories)
 			yOffset = yOffset - (buttonHeight + 1)
 		else
 			-- Create expandable category button (has multiple subcategories)
-			local categoryButton = LibAT.UI.CreateFilterButton(LoggerState.LogWindow.ModuleTree, 'LibAT_CategoryButton_' .. categoryName)
+			local categoryButton = AcquireTreeButton()
 			categoryButton:SetPoint('TOPLEFT', LoggerState.LogWindow.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 			-- Set up category button using Blizzard's helper function
@@ -221,7 +233,7 @@ function CreateCategoryTree(sortedCategories)
 			LibAT.UI.SetupFilterButton(categoryButton, categoryInfo)
 
 			-- Add expand/collapse indicator
-			categoryButton.indicator = categoryButton:CreateTexture(nil, 'OVERLAY')
+			categoryButton.indicator:Show()
 			categoryButton.indicator:SetSize(15, 15)
 			categoryButton.indicator:SetPoint('LEFT', categoryButton, 'LEFT', 2, 0)
 			if categoryData.expanded then
@@ -269,7 +281,7 @@ function CreateCategoryTree(sortedCategories)
 				local subCategoryData = categoryData.subCategories[subCategoryName]
 
 				-- Create subCategory button using the proper template
-				local subCategoryButton = LibAT.UI.CreateFilterButton(LoggerState.LogWindow.ModuleTree, nil)
+				local subCategoryButton = AcquireTreeButton()
 				subCategoryButton:SetPoint('TOPLEFT', LoggerState.LogWindow.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 				-- Set up subCategory button using Blizzard's helper function
@@ -281,7 +293,7 @@ function CreateCategoryTree(sortedCategories)
 				}
 				LibAT.UI.SetupFilterButton(subCategoryButton, subCategoryInfo) -- If this subCategory has subSubCategories, add expand/collapse indicator
 				if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
-					subCategoryButton.indicator = subCategoryButton:CreateTexture(nil, 'OVERLAY')
+					subCategoryButton.indicator:Show()
 					subCategoryButton.indicator:SetSize(12, 12)
 					subCategoryButton.indicator:SetPoint('LEFT', subCategoryButton, 'LEFT', 2, 0)
 					if subCategoryData.expanded then
@@ -304,7 +316,7 @@ function CreateCategoryTree(sortedCategories)
 					-- If this has subSubCategories, toggle expansion
 					if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
 						subCategoryData.expanded = not subCategoryData.expanded
-						if self.indicator then
+						if self.indicator:IsShown() then
 							if subCategoryData.expanded then
 								self.indicator:SetAtlas('uitools-icon-minimize')
 							else
@@ -337,7 +349,7 @@ function CreateCategoryTree(sortedCategories)
 						local subSubCategoryData = subCategoryData.subSubCategories[subSubCategoryName]
 
 						-- Create subSubCategory button using the proper template
-						local subSubCategoryButton = LibAT.UI.CreateFilterButton(LoggerState.LogWindow.ModuleTree, nil)
+						local subSubCategoryButton = AcquireTreeButton()
 						subSubCategoryButton:SetPoint('TOPLEFT', LoggerState.LogWindow.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 						-- Set up subSubCategory button using Blizzard's helper function
@@ -378,6 +390,10 @@ function CreateCategoryTree(sortedCategories)
 		end
 	end
 
+	for i = used + 1, #pool do
+		pool[i]:Hide()
+	end
+
 	-- Update tree height
 	local totalHeight = math.abs(yOffset) + 20
 	LoggerState.LogWindow.ModuleTree:SetHeight(math.max(totalHeight, LoggerState.LogWindow.ModuleScrollFrame:GetHeight()))
@@ -396,6 +412,11 @@ local function CreateLogWindow()
 		height = 538,
 		portrait = 'Interface\\AddOns\\SpartanUI\\images\\LogoSpartanUI',
 	})
+
+	-- Logs arriving while hidden are not drawn; catch up when the window opens
+	LoggerState.LogWindow:HookScript('OnShow', function()
+		LibAT.Logger.UpdateLogDisplay()
+	end)
 
 	-- Create control frame (top bar for search/filters)
 	LoggerState.LogWindow.ControlFrame = LibAT.UI.CreateControlFrame(LoggerState.LogWindow)
@@ -609,15 +630,14 @@ local function UpdateLogDisplay(force)
 		return
 	end
 
-	local logText = ''
+	-- Built as a list and joined once; appending to a string in a loop copies it on every line
+	local logText
 	local totalEntries = 0
 	local filteredCount = 0
 	local searchedCount = 0
 
 	if LoggerState.SearchAllModules then
-		-- Search across all modules
-		logText = 'Search Results Across All Modules:\n\n'
-
+		local body = {}
 		for moduleName, logs in pairs(LoggerState.LogMessages) do
 			local moduleLogLevel = LoggerState.ModuleLogLevels[moduleName] or 0
 			local effectiveLogLevel = moduleLogLevel > 0 and moduleLogLevel or LoggerState.GlobalLogLevel
@@ -632,20 +652,27 @@ local function UpdateLogDisplay(force)
 			end
 
 			if #moduleMatches > 0 then
-				logText = logText .. '=== ' .. moduleName .. ' (' .. #moduleMatches .. ' entries) ===\n'
+				body[#body + 1] = '=== ' .. moduleName .. ' (' .. #moduleMatches .. ' entries) ==='
 				for _, logEntry in ipairs(moduleMatches) do
-					local highlightedText = HighlightSearchTerm(logEntry.formattedMessage, LoggerState.CurrentSearchTerm)
-					logText = logText .. highlightedText .. '\n'
+					body[#body + 1] = HighlightSearchTerm(logEntry.formattedMessage, LoggerState.CurrentSearchTerm)
 					searchedCount = searchedCount + 1
 				end
-				logText = logText .. '\n'
+				body[#body + 1] = ''
 			end
 		end
 
 		if searchedCount == 0 then
-			logText = logText .. 'No logs match the current search and filter criteria.'
+			logText = 'Search Results Across All Modules:\n\nNo logs match the current search and filter criteria.'
 		else
-			logText = 'Search Results: ' .. searchedCount .. ' matches across all modules\n' .. 'Total entries: ' .. totalEntries .. ' | Filtered: ' .. filteredCount .. '\n\n' .. logText
+			logText = 'Search Results: '
+				.. searchedCount
+				.. ' matches across all modules\n'
+				.. 'Total entries: '
+				.. totalEntries
+				.. ' | Filtered: '
+				.. filteredCount
+				.. '\n\n'
+				.. table.concat(body, '\n')
 		end
 	else
 		-- Single module display
@@ -680,15 +707,16 @@ local function UpdateLogDisplay(force)
 			searchInfo = ' | Search: "' .. LoggerState.CurrentSearchTerm .. '"'
 		end
 
-		logText = 'Logs for ' .. LoggerState.ActiveModule .. ' (' .. totalEntries .. ' total, ' .. filteredCount .. ' shown' .. searchInfo .. '):\n\n'
+		local header = 'Logs for ' .. LoggerState.ActiveModule .. ' (' .. totalEntries .. ' total, ' .. filteredCount .. ' shown' .. searchInfo .. '):\n\n'
 
 		if #matchingEntries > 0 then
-			for _, logEntry in ipairs(matchingEntries) do
-				local highlightedText = HighlightSearchTerm(logEntry.formattedMessage, LoggerState.CurrentSearchTerm)
-				logText = logText .. highlightedText .. '\n'
+			local body = {}
+			for i, logEntry in ipairs(matchingEntries) do
+				body[i] = HighlightSearchTerm(logEntry.formattedMessage, LoggerState.CurrentSearchTerm)
 			end
+			logText = header .. table.concat(body, '\n') .. '\n'
 		else
-			logText = logText .. 'No logs match current filter and search criteria.'
+			logText = header .. 'No logs match current filter and search criteria.'
 		end
 	end
 
@@ -741,8 +769,11 @@ end
 
 LibAT.Logger.ClearCurrentLogs = ClearCurrentLogs
 
--- Function to export current logs to a copyable format
-local function ExportCurrentLogs()
+---Export logs to a copyable window
+---@param moduleName? string Module to export (defaults to the log window's selection)
+---@param searchAll? boolean Export every module (defaults to the log window's setting)
+---@param searchTerm? string Only include matching messages (defaults to the log window's search)
+local function ExportCurrentLogs(moduleName, searchAll, searchTerm)
 	if not LoggerState.LogWindow then
 		return
 	end
@@ -767,13 +798,17 @@ local function ExportCurrentLogs()
 
 		-- Scroll frame for export text (properly styled)
 		LoggerState.LogWindow.ExportFrame.ScrollFrame = CreateFrame('ScrollFrame', nil, LoggerState.LogWindow.ExportFrame, 'UIPanelScrollFrameTemplate')
-		LoggerState.LogWindow.ExportFrame.ScrollFrame:SetPoint('TOPLEFT', LoggerState.LogWindow.ExportFrame.TitleBar, 'BOTTOMLEFT', 0, -10)
+		LoggerState.LogWindow.ExportFrame.ScrollFrame:SetPoint('TOPLEFT', LoggerState.LogWindow.ExportFrame, 'TOPLEFT', 12, -32)
 		LoggerState.LogWindow.ExportFrame.ScrollFrame:SetPoint('BOTTOMRIGHT', LoggerState.LogWindow.ExportFrame, 'BOTTOMRIGHT', -26, 40)
 
 		LoggerState.LogWindow.ExportFrame.EditBox = CreateFrame('EditBox', nil, LoggerState.LogWindow.ExportFrame.ScrollFrame)
 		LoggerState.LogWindow.ExportFrame.EditBox:SetMultiLine(true)
 		LoggerState.LogWindow.ExportFrame.EditBox:SetFontObject('GameFontHighlightSmall')
-		LoggerState.LogWindow.ExportFrame.EditBox:SetWidth(LoggerState.LogWindow.ExportFrame.ScrollFrame:GetWidth() - 20)
+		LoggerState.LogWindow.ExportFrame.EditBox:SetWidth(1)
+		-- Scroll children cannot anchor to their scroll frame, so follow its width instead
+		LoggerState.LogWindow.ExportFrame.ScrollFrame:HookScript('OnSizeChanged', function(self, width)
+			LoggerState.LogWindow.ExportFrame.EditBox:SetWidth(math.max((width or 0) - 20, 1))
+		end)
 		LoggerState.LogWindow.ExportFrame.EditBox:SetAutoFocus(false)
 		LoggerState.LogWindow.ExportFrame.EditBox:SetTextColor(1, 1, 1) -- White text
 		LoggerState.LogWindow.ExportFrame.EditBox:SetScript('OnTextChanged', function(self)
@@ -791,56 +826,56 @@ local function ExportCurrentLogs()
 		LoggerState.LogWindow.ExportFrame.Instructions:SetTextColor(1, 0.82, 0) -- Gold color like other instructions
 	end
 
-	-- Generate export text
-	local exportText = '=== SpartanUI Log Export ===\n'
-	exportText = exportText .. 'Generated: ' .. date('%Y-%m-%d %H:%M:%S') .. '\n'
-	exportText = exportText .. 'Global Log Level: ' .. (LoggerState.GetLogLevelByPriority(LoggerState.GlobalLogLevel) or 'Unknown') .. '\n\n'
+	-- Callers like the DevUI Logs tab pass their own selection; otherwise use this window's
+	if searchAll == nil then
+		searchAll = LoggerState.SearchAllModules
+	end
+	moduleName = moduleName or LoggerState.ActiveModule
+	searchTerm = searchTerm or LoggerState.CurrentSearchTerm
+	local needle = (searchTerm and searchTerm ~= '') and searchTerm:lower() or nil
 
-	if LoggerState.SearchAllModules then
-		exportText = exportText .. '=== ALL MODULES ===\n\n'
-		for moduleName, logs in pairs(LoggerState.LogMessages) do
-			if #logs > 0 then
-				exportText = exportText .. '--- Module: ' .. moduleName .. ' (' .. #logs .. ' entries) ---\n'
+	local lines = {
+		'=== Log Export ===',
+		'Generated: ' .. date('%Y-%m-%d %H:%M:%S'),
+		'Global Log Level: ' .. (LoggerState.GetLogLevelByPriority(LoggerState.GlobalLogLevel) or 'Unknown'),
+		'',
+	}
 
-				local moduleLogLevel = LoggerState.ModuleLogLevels[moduleName] or 0
-				local effectiveLogLevel = moduleLogLevel > 0 and moduleLogLevel or LoggerState.GlobalLogLevel
-
-				for _, logEntry in ipairs(logs) do
-					local entryLogLevel = LoggerState.LOG_LEVELS[logEntry.level]
-					if entryLogLevel and entryLogLevel.priority >= effectiveLogLevel then
-						-- Remove color codes for export
-						local cleanMessage = logEntry.formattedMessage:gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', '')
-						exportText = exportText .. cleanMessage .. '\n'
-					end
-				end
-				exportText = exportText .. '\n'
-			end
-		end
-	else
-		if LoggerState.ActiveModule and LoggerState.LogMessages[LoggerState.ActiveModule] then
-			exportText = exportText .. '=== Module: ' .. LoggerState.ActiveModule .. ' ===\n\n'
-
-			local logs = LoggerState.LogMessages[LoggerState.ActiveModule]
-			local moduleLogLevel = LoggerState.ModuleLogLevels[LoggerState.ActiveModule] or 0
-			local effectiveLogLevel = moduleLogLevel > 0 and moduleLogLevel or LoggerState.GlobalLogLevel
-
-			for _, logEntry in ipairs(logs) do
-				local entryLogLevel = LoggerState.LOG_LEVELS[logEntry.level]
-				if entryLogLevel and entryLogLevel.priority >= effectiveLogLevel then
-					-- Apply search filtering if active
-					if not LoggerState.CurrentSearchTerm or LoggerState.CurrentSearchTerm == '' or logEntry.message:lower():find(LoggerState.CurrentSearchTerm:lower(), 1, true) then
-						-- Remove color codes for export
-						local cleanMessage = logEntry.formattedMessage:gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', '')
-						exportText = exportText .. cleanMessage .. '\n'
-					end
+	local function AddModule(name, logs)
+		local moduleLogLevel = LoggerState.ModuleLogLevels[name] or 0
+		local effectiveLogLevel = moduleLogLevel > 0 and moduleLogLevel or LoggerState.GlobalLogLevel
+		for _, logEntry in ipairs(logs) do
+			local entryLogLevel = LoggerState.LOG_LEVELS[logEntry.level]
+			if entryLogLevel and entryLogLevel.priority >= effectiveLogLevel then
+				if not needle or logEntry.message:lower():find(needle, 1, true) then
+					local cleanMessage = logEntry.formattedMessage:gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', '')
+					lines[#lines + 1] = cleanMessage
 				end
 			end
-		else
-			exportText = exportText .. 'No active module selected.\n'
 		end
 	end
 
-	exportText = exportText .. '\n=== End of Export ==='
+	if searchAll then
+		lines[#lines + 1] = '=== ALL MODULES ==='
+		lines[#lines + 1] = ''
+		for name, logs in pairs(LoggerState.LogMessages) do
+			if #logs > 0 then
+				lines[#lines + 1] = '--- Module: ' .. name .. ' (' .. #logs .. ' entries) ---'
+				AddModule(name, logs)
+				lines[#lines + 1] = ''
+			end
+		end
+	elseif moduleName and LoggerState.LogMessages[moduleName] then
+		lines[#lines + 1] = '=== Module: ' .. moduleName .. ' ==='
+		lines[#lines + 1] = ''
+		AddModule(moduleName, LoggerState.LogMessages[moduleName])
+	else
+		lines[#lines + 1] = 'No active module selected.'
+	end
+
+	lines[#lines + 1] = ''
+	lines[#lines + 1] = '=== End of Export ==='
+	local exportText = table.concat(lines, '\n')
 
 	-- Set text and show frame
 	LoggerState.LogWindow.ExportFrame.EditBox:SetText(exportText)

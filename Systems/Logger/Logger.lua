@@ -174,6 +174,22 @@ LibAT.Logger.GetState = function()
 	return LoggerState
 end
 
+local categoriesPending = false
+
+---Rebuild the category tree once, on the next frame, however many modules appear at once
+local function QueueCategoryRebuild()
+	if categoriesPending then
+		return
+	end
+	categoriesPending = true
+	C_Timer.After(0, function()
+		categoriesPending = false
+		if LoggerState.LogWindow and LoggerState.LogWindow.Categories then
+			LibAT.Logger.CreateLogSourceCategories()
+		end
+	end)
+end
+
 ---Helper function to create a logger object for a module
 ---@param addonName string The addon name
 ---@param moduleName string The full module name (addonName or addonName.category)
@@ -263,7 +279,7 @@ local function CreateLoggerObject(addonName, moduleName)
 
 		-- Rebuild UI if window exists
 		if LoggerState.LogWindow and LoggerState.LogWindow.Categories then
-			LibAT.Logger.CreateLogSourceCategories()
+			QueueCategoryRebuild()
 		end
 
 		return categoryLogger
@@ -341,7 +357,7 @@ function LibAT.Logger.RegisterAddon(addonName, categories)
 
 	-- Rebuild UI if window exists
 	if LoggerState.LogWindow and LoggerState.LogWindow.Categories then
-		LibAT.Logger.CreateLogSourceCategories()
+		QueueCategoryRebuild()
 	end
 
 	return loggerObj
@@ -350,6 +366,31 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Core Logging Functions
 ----------------------------------------------------------------------------------------------------
+
+local refreshPending = false
+local refreshModules = {}
+
+---Refresh visible log views once per frame. Nothing is rebuilt while the views are hidden;
+---they rebuild when they are shown or switched to.
+---@param module string
+local function QueueDisplayRefresh(module)
+	refreshModules[module] = true
+	if refreshPending then
+		return
+	end
+	refreshPending = true
+	C_Timer.After(0, function()
+		refreshPending = false
+		local window = LoggerState.LogWindow
+		if window and window:IsVisible() and (LoggerState.SearchAllModules or (LoggerState.ActiveModule and refreshModules[LoggerState.ActiveModule])) then
+			LibAT.Logger.UpdateLogDisplay()
+		end
+		if LibAT.DevUI and LibAT.DevUI.OnLogsAdded then
+			LibAT.DevUI.OnLogsAdded(refreshModules)
+		end
+		wipe(refreshModules)
+	end)
+end
 
 ---Enhanced logging function with log levels
 ---@param debugText string The message to log
@@ -370,18 +411,19 @@ function LibAT.Log(debugText, module, level)
 	if not LoggerState.LogMessages[module] then
 		LoggerState.LogMessages[module] = {}
 
-		-- Add new module to category system if log window exists
-		if LoggerState.LogWindow and LoggerState.LogWindow.Categories then
-			-- Rebuild the category tree to include new module
-			LibAT.Logger.CreateLogSourceCategories()
-		end
+		QueueCategoryRebuild()
 
 		-- Only update DB if it's initialized (might be called before OnInitialize)
 		if logger.DB and logger.DB.modules then
 			logger.DB.modules[module] = true -- Default to enabled for logging approach
 		end
-		if logger.options then
-			logger.options.args[module] = {
+		local moduleGroup = logger.options and logger.options.args.ModuleLogLevels
+		if moduleGroup and moduleGroup.args and not moduleGroup.args[module] then
+			local order = 0
+			for _ in pairs(moduleGroup.args) do
+				order = order + 1
+			end
+			moduleGroup.args[module] = {
 				name = module,
 				desc = 'Set the minimum log level for the ' .. module .. ' module. Use "Global" to inherit the global log level setting.',
 				type = 'select',
@@ -427,7 +469,7 @@ function LibAT.Log(debugText, module, level)
 						LibAT.Logger.UpdateLogDisplay()
 					end
 				end,
-				order = (#logger.options.args + 1),
+				order = order + 1,
 			}
 		end
 	end
@@ -471,21 +513,18 @@ function LibAT.Log(debugText, module, level)
 
 	table.insert(LoggerState.LogMessages[module], logEntry)
 
-	-- Maintain maximum log history
-	local maxHistory = logger.DB.maxLogHistory or 1000
+	-- Maintain maximum log history (LibAT.Log can run before the logger's OnInitialize)
+	local maxHistory = (logger.DB and logger.DB.maxLogHistory) or 1000
 	if #LoggerState.LogMessages[module] > maxHistory then
 		table.remove(LoggerState.LogMessages[module], 1)
 	end
 
 	-- Initialize log window if needed
-	if not LoggerState.LogWindow then
+	if not LoggerState.LogWindow and logger.DB then
 		LibAT.Logger.CreateLogWindow()
 	end
 
-	-- Update display if this module is currently active
-	if LoggerState.ActiveModule and LoggerState.ActiveModule == module then
-		LibAT.Logger.UpdateLogDisplay()
-	end
+	QueueDisplayRefresh(module)
 end
 
 ---@param debugText string The message to log

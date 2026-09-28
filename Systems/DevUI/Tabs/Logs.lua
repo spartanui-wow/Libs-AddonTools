@@ -60,6 +60,16 @@ function LibAT.DevUI.InitLogs(devUIModule, state)
 			end
 		end,
 	}
+
+	-- Called by the Logger (at most once per frame) with the set of modules that got new lines
+	LibAT.DevUI.OnLogsAdded = function(modules)
+		if TabState.Paused or not TabState.ContentFrame or not TabState.ContentFrame:IsVisible() then
+			return
+		end
+		if TabState.SearchAllEnabled or (TabState.ActiveModule and modules[TabState.ActiveModule]) then
+			UpdateLogsDisplay()
+		end
+	end
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -218,15 +228,27 @@ BuildCategoryTree = function(sortedCategories)
 		return
 	end
 
-	-- Clear existing buttons
-	for _, button in pairs(TabState.categoryButtons) do
-		button:Hide()
-		button:SetParent(nil)
+	-- Tree buttons are pooled; each rebuild takes them from the start of the pool again
+	TabState.treePool = TabState.treePool or {}
+	local pool = TabState.treePool
+	local used = 0
+	local function AcquireTreeButton()
+		used = used + 1
+		local button = pool[used]
+		if not button then
+			button = LibAT.UI.CreateFilterButton(TabState.ModuleTree, nil)
+			button.indicator = button:CreateTexture(nil, 'OVERLAY')
+			pool[used] = button
+		end
+		button:ClearAllPoints()
+		button.indicator:Hide()
+		button.SelectedTexture:Hide()
+		button.HighlightTexture:Hide()
+		button.Text:SetFontObject(GameFontNormalSmall)
+		button:Show()
+		return button
 	end
-	for _, button in pairs(TabState.moduleButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
+
 	TabState.categoryButtons = {}
 	TabState.moduleButtons = {}
 
@@ -252,7 +274,7 @@ BuildCategoryTree = function(sortedCategories)
 
 		if isCoreOnly then
 			local coreSubCategory = categoryData.subCategories['Core']
-			local categoryButton = LibAT.UI.CreateFilterButton(TabState.ModuleTree, nil)
+			local categoryButton = AcquireTreeButton()
 			categoryButton:SetPoint('TOPLEFT', TabState.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 			LibAT.UI.SetupFilterButton(categoryButton, {
@@ -284,7 +306,7 @@ BuildCategoryTree = function(sortedCategories)
 			table.insert(TabState.moduleButtons, categoryButton)
 			yOffset = yOffset - (buttonHeight + 1)
 		else
-			local categoryButton = LibAT.UI.CreateFilterButton(TabState.ModuleTree, nil)
+			local categoryButton = AcquireTreeButton()
 			categoryButton:SetPoint('TOPLEFT', TabState.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 			LibAT.UI.SetupFilterButton(categoryButton, {
@@ -295,7 +317,7 @@ BuildCategoryTree = function(sortedCategories)
 				selected = false,
 			})
 
-			categoryButton.indicator = categoryButton:CreateTexture(nil, 'OVERLAY')
+			categoryButton.indicator:Show()
 			categoryButton.indicator:SetSize(15, 15)
 			categoryButton.indicator:SetPoint('LEFT', categoryButton, 'LEFT', 2, 0)
 			if categoryData.expanded then
@@ -336,7 +358,7 @@ BuildCategoryTree = function(sortedCategories)
 			for _, subCategoryName in ipairs(categoryData.sortedSubCategories) do
 				local subCategoryData = categoryData.subCategories[subCategoryName]
 
-				local subCategoryButton = LibAT.UI.CreateFilterButton(TabState.ModuleTree, nil)
+				local subCategoryButton = AcquireTreeButton()
 				subCategoryButton:SetPoint('TOPLEFT', TabState.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 				LibAT.UI.SetupFilterButton(subCategoryButton, {
@@ -347,7 +369,7 @@ BuildCategoryTree = function(sortedCategories)
 				})
 
 				if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
-					subCategoryButton.indicator = subCategoryButton:CreateTexture(nil, 'OVERLAY')
+					subCategoryButton.indicator:Show()
 					subCategoryButton.indicator:SetSize(12, 12)
 					subCategoryButton.indicator:SetPoint('LEFT', subCategoryButton, 'LEFT', 2, 0)
 					if subCategoryData.expanded then
@@ -367,7 +389,7 @@ BuildCategoryTree = function(sortedCategories)
 				subCategoryButton:SetScript('OnClick', function(self)
 					if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
 						subCategoryData.expanded = not subCategoryData.expanded
-						if self.indicator then
+						if self.indicator:IsShown() then
 							if subCategoryData.expanded then
 								self.indicator:SetAtlas('uitools-icon-minimize')
 							else
@@ -395,7 +417,7 @@ BuildCategoryTree = function(sortedCategories)
 					for _, subSubCategoryName in ipairs(subCategoryData.sortedSubSubCategories) do
 						local subSubCategoryData = subCategoryData.subSubCategories[subSubCategoryName]
 
-						local subSubCategoryButton = LibAT.UI.CreateFilterButton(TabState.ModuleTree, nil)
+						local subSubCategoryButton = AcquireTreeButton()
 						subSubCategoryButton:SetPoint('TOPLEFT', TabState.ModuleTree, 'TOPLEFT', 3, yOffset)
 
 						LibAT.UI.SetupFilterButton(subSubCategoryButton, {
@@ -431,6 +453,10 @@ BuildCategoryTree = function(sortedCategories)
 		end
 	end
 
+	for i = used + 1, #pool do
+		pool[i]:Hide()
+	end
+
 	-- Update tree height
 	local totalHeight = math.abs(yOffset) + 20
 	TabState.ModuleTree:SetHeight(math.max(totalHeight, TabState.ModuleScrollFrame:GetHeight()))
@@ -455,14 +481,14 @@ UpdateLogsDisplay = function()
 		end
 	end
 
-	local logText = ''
+	-- Built as a list and joined once; appending to a string in a loop copies it on every line
+	local logText
 	local totalEntries = 0
 	local filteredCount = 0
 	local searchedCount = 0
 
 	if TabState.SearchAllEnabled then
-		logText = 'Search Results Across All Modules:\n\n'
-
+		local body = {}
 		for moduleName, logs in pairs(LoggerState.LogMessages) do
 			local moduleLogLevel = LoggerState.ModuleLogLevels[moduleName] or 0
 			local effectiveLogLevel = moduleLogLevel > 0 and moduleLogLevel or LoggerState.GlobalLogLevel
@@ -477,20 +503,19 @@ UpdateLogsDisplay = function()
 			end
 
 			if #moduleMatches > 0 then
-				logText = logText .. '=== ' .. moduleName .. ' (' .. #moduleMatches .. ' entries) ===\n'
+				body[#body + 1] = '=== ' .. moduleName .. ' (' .. #moduleMatches .. ' entries) ==='
 				for _, logEntry in ipairs(moduleMatches) do
-					local highlightedText = HighlightSearchTerm(logEntry.formattedMessage, TabState.CurrentSearchTerm)
-					logText = logText .. highlightedText .. '\n'
+					body[#body + 1] = HighlightSearchTerm(logEntry.formattedMessage, TabState.CurrentSearchTerm)
 					searchedCount = searchedCount + 1
 				end
-				logText = logText .. '\n'
+				body[#body + 1] = ''
 			end
 		end
 
 		if searchedCount == 0 then
-			logText = logText .. 'No logs match the current search and filter criteria.'
+			logText = 'Search Results Across All Modules:\n\nNo logs match the current search and filter criteria.'
 		else
-			logText = 'Search Results: ' .. searchedCount .. ' matches across all modules\nTotal entries: ' .. totalEntries .. ' | Filtered: ' .. filteredCount .. '\n\n' .. logText
+			logText = 'Search Results: ' .. searchedCount .. ' matches across all modules\nTotal entries: ' .. totalEntries .. ' | Filtered: ' .. filteredCount .. '\n\n' .. table.concat(body, '\n')
 		end
 	else
 		if not TabState.ActiveModule then
@@ -522,15 +547,16 @@ UpdateLogsDisplay = function()
 			searchInfo = ' | Search: "' .. TabState.CurrentSearchTerm .. '"'
 		end
 
-		logText = 'Logs for ' .. TabState.ActiveModule .. ' (' .. totalEntries .. ' total, ' .. filteredCount .. ' shown' .. searchInfo .. '):\n\n'
+		local header = 'Logs for ' .. TabState.ActiveModule .. ' (' .. totalEntries .. ' total, ' .. filteredCount .. ' shown' .. searchInfo .. '):\n\n'
 
 		if #matchingEntries > 0 then
-			for _, logEntry in ipairs(matchingEntries) do
-				local highlightedText = HighlightSearchTerm(logEntry.formattedMessage, TabState.CurrentSearchTerm)
-				logText = logText .. highlightedText .. '\n'
+			local body = {}
+			for i, logEntry in ipairs(matchingEntries) do
+				body[i] = HighlightSearchTerm(logEntry.formattedMessage, TabState.CurrentSearchTerm)
 			end
+			logText = header .. table.concat(body, '\n') .. '\n'
 		else
-			logText = logText .. 'No logs match current filter and search criteria.'
+			logText = header .. 'No logs match current filter and search criteria.'
 		end
 	end
 
@@ -668,7 +694,7 @@ BuildContent = function(contentFrame)
 			onClick = function()
 				-- Delegate to Logger's export function
 				if LibAT.Logger.ExportCurrentLogs then
-					LibAT.Logger.ExportCurrentLogs()
+					LibAT.Logger.ExportCurrentLogs(TabState.ActiveModule, TabState.SearchAllEnabled == true, TabState.CurrentSearchTerm)
 				end
 			end,
 		},
