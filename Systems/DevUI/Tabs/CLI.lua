@@ -42,12 +42,18 @@ end
 -- Script Execution
 ----------------------------------------------------------------------------------------------------
 
----Format a value for dump output (similar to WoW's /dump)
+local MAX_DEPTH = 4
+local MAX_LINES = 3000
+
+---Format a value for dump output (similar to WoW's /dump). Depth and total output are capped so
+---dumping something huge like _G stays responsive.
 ---@param val any The value to format
 ---@param indent string Current indentation
----@param visited table Table of already-visited tables (cycle detection)
+---@param visited table Tables on the current path (cycle detection)
+---@param budget {lines: number} Shared output budget
+---@param depth number Current nesting depth
 ---@return string formatted The formatted string
-local function FormatValue(val, indent, visited)
+local function FormatValue(val, indent, visited, budget, depth)
 	local valType = type(val)
 
 	if valType == 'string' then
@@ -66,39 +72,45 @@ local function FormatValue(val, indent, visited)
 		if visited[val] then
 			return '|cffff8800<circular reference>|r'
 		end
+		if depth >= MAX_DEPTH then
+			return '|cff888888{...}|r'
+		end
 		visited[val] = true
 
 		local parts = {}
 		local nextIndent = indent .. '  '
 		local count = 0
 		local maxEntries = 200
+		local truncated = false
 
-		-- Collect numeric keys first
-		for i = 1, #val do
-			if count >= maxEntries then
-				table.insert(parts, nextIndent .. '|cff888888... (truncated)|r')
-				break
+		local function Add(keyStr, v)
+			if count >= maxEntries or budget.lines >= MAX_LINES then
+				truncated = true
+				return false
 			end
-			table.insert(parts, nextIndent .. '|cffffcc00[' .. i .. ']|r=' .. FormatValue(val[i], nextIndent, visited))
+			budget.lines = budget.lines + 1
+			table.insert(parts, nextIndent .. '|cffffcc00' .. keyStr .. '|r=' .. FormatValue(v, nextIndent, visited, budget, depth + 1))
 			count = count + 1
+			return true
 		end
 
-		-- Then non-numeric keys
-		for k, v in pairs(val) do
-			if type(k) ~= 'number' or k < 1 or k > #val or k ~= math.floor(k) then
-				if count >= maxEntries then
-					table.insert(parts, nextIndent .. '|cff888888... (truncated)|r')
-					break
-				end
-				local keyStr
-				if type(k) == 'string' then
-					keyStr = k
-				else
-					keyStr = '[' .. tostring(k) .. ']'
-				end
-				table.insert(parts, nextIndent .. '|cffffcc00' .. keyStr .. '|r=' .. FormatValue(v, nextIndent, visited))
-				count = count + 1
+		local length = #val
+		for i = 1, length do
+			if not Add('[' .. i .. ']', val[i]) then
+				break
 			end
+		end
+		if not truncated then
+			for k, v in pairs(val) do
+				if type(k) ~= 'number' or k < 1 or k > length or k ~= math.floor(k) then
+					if not Add(type(k) == 'string' and k or ('[' .. tostring(k) .. ']'), v) then
+						break
+					end
+				end
+			end
+		end
+		if truncated then
+			table.insert(parts, nextIndent .. '|cff888888... (truncated)|r')
 		end
 
 		visited[val] = nil
@@ -112,31 +124,33 @@ local function FormatValue(val, indent, visited)
 	return tostring(val)
 end
 
----Dump multiple return values in a structured format (like WoW's /dump)
----@param ... any Values to dump
+---Dump values in a structured format (like WoW's /dump)
+---@param count number Number of values, including trailing nils
+---@param values table Values packed from index 1
 ---@return string output Formatted dump output
-local function DumpValues(...)
-	local numArgs = select('#', ...)
-	if numArgs == 0 then
+local function DumpValues(count, values)
+	if count == 0 then
 		return '|cff888888nil|r'
 	end
-
-	-- Single return value — dump it directly
-	if numArgs == 1 then
-		local val = ...
-		return FormatValue(val, '', {})
+	local budget = { lines = 0 }
+	if count == 1 then
+		return FormatValue(values[1], '', {}, budget, 0)
 	end
-
-	-- Multiple return values — show indexed like WoW's /dump
 	local lines = {}
-	for i = 1, numArgs do
-		local val = select(i, ...)
-		table.insert(lines, '|cffffcc00[' .. i .. ']|r=' .. FormatValue(val, '', {}))
+	for i = 1, count do
+		table.insert(lines, '|cffffcc00[' .. i .. ']|r=' .. FormatValue(values[i], '', {}, budget, 0))
 	end
 	return table.concat(lines, ',\n')
 end
 
----Execute Lua code and capture output
+---@return number count
+---@return table values
+local function Pack(...)
+	return select('#', ...), { ... }
+end
+
+---Execute Lua code and capture output. The code runs in its own environment whose print writes
+---to the output pane; globals still read from and write to _G, and the real print is never touched.
 ---@param code string The Lua code to execute
 ---@return string output The captured output text
 local function ExecuteCode(code)
@@ -145,16 +159,15 @@ local function ExecuteCode(code)
 	end
 
 	local output = {}
-	local oldPrint = print
-
-	-- Redirect print to capture output
-	print = function(...)
-		local parts = {}
-		for i = 1, select('#', ...) do
-			parts[i] = tostring(select(i, ...))
-		end
-		table.insert(output, table.concat(parts, '\t'))
-	end
+	local env = setmetatable({
+		print = function(...)
+			local parts = {}
+			for i = 1, select('#', ...) do
+				parts[i] = tostring(select(i, ...))
+			end
+			table.insert(output, table.concat(parts, '\t'))
+		end,
+	}, { __index = _G, __newindex = _G })
 
 	-- Strip common WoW slash command prefixes so copy-pasted commands just work
 	-- /run, /script execute Lua; /dump inspects values
@@ -166,30 +179,28 @@ local function ExecuteCode(code)
 	-- Support "dump expression" and "/dump expression" shorthand
 	local dumpExpr = code:match('^%s*/?dump%s+(.+)')
 	if dumpExpr then
-		-- Wrap in a function that captures all return values
-		local evalCode = 'return ' .. dumpExpr
-		local func, err = loadstring(evalCode)
+		local func, err = loadstring('return ' .. dumpExpr)
 		if func then
-			local results = { pcall(func) }
-			local success = table.remove(results, 1)
-			if success then
-				table.insert(output, DumpValues(unpack(results)))
+			setfenv(func, env)
+			local count, results = Pack(pcall(func))
+			if results[1] then
+				local ok, text = pcall(DumpValues, count - 1, { select(2, unpack(results, 1, count)) })
+				table.insert(output, ok and text or ('|cffff0000Could not display the result: ' .. tostring(text) .. '|r'))
 			else
-				table.insert(output, '|cffff0000Runtime Error: ' .. tostring(results[1]) .. '|r')
+				table.insert(output, '|cffff0000Runtime Error: ' .. tostring(results[2]) .. '|r')
 			end
 		else
 			table.insert(output, '|cffff0000Syntax Error: ' .. tostring(err) .. '|r')
 		end
-		print = oldPrint
 		return table.concat(output, '\n')
 	end
 
 	-- Support "= expression" shorthand (auto-print)
 	local evalCode = code:gsub('^%s*=%s*(.+)', 'print(%1)')
 
-	-- Compile
 	local func, err = loadstring(evalCode)
 	if func then
+		setfenv(func, env)
 		local success, execErr = pcall(func)
 		if not success then
 			table.insert(output, '|cffff0000Runtime Error: ' .. tostring(execErr) .. '|r')
@@ -197,9 +208,6 @@ local function ExecuteCode(code)
 	else
 		table.insert(output, '|cffff0000Syntax Error: ' .. tostring(err) .. '|r')
 	end
-
-	-- Restore print
-	print = oldPrint
 
 	if #output == 0 then
 		return '|cff888888(no output)|r'
@@ -214,13 +222,6 @@ end
 
 ---Rebuild the saved scripts list in the left panel
 RebuildScriptList = function()
-	-- Clear existing buttons
-	for _, button in pairs(TabState.ScriptButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
-	TabState.ScriptButtons = {}
-
 	if not TabState.ScriptTree or not DevUI.DB then
 		return
 	end
@@ -228,57 +229,59 @@ RebuildScriptList = function()
 	local yOffset = 0
 	local buttonHeight = 21
 
-	-- Sort script names alphabetically
 	local scriptNames = {}
 	for name, _ in pairs(DevUI.DB.cli.savedScripts) do
 		table.insert(scriptNames, name)
 	end
 	table.sort(scriptNames)
 
-	for _, scriptName in ipairs(scriptNames) do
-		local button = LibAT.UI.CreateFilterButton(TabState.ScriptTree, nil)
-		button:SetPoint('TOPLEFT', TabState.ScriptTree, 'TOPLEFT', 3, yOffset)
+	for index, scriptName in ipairs(scriptNames) do
+		local button = TabState.ScriptButtons[index]
+		if not button then
+			button = LibAT.UI.CreateFilterButton(TabState.ScriptTree, nil)
+			button:SetScript('OnEnter', function(self)
+				self.HighlightTexture:Show()
+			end)
+			button:SetScript('OnLeave', function(self)
+				self.HighlightTexture:Hide()
+			end)
+			button:SetScript('OnClick', function(self)
+				for _, btn in ipairs(TabState.ScriptButtons) do
+					btn.SelectedTexture:Hide()
+					btn:SetNormalFontObject(GameFontHighlightSmall)
+				end
+				self.SelectedTexture:Show()
+				self:SetNormalFontObject(GameFontNormalSmall)
 
+				TabState.ActiveScript = self.scriptName
+				local body = DevUI.DB.cli.savedScripts[self.scriptName]
+				if TabState.TitleBox then
+					TabState.TitleBox:SetText(self.scriptName)
+				end
+				if TabState.EditorBox then
+					TabState.EditorBox:SetValue(body or '')
+				end
+			end)
+			TabState.ScriptButtons[index] = button
+		end
+
+		button.scriptName = scriptName
+		button:ClearAllPoints()
+		button:SetPoint('TOPLEFT', TabState.ScriptTree, 'TOPLEFT', 3, yOffset)
 		LibAT.UI.SetupFilterButton(button, {
 			type = 'subCategory',
 			name = scriptName,
 			subCategoryIndex = scriptName,
 			selected = (TabState.ActiveScript == scriptName),
 		})
-
-		button:SetScript('OnEnter', function(self)
-			self.HighlightTexture:Show()
-		end)
-		button:SetScript('OnLeave', function(self)
-			self.HighlightTexture:Hide()
-		end)
-
-		button:SetScript('OnClick', function(self)
-			-- Clear all selections
-			for _, btn in pairs(TabState.ScriptButtons) do
-				btn.SelectedTexture:Hide()
-				btn:SetNormalFontObject(GameFontHighlightSmall)
-			end
-			-- Select this one
-			self.SelectedTexture:Show()
-			self:SetNormalFontObject(GameFontNormalSmall)
-
-			-- Load script into editor
-			TabState.ActiveScript = scriptName
-			local body = DevUI.DB.cli.savedScripts[scriptName]
-			if TabState.TitleBox then
-				TabState.TitleBox:SetText(scriptName)
-			end
-			if TabState.EditorBox then
-				TabState.EditorBox:SetValue(body or '')
-			end
-		end)
-
-		table.insert(TabState.ScriptButtons, button)
+		button:Show()
 		yOffset = yOffset - (buttonHeight + 1)
 	end
 
-	-- Update tree height
+	for i = #scriptNames + 1, #TabState.ScriptButtons do
+		TabState.ScriptButtons[i]:Hide()
+	end
+
 	local totalHeight = math.abs(yOffset) + 20
 	TabState.ScriptTree:SetHeight(math.max(totalHeight, TabState.ScriptScrollFrame:GetHeight()))
 end
