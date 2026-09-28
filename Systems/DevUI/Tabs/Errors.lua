@@ -95,11 +95,8 @@ RebuildErrorList = function()
 
 	-- Sort: current session first, then reverse chronological
 	table.sort(sessions, function(a, b)
-		if a.isCurrent then
-			return true
-		end
-		if b.isCurrent then
-			return false
+		if (a.isCurrent and true or false) ~= (b.isCurrent and true or false) then
+			return a.isCurrent and true or false
 		end
 		return a.id > b.id
 	end)
@@ -289,7 +286,7 @@ BuildContent = function(contentFrame)
 
 	TabState.ShowLocals = LibAT.UI.CreateCheckbox(controlFrame, 'Show Locals')
 	TabState.ShowLocals:SetPoint('LEFT', controlFrame, 'LEFT', 60, 0)
-	TabState.ShowLocals:SetChecked(DevUI.DB and DevUI.DB.errors.showLocals or true)
+	TabState.ShowLocals:SetChecked(not DevUI.DB or DevUI.DB.errors.showLocals ~= false)
 	TabState.ShowLocals:SetScript('OnClick', function(self)
 		if DevUI.DB then
 			DevUI.DB.errors.showLocals = self:GetChecked()
