@@ -32,6 +32,9 @@ function AddonManager:OnInitialize()
 			perCharacter = {}, -- { [characterName] = { activeProfile = profileId, profiles = {}, nextProfileId = n } }
 			addonListPosition = nil, -- { point, relPoint, x, y, width, height } saved AddonList position/size
 			characterList = {}, -- { [realmName] = { [charName] = { name, class, guid } } }
+			characterScope = 'player', -- 'player' edits this character, 'all' edits every character
+			collapsed = {}, -- { [addonName] = true } collapsed addon groups
+			gameMenuOpensManager = false, -- the game menu AddOns button opens this manager instead
 		},
 	}
 	AddonManager.Database = LibAT.Database:RegisterNamespace('AddonManager', defaults)
@@ -211,8 +214,8 @@ function AddonManager:OnInitialize()
 		name = 'Addon Manager',
 		args = {
 			enabled = {
-				name = 'Enable Addon Manager',
-				desc = 'Adds a sidecar panel to the Blizzard addon list with profile switching and favorites. Requires a UI reload to take effect.',
+				name = 'Add a shortcut to the Blizzard addon list',
+				desc = 'Shows an "Addon Manager" button on the Blizzard addon list and keeps locked favorites enabled when that list is used.',
 				type = 'toggle',
 				order = 1,
 				width = 'full',
@@ -221,39 +224,61 @@ function AddonManager:OnInitialize()
 				end,
 				set = function(_, val)
 					AddonManager.DB.enabled = val
-					if val then
-						LibAT:SafeReloadUI()
-					else
-						if AddonManager.BlizzardEnhance then
-							AddonManager.BlizzardEnhance.Teardown()
-						end
+					if AddonManager.BlizzardEnhance then
+						AddonManager.BlizzardEnhance.Refresh()
 					end
+				end,
+			},
+			gameMenu = {
+				name = 'Open the Addon Manager from the game menu',
+				desc = 'The AddOns button in the game menu (Escape) opens this manager instead of the Blizzard addon list.',
+				type = 'toggle',
+				order = 2,
+				width = 'full',
+				get = function()
+					return AddonManager.DB.gameMenuOpensManager == true
+				end,
+				set = function(_, val)
+					AddonManager.DB.gameMenuOpensManager = val
+				end,
+			},
+			open = {
+				name = 'Open Addon Manager',
+				type = 'execute',
+				order = 3,
+				func = function()
+					AddonManager.Open()
 				end,
 			},
 		},
 	}
 	LibAT.Options:AddOptions(options, 'Addon Manager', 'Libs-AddonTools')
-
-	-- Initialize Core (API compatibility layer)
-	if AddonManager.logger then
-		AddonManager.logger.info('Initializing AddonManager core systems')
-	end
 end
 
 function AddonManager:OnEnable()
-	-- Register events
-	self:RegisterEvent('PLAYER_LOGIN', 'OnPlayerLogin')
+	self:RegisterEvent('ADDON_LOADED', 'OnAddonLoaded')
 
-	if AddonManager.logger then
-		AddonManager.logger.info('AddonManager enabled')
+	-- AceAddon enables modules while PLAYER_LOGIN is being dispatched, so registering for it here
+	-- would never fire. Initialize directly when already logged in.
+	if IsLoggedIn() then
+		self:OnPlayerLogin()
+	else
+		self:RegisterEvent('PLAYER_LOGIN', 'OnPlayerLogin')
 	end
 end
 
 function AddonManager:OnDisable()
 	self:UnregisterAllEvents()
+end
 
-	if AddonManager.logger then
-		AddonManager.logger.info('AddonManager disabled')
+---Open the manager window
+function AddonManager.Open()
+	local DevUI = LibAT:GetModule('Handler.DevUI', true)
+	if DevUI and DevUI.ShowTab and DevUI.GetTabIndex then
+		local index = DevUI.GetTabIndex('Addons')
+		if index then
+			DevUI.ShowTab(index, true)
+		end
 	end
 end
 
@@ -262,19 +287,25 @@ end
 ----------------------------------------------------------------------------------------------------
 
 function AddonManager:OnPlayerLogin()
-	-- Record current character for the character selector
-	local realm = GetRealmName()
-	local name = UnitName('player')
-	local _, class = UnitClass('player')
-	AddonManager.DB.characterList[realm] = AddonManager.DB.characterList[realm] or {}
-	AddonManager.DB.characterList[realm][name] = { name = name, class = class }
-
-	-- Scan all installed addons and build metadata cache
-	if AddonManager.Core then
-		AddonManager.Core.ScanAddons()
+	if self.initialized then
+		return
 	end
+	self.initialized = true
 
-	if AddonManager.logger then
-		AddonManager.logger.info('Player login - scanning installed addons')
+	local Core = AddonManager.Core
+	Core.Initialize()
+	Core.SetCharacter(AddonManager.DB.characterScope == 'all' and nil or Core.PlayerGUID())
+
+	if AddonManager.Favorites then
+		AddonManager.Favorites.EnforceLock()
+	end
+	if AddonManager.BlizzardEnhance then
+		AddonManager.BlizzardEnhance.Initialize()
+	end
+end
+
+function AddonManager:OnAddonLoaded()
+	if self.initialized then
+		AddonManager.Core.OnAddonLoaded()
 	end
 end

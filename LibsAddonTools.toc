@@ -92,15 +92,11 @@ Systems\DevUI\Tabs\Performance.lua
 # AddonManager System
 Systems\AddonManager\AddonManager.lua
 Systems\AddonManager\Core.lua
-Systems\AddonManager\Data\SpecialCases.lua
-Systems\AddonManager\Data\Metadata.lua
-Systems\AddonManager\Features\Search.lua
-Systems\AddonManager\Features\Categories.lua
-Systems\AddonManager\Features\Profiles.lua
-Systems\AddonManager\Features\Dependencies.lua
-Systems\AddonManager\Features\Compatibility.lua
 Systems\AddonManager\Features\Favorites.lua
+Systems\AddonManager\Features\Profiles.lua
 Systems\AddonManager\BlizzardAddonListEnhance.lua
+Systems\AddonManager\UI\Theme.lua
+Systems\AddonManager\UI\ManagerView.lua
 
 # Performance System
 Systems\Performance\Performance.lua
