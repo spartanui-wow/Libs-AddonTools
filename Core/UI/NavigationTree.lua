@@ -91,6 +91,28 @@ end
 -- Tree Building Functions
 ----------------------------------------------------------------------------------------------------
 
+---Take a tree button from the scroll frame's pool; buttons are reused across rebuilds
+---@param scrollFrame Frame
+---@param treeContainer Frame
+---@return Button
+local function AcquireNavButton(scrollFrame, treeContainer)
+	scrollFrame.buttonPool = scrollFrame.buttonPool or {}
+	scrollFrame.poolUsed = (scrollFrame.poolUsed or 0) + 1
+	local button = scrollFrame.buttonPool[scrollFrame.poolUsed]
+	if not button then
+		button = LibAT.UI.CreateFilterButton(treeContainer)
+		button.indicator = button:CreateTexture(nil, 'OVERLAY')
+		scrollFrame.buttonPool[scrollFrame.poolUsed] = button
+	end
+	button:ClearAllPoints()
+	button.indicator:Hide()
+	button.SelectedTexture:Hide()
+	button.HighlightTexture:Hide()
+	button.Text:SetFontObject(GameFontNormalSmall)
+	button:Show()
+	return button
+end
+
 ---Build and display the navigation tree
 ---@param scrollFrame Frame The scroll frame containing the tree
 ---@param sortedCategoryKeys? string[] Optional sorted category keys
@@ -103,19 +125,9 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 	local treeContainer = scrollFrame.treeContainer
 	local categories = config.categories
 
-	-- Clear existing buttons
-	for _, button in pairs(scrollFrame.categoryButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
-	for _, button in pairs(scrollFrame.subCategoryButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
-	for _, button in pairs(scrollFrame.subSubCategoryButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
+	-- Start taking buttons from the front of the pool again
+	scrollFrame.buttonPool = scrollFrame.buttonPool or {}
+	scrollFrame.poolUsed = 0
 	scrollFrame.categoryButtons = {}
 	scrollFrame.subCategoryButtons = {}
 	scrollFrame.subSubCategoryButtons = {}
@@ -138,7 +150,7 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 		local isLeaf = categoryData.isLeaf
 
 		-- Create category button
-		local categoryButton = LibAT.UI.CreateFilterButton(treeContainer)
+		local categoryButton = AcquireNavButton(scrollFrame, treeContainer)
 		categoryButton:SetPoint('TOPLEFT', treeContainer, 'TOPLEFT', 3, yOffset)
 
 		if isLeaf then
@@ -195,7 +207,7 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 			LibAT.UI.SetupFilterButton(categoryButton, categoryInfo)
 
 			-- Add expand/collapse indicator
-			categoryButton.indicator = categoryButton:CreateTexture(nil, 'OVERLAY')
+			categoryButton.indicator:Show()
 			categoryButton.indicator:SetSize(15, 15)
 			categoryButton.indicator:SetPoint('LEFT', categoryButton, 'LEFT', 2, 0)
 			if categoryData.expanded then
@@ -248,6 +260,10 @@ function LibAT.UI.BuildNavigationTree(scrollFrame, sortedCategoryKeys)
 		end
 	end
 
+	for i = scrollFrame.poolUsed + 1, #scrollFrame.buttonPool do
+		scrollFrame.buttonPool[i]:Hide()
+	end
+
 	-- Update tree height
 	local totalHeight = math.abs(yOffset) + 20
 	treeContainer:SetHeight(math.max(totalHeight, scrollFrame:GetHeight()))
@@ -267,7 +283,7 @@ function LibAT.UI.BuildSubCategories(scrollFrame, treeContainer, categoryData, y
 		local subCategoryData = categoryData.subCategories[subCategoryKey]
 
 		-- Create subcategory button
-		local subCategoryButton = LibAT.UI.CreateFilterButton(treeContainer)
+		local subCategoryButton = AcquireNavButton(scrollFrame, treeContainer)
 		subCategoryButton:SetPoint('TOPLEFT', treeContainer, 'TOPLEFT', 3, yOffset)
 
 		-- Setup subcategory button styling
@@ -281,7 +297,7 @@ function LibAT.UI.BuildSubCategories(scrollFrame, treeContainer, categoryData, y
 
 		-- Add expand/collapse indicator if has children
 		if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
-			subCategoryButton.indicator = subCategoryButton:CreateTexture(nil, 'OVERLAY')
+			subCategoryButton.indicator:Show()
 			subCategoryButton.indicator:SetSize(12, 12)
 			subCategoryButton.indicator:SetPoint('LEFT', subCategoryButton, 'LEFT', 2, 0)
 			if subCategoryData.expanded then
@@ -296,7 +312,7 @@ function LibAT.UI.BuildSubCategories(scrollFrame, treeContainer, categoryData, y
 			-- Handle expansion if has children
 			if subCategoryData.subSubCategories and next(subCategoryData.subSubCategories) then
 				subCategoryData.expanded = not subCategoryData.expanded
-				if self.indicator then
+				if self.indicator:IsShown() then
 					if subCategoryData.expanded then
 						self.indicator:SetAtlas('uitools-icon-minimize')
 					else
@@ -354,7 +370,7 @@ function LibAT.UI.BuildSubSubCategories(scrollFrame, treeContainer, subCategoryD
 		local subSubCategoryData = subCategoryData.subSubCategories[subSubCategoryKey]
 
 		-- Create sub-subcategory button
-		local subSubCategoryButton = LibAT.UI.CreateFilterButton(treeContainer)
+		local subSubCategoryButton = AcquireNavButton(scrollFrame, treeContainer)
 		subSubCategoryButton:SetPoint('TOPLEFT', treeContainer, 'TOPLEFT', 3, yOffset)
 
 		-- Setup sub-subcategory button styling
