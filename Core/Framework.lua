@@ -7,8 +7,8 @@ _G.LibAT = LibAT
 LibAT.DebugMode = false
 
 -- Version information
-LibAT.Version = C_AddOns.GetAddOnMetadata('Libs-AddonTools', 'Version') or 0
-LibAT.BuildNum = C_AddOns.GetAddOnMetadata('Libs-AddonTools', 'X-Build') or 0
+LibAT.Version = C_AddOns.GetAddOnMetadata('LibsAddonTools', 'Version') or 0
+LibAT.BuildNum = C_AddOns.GetAddOnMetadata('LibsAddonTools', 'X-Build') or 0
 LibAT.BuildType = 'Release'
 --@alpha@
 LibAT.BuildType = 'ALPHA ' .. LibAT.BuildNum
@@ -358,11 +358,6 @@ end
 SLASH_LOGS1 = '/logs'
 SlashCmdList['LOGS'] = function(msg)
 	SlashCmdList['LIBAT']('logs ' .. (msg or ''))
-end
-
-SLASH_PROFILES1 = '/profiles'
-SlashCmdList['PROFILES'] = function(msg)
-	SlashCmdList['LIBAT']('profiles ' .. (msg or ''))
 end
 
 SLASH_SETUP1 = '/setup'

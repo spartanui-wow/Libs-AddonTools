@@ -195,11 +195,6 @@ function LibAT.UI.CreateIconButton(parent, normalAtlas, highlightAtlas, pushedAt
 	local button = CreateFrame('Button', nil, parent)
 	button:SetSize(size, size)
 
-	-- Set up texture states
-	button:SetNormalTexture('Interface\\AddOns\\SpartanUI\\images\\empty')
-	button:SetHighlightTexture('Interface\\AddOns\\SpartanUI\\images\\empty')
-	button:SetPushedTexture('Interface\\AddOns\\SpartanUI\\images\\empty')
-
 	-- Create texture layers using atlas
 	button.NormalTexture = button:CreateTexture(nil, 'ARTWORK')
 	button.NormalTexture:SetAtlas(normalAtlas)
@@ -753,18 +748,6 @@ function LibAT.UI.CreateMultiLineBox(parent, width, height, text)
 			editBox:SetTextColor(0.7, 0.7, 0.7)
 			-- Block typing but keep the EditBox enabled so text is selectable/copyable
 			editBox:SetScript('OnChar', function() end)
-			editBox:SetScript('OnKeyDown', function(self, key)
-				-- Allow Ctrl+A (select all) and Ctrl+C (copy)
-				if IsControlKeyDown() and (key == 'A' or key == 'C') then
-					return
-				end
-				-- Block Enter, Backspace, Delete
-				if key == 'ENTER' or key == 'BACKSPACE' or key == 'DELETE' then
-					self:SetPropagateKeyboardInput(false)
-				else
-					self:SetPropagateKeyboardInput(true)
-				end
-			end)
 			-- Guard against paste or other modifications
 			editBox:SetScript('OnTextChanged', function(self)
 				if scrollFrame._readOnlyText and self:GetText() ~= scrollFrame._readOnlyText then
@@ -899,4 +882,4 @@ function LibAT.UI.TooltipStyle.BuildDivider(title, width)
 	end
 end
 
-return UI
+return LibAT.UI

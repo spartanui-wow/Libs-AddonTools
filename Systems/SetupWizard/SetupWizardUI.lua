@@ -423,7 +423,8 @@ function SetupWizard:CheckFirstRun()
 
 	-- Show static popup prompt
 	StaticPopupDialogs['LIBAT_SETUP_WIZARD_PROMPT'] = {
-		text = 'The following addons have setup pages to review:\n\n' .. addonList .. '\n\nWould you like to open the Setup Wizard?',
+		-- The addon list goes in as an argument: popup text is formatted, so a '%' in a name would break it
+		text = 'The following addons have setup pages to review:\n\n%s\n\nWould you like to open the Setup Wizard?',
 		button1 = 'Open Wizard',
 		button2 = 'Not Now',
 		button3 = "Don't Ask Again",
@@ -444,5 +445,5 @@ function SetupWizard:CheckFirstRun()
 		hideOnEscape = true,
 		preferredIndex = 3,
 	}
-	StaticPopup_Show('LIBAT_SETUP_WIZARD_PROMPT')
+	StaticPopup_Show('LIBAT_SETUP_WIZARD_PROMPT', addonList)
 end

@@ -91,17 +91,14 @@ local function SetupTableInspectorHooks()
 			HookInspectorInstance(_G.TableAttributeDisplay)
 		end
 
-		-- Wrap DisplayTableInspectorWindow to catch /tinspect pool instances
-		if _G.DisplayTableInspectorWindow then
-			local origDisplay = _G.DisplayTableInspectorWindow
-			_G.DisplayTableInspectorWindow = function(...)
-				local result = origDisplay(...)
-				if result then
-					HookInspectorInstance(result)
-					PatchInspectorLines(result)
-				end
-				return result
-			end
+		-- /tinspect windows come from a pool built on TableInspectorMixin. Hooking the mixin
+		-- reaches every window created afterwards without replacing Blizzard's global function.
+		if TableInspectorMixin and TableInspectorMixin.InspectTable and not TableInspectorMixin._libATHooked then
+			TableInspectorMixin._libATHooked = true
+			hooksecurefunc(TableInspectorMixin, 'InspectTable', function(inspector)
+				HookInspectorInstance(inspector)
+				PatchInspectorLines(inspector)
+			end)
 		end
 
 		if logger then

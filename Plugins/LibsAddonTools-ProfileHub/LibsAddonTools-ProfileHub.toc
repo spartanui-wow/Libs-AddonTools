@@ -1,4 +1,4 @@
-## Interface: 120005, 120007, 50503, 50504, 38000, 20505, 11508
+## Interface: 120100, 120007, 16001, 50504, 38001, 20506, 11509
 ## Title: LibAT Profile Hub
 ## Notes: Desktop companion helper for Lib's Addon Tools Profile Manager
 ## Author: wutname1
