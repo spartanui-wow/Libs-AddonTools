@@ -94,30 +94,26 @@ local function ApplyImportData(addonId, importData, targetProfileKeyOverride)
 	end
 	local importCount = 0
 
-	-- Import namespaces
-	if importData.Namespaces then
-		if not db.sv.namespaces then
-			db.sv.namespaces = {}
+	-- Validate before writing so a damaged payload cannot half-apply
+	if importData.Namespaces ~= nil and type(importData.Namespaces) ~= 'table' then
+		return false, 'Namespace data is damaged'
+	end
+	for namespace, nsData in pairs(importData.Namespaces or {}) do
+		if type(namespace) ~= 'string' or type(nsData) ~= 'table' then
+			return false, 'Namespace "' .. tostring(namespace) .. '" is damaged'
 		end
-		for namespace, nsData in pairs(importData.Namespaces) do
-			if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-				if not db.sv.namespaces[namespace] then
-					db.sv.namespaces[namespace] = {}
-				end
-				local profileData = {}
-				for key, value in pairs(nsData) do
-					if key == '$global' then
-						db.sv.namespaces[namespace].global = value
-					elseif key ~= 'profiles' then
-						profileData[key] = value
-					end
-				end
-				if next(profileData) then
-					if not db.sv.namespaces[namespace].profiles then
-						db.sv.namespaces[namespace].profiles = {}
-					end
-					db.sv.namespaces[namespace].profiles[targetProfileKey] = profileData
-				end
+	end
+	if importData.BaseDB ~= nil and type(importData.BaseDB) ~= 'table' then
+		return false, 'Profile data is damaged'
+	end
+	if importData.GlobalDB ~= nil and type(importData.GlobalDB) ~= 'table' then
+		return false, 'Global data is damaged'
+	end
+
+	-- Import namespaces into the target profile, keeping each namespace's other profiles
+	for namespace, nsData in pairs(importData.Namespaces or {}) do
+		if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
+			if ProfileManagerState.ApplyNamespaceImport(db.sv, namespace, nsData, targetProfileKey) then
 				importCount = importCount + 1
 			end
 		end
@@ -369,15 +365,22 @@ local function RefreshReviewContent()
 				for _, name in ipairs(names) do
 					local entry = pendingImports[name]
 					local targetKey
+					local skip = false
 					if entry and entry.selectedDest == '__NEW__' then
 						local newName = (entry.selectedNewName or ''):match('^%s*(.-)%s*$') or ''
 						if newName ~= '' then
 							targetKey = newName
+						else
+							-- A blank "Create New" name must not fall through to the current profile
+							skip = true
+							LibAT:Print('|cffff0000Skipped ' .. name .. ':|r enter a name for the new profile, then apply it.')
 						end
 					elseif entry and entry.selectedDest then
 						targetKey = entry.selectedDest
 					end
-					ProfileManager:ApplyDesktopImport(name, targetKey)
+					if not skip then
+						ProfileManager:ApplyDesktopImport(name, targetKey)
+					end
 				end
 				RefreshReviewContent()
 			end)
@@ -491,12 +494,13 @@ function ProfileManager:ApplyDesktopImport(addonName, targetProfileKey)
 
 	-- Handle composite format
 	if importData.format == 'ProfileManager_Composite' then
-		self:ShowCompositeImport(cleanEncoded)
-		-- Clear from pending after routing to composite UI
-		pendingImports[addonName] = nil
-		if LibAT_ProfileHub_PendingImports then
-			LibAT_ProfileHub_PendingImports[addonName] = nil
-		end
+		-- Keep the staged import until the user actually confirms it
+		self:ShowCompositeImport(cleanEncoded, function()
+			pendingImports[addonName] = nil
+			if LibAT_ProfileHub_PendingImports then
+				LibAT_ProfileHub_PendingImports[addonName] = nil
+			end
+		end)
 		return true
 	end
 

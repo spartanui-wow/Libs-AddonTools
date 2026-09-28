@@ -936,7 +936,9 @@ end
 
 ---Show composite import window with confirmation dialog
 ---@param encodedData string The base64-encoded composite data
-function ProfileManager:ShowCompositeImport(encodedData)
+---@param encodedData string
+---@param onImported? fun() Called after at least one component imported
+function ProfileManager:ShowCompositeImport(encodedData, onImported)
 	-- Decode data
 	local compositeData, decodeErr = ProfileManager.DecodeData(encodedData)
 	if not compositeData then
@@ -949,6 +951,11 @@ function ProfileManager:ShowCompositeImport(encodedData)
 	if not analysis or not analysis.valid then
 		LibAT:Print('|cffff0000Import failed:|r ' .. (analysis and analysis.error or 'Invalid composite format'))
 		return
+	end
+
+	-- Only one confirmation at a time
+	if ProfileManagerState.compositeConfirm then
+		ProfileManagerState.compositeConfirm:Hide()
 	end
 
 	-- Create confirmation window
@@ -1004,6 +1011,9 @@ function ProfileManager:ShowCompositeImport(encodedData)
 	importButton:SetScript('OnClick', function()
 		-- Perform import
 		local success, results = self:ImportComposite(compositeData)
+		if results and results.successCount and results.successCount > 0 and onImported then
+			onImported()
+		end
 
 		if success then
 			LibAT:Print('|cff00ff00Successfully imported ' .. results.successCount .. ' component(s).|r Please /reload to apply changes.')
@@ -1026,6 +1036,7 @@ function ProfileManager:ShowCompositeImport(encodedData)
 		confirmWindow:Hide()
 	end)
 
+	ProfileManagerState.compositeConfirm = confirmWindow
 	confirmWindow:Show()
 end
 

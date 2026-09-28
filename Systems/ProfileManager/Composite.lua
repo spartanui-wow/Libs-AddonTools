@@ -395,33 +395,25 @@ local function ImportRegisteredAddon(addonId, data)
 		return false, 'Invalid AceDB object for ' .. addon.displayName
 	end
 
-	-- Validate data structure
-	if not data.addonId or not data.data then
+	-- Validate data structure (exports carry namespaces in data and the main profile in profileData)
+	if type(data.data) ~= 'table' and type(data.profileData) ~= 'table' and type(data.profiles) ~= 'table' then
 		return false, 'Invalid export data structure'
 	end
 
-	-- Import namespaces
-	if data.data and type(data.data) == 'table' then
-		if not db.sv.namespaces then
-			db.sv.namespaces = {}
-		end
+	-- Import namespaces into the active profile, keeping each namespace's other profiles
+	if type(data.data) == 'table' then
 		local targetProfileKey = db.keys and db.keys.profile or 'Default'
-
 		for namespace, nsData in pairs(data.data) do
-			if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-				if nsData.profileData then
-					-- v3.1.0+ format: convert flat profileData back to AceDB profiles structure
-					local converted = {}
-					for key, value in pairs(nsData) do
-						if key ~= 'profileData' then
-							converted[key] = value
-						end
+			if type(namespace) == 'string' and type(nsData) == 'table' and not tContains(ProfileManagerState.namespaceblacklist, namespace) then
+				local source = nsData
+				-- Older exports wrapped the profile settings in a profileData table
+				if type(nsData.profileData) == 'table' then
+					source = { ['$global'] = nsData['$global'] or nsData.global }
+					for key, value in pairs(nsData.profileData) do
+						source[key] = value
 					end
-					converted.profiles = { [targetProfileKey] = nsData.profileData }
-					db.sv.namespaces[namespace] = converted
-				else
-					db.sv.namespaces[namespace] = nsData
 				end
+				ProfileManagerState.ApplyNamespaceImport(db.sv, namespace, source, targetProfileKey)
 			end
 		end
 	end
@@ -569,23 +561,27 @@ function ProfileManager:ImportComposite(compositeData, options)
 
 	-- Validate composite format
 	if not compositeData or compositeData.format ~= 'ProfileManager_Composite' then
-		return false, { error = 'Invalid composite format' }
+		return false, { error = 'Invalid composite format', successCount = 0, errorCount = 0 }
 	end
 
 	if not compositeData.version then
-		return false, { error = 'Missing composite version' }
+		return false, { error = 'Missing composite version', successCount = 0, errorCount = 0 }
 	end
 
 	-- Version compatibility check (reject if major version > 4)
-	local majorVersion = tonumber(compositeData.version:match('^(%d+)'))
+	local majorVersion = tonumber(tostring(compositeData.version):match('^(%d+)'))
 	if not majorVersion or majorVersion > 4 then
-		return false, { error = 'Unsupported composite version: ' .. compositeData.version }
+		return false, { error = 'Unsupported composite version: ' .. tostring(compositeData.version), successCount = 0, errorCount = 0 }
+	end
+
+	if type(compositeData.compositeId) ~= 'string' or type(compositeData.components) ~= 'table' then
+		return false, { error = 'Composite data is damaged', successCount = 0, errorCount = 0 }
 	end
 
 	-- Get composite definition
 	local composite = ProfileManagerState.composites[compositeData.compositeId]
-	if not composite then
-		return false, { error = 'Composite "' .. compositeData.compositeId .. '" is not registered' }
+	if not composite or not ProfileManagerState.registeredAddons[composite.primaryAddonId] then
+		return false, { error = 'Composite "' .. compositeData.compositeId .. '" is not registered', successCount = 0, errorCount = 0 }
 	end
 
 	-- Build component lookup map
@@ -649,9 +645,13 @@ function ProfileManager:AnalyzeComposite(compositeData)
 		return nil
 	end
 
+	if type(compositeData.compositeId) ~= 'string' or type(compositeData.components) ~= 'table' then
+		return { valid = false, error = 'Composite data is damaged' }
+	end
+
 	-- Get composite definition
 	local composite = ProfileManagerState.composites[compositeData.compositeId]
-	if not composite then
+	if not composite or not ProfileManagerState.registeredAddons[composite.primaryAddonId] then
 		return {
 			valid = false,
 			error = 'Composite "' .. compositeData.compositeId .. '" is not registered',

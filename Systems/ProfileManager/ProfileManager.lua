@@ -828,9 +828,9 @@ end
 ---@param exportProfileKey string|nil If provided, only process this specific profile
 ---@return table|nil strippedData The namespace data with defaults removed, or nil if empty
 local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
-	if not nsDefaults then
-		return nsData
-	end
+	-- Without registered defaults nothing can be stripped, but the data must still be reshaped
+	-- (selected profile flattened, bookkeeping dropped) or imports cannot read it back
+	nsDefaults = nsDefaults or {}
 
 	local result = {}
 	local hasContent = false
@@ -909,9 +909,88 @@ local function StripNamespaceData(nsData, nsDefaults, exportProfileKey)
 	return hasContent and result or nil
 end
 
--- Expose helpers for Composite.lua (shares ProfileManagerState)
+-- Keys AceDB keeps beside the profiles; they never belong inside imported profile data
+local NAMESPACE_BOOKKEEPING = {
+	['$global'] = true,
+	global = true,
+	profiles = true,
+	profileKeys = true,
+	char = true,
+	realm = true,
+	factionrealm = true,
+	faction = true,
+	race = true,
+	class = true,
+}
+
+---Read exported namespace data in any of the shapes older versions produced:
+---  current: flat profile settings plus '$global'
+---  older single-namespace exports: { profiles = { [name] = {...} }, '$global' = ... }
+---  raw SavedVariables (no defaults registered): { profiles = {...}, global = {...}, profileKeys = ... }
+---@param nsData table
+---@return table|nil profileData Settings for one profile, or nil when there are none
+---@return table|nil globalData
+local function NormalizeNamespaceImport(nsData)
+	local globalData = nsData['$global']
+	if globalData == nil and type(nsData.global) == 'table' then
+		globalData = nsData.global
+	end
+
+	local profileData
+	for key, value in pairs(nsData) do
+		if not NAMESPACE_BOOKKEEPING[key] then
+			profileData = profileData or {}
+			profileData[key] = value
+		end
+	end
+
+	if not profileData and type(nsData.profiles) == 'table' then
+		if type(nsData.profiles.Default) == 'table' then
+			profileData = nsData.profiles.Default
+		else
+			local _, first = next(nsData.profiles)
+			if type(first) == 'table' then
+				profileData = first
+			end
+		end
+	end
+
+	return profileData, type(globalData) == 'table' and globalData or nil
+end
+
+---Write imported namespace data into one profile, keeping every other profile and the
+---namespace's per-character bookkeeping intact
+---@param sv table The addon's SavedVariables root (db.sv)
+---@param namespace string
+---@param nsData table Exported namespace data
+---@param targetProfileKey string
+---@return boolean imported
+local function ApplyNamespaceImport(sv, namespace, nsData, targetProfileKey)
+	local profileData, globalData = NormalizeNamespaceImport(nsData)
+	if not profileData and not globalData then
+		return false
+	end
+	sv.namespaces = sv.namespaces or {}
+	local target = sv.namespaces[namespace]
+	if type(target) ~= 'table' then
+		target = {}
+		sv.namespaces[namespace] = target
+	end
+	if globalData then
+		target.global = globalData
+	end
+	if profileData then
+		target.profiles = type(target.profiles) == 'table' and target.profiles or {}
+		target.profiles[targetProfileKey] = profileData
+	end
+	return true
+end
+
+-- Expose helpers for Composite.lua and DesktopImport.lua (shares ProfileManagerState)
 ProfileManagerState.GetNamespaceDefaults = GetNamespaceDefaults
 ProfileManagerState.StripNamespaceData = StripNamespaceData
+ProfileManagerState.NormalizeNamespaceImport = NormalizeNamespaceImport
+ProfileManagerState.ApplyNamespaceImport = ApplyNamespaceImport
 
 function ProfileManager:DoExport()
 	if not ProfileManagerState.window then
@@ -977,7 +1056,7 @@ function ProfileManager:DoExport()
 		-- Export single namespace
 		if db.sv.namespaces and db.sv.namespaces[activeNS] then
 			local nsDefaults = GetNamespaceDefaults(db, activeNS)
-			local strippedData = StripNamespaceData(db.sv.namespaces[activeNS], nsDefaults)
+			local strippedData = StripNamespaceData(db.sv.namespaces[activeNS], nsDefaults, exportProfileKey)
 			local pruned = PruneEmptyTables(strippedData, activeNS)
 			if pruned then
 				exportData.Namespaces[activeNS] = pruned
@@ -1089,14 +1168,16 @@ function ProfileManager:DoImport()
 	local importData, decodeErr
 
 	if dataText:match('^return%s*{') then
-		-- Legacy format: Lua table string
+		-- Legacy format: a Lua table constructor. It runs with an empty environment so it can
+		-- only build a table; it cannot reach any game or addon API.
 		local func = loadstring(dataText)
 		if func then
+			setfenv(func, {})
 			local success, result = pcall(func)
 			if success and type(result) == 'table' then
 				importData = result
 			else
-				decodeErr = 'Failed to evaluate Lua table: ' .. tostring(result)
+				decodeErr = 'Failed to read Lua table: ' .. tostring(result)
 			end
 		else
 			decodeErr = 'Invalid Lua table format'
@@ -1106,14 +1187,13 @@ function ProfileManager:DoImport()
 		importData, decodeErr = ProfileManager.DecodeData(dataText)
 	end
 
-	if not importData then
+	if type(importData) ~= 'table' then
 		LibAT:Print('|cffff0000Invalid profile data:|r ' .. tostring(decodeErr))
 		return
 	end
 
 	-- Detect composite format
 	if importData.format == 'ProfileManager_Composite' then
-		-- Route to composite import
 		self:ShowCompositeImport(dataText)
 		return
 	end
@@ -1121,143 +1201,130 @@ function ProfileManager:DoImport()
 	local addon = ProfileManagerState.registeredAddons[ProfileManagerState.window.activeAddonId]
 	local db = addon.db
 
-	-- Validate AceDB structure
 	if not db or not db.sv then
 		LibAT:Print('|cffff0000Error:|r Invalid AceDB object for ' .. addon.displayName)
 		return
 	end
 
-	-- Validate addon ID matches (optional safety check)
 	if importData.addonId and importData.addonId ~= addon.id then
-		LibAT:Print('|cffff9900Warning:|r Import data is for addon "' .. (importData.addon or 'Unknown') .. '" but you selected "' .. addon.displayName .. '"')
-		LibAT:Print('Continuing with import anyway...')
+		LibAT:Print('|cffff0000Import cancelled:|r this export was made for "' .. tostring(importData.addonId) .. '", not ' .. addon.displayName .. '. Select that addon on the left and import again.')
+		return
+	end
+
+	-- Validate every section before anything is written, so a damaged string cannot half-apply
+	if importData.Namespaces ~= nil and type(importData.Namespaces) ~= 'table' then
+		LibAT:Print('|cffff0000Invalid profile data:|r namespace section is damaged')
+		return
+	end
+	for namespace, nsData in pairs(importData.Namespaces or {}) do
+		if type(namespace) ~= 'string' or type(nsData) ~= 'table' then
+			LibAT:Print('|cffff0000Invalid profile data:|r namespace "' .. tostring(namespace) .. '" is damaged')
+			return
+		end
+	end
+	if importData.BaseDB ~= nil and type(importData.BaseDB) ~= 'table' then
+		LibAT:Print('|cffff0000Invalid profile data:|r profile section is damaged')
+		return
+	end
+	if importData.GlobalDB ~= nil and type(importData.GlobalDB) ~= 'table' then
+		LibAT:Print('|cffff0000Invalid profile data:|r global section is damaged')
+		return
 	end
 
 	-- Determine import destination profile key
 	local importDest = ProfileManagerState.window.importDestination
 	local targetProfileKey
 	if importDest == '__NEW__' then
-		-- Create new profile from user input
 		local newName = ProfileManagerState.window.NewProfileInput and ProfileManagerState.window.NewProfileInput:GetText() or ''
-		newName = newName:match('^%s*(.-)%s*$') -- trim
+		newName = newName:match('^%s*(.-)%s*$')
 		if not newName or newName == '' then
 			LibAT:Print('|cffff0000Error:|r Please enter a name for the new profile.')
 			return
 		end
 		targetProfileKey = newName
-		if not db.sv.profiles then
-			db.sv.profiles = {}
-		end
 	elseif importDest and importDest ~= '' then
-		-- Import to a specific existing profile
 		targetProfileKey = importDest
 	else
-		-- Default: import to current active profile
 		targetProfileKey = db.keys and db.keys.profile or 'Default'
 	end
 
-	-- Apply import data
-	local importCount = 0
 	local activeNS = ProfileManagerState.window.activeNamespace
 
+	-- Check there is something for the selected section before asking
 	if activeNS == '__COREDB__' then
-		-- Import Core DB to the target profile
-		if importData.namespace == '__COREDB__' and importData.BaseDB then
-			if not db.sv.profiles then
-				db.sv.profiles = {}
-			end
-			db.sv.profiles[targetProfileKey] = importData.BaseDB
-			importCount = 1
-		else
+		if importData.namespace ~= '__COREDB__' or not importData.BaseDB then
 			LibAT:Print('|cffff0000Error:|r Import data is not a Core DB export')
 			return
 		end
 	elseif activeNS then
-		-- Import single namespace
-		local nsData
-		if importData.Namespaces and importData.Namespaces[activeNS] then
-			nsData = importData.Namespaces[activeNS]
-		elseif importData.namespace == activeNS and importData.Namespaces then
-			nsData = importData.Namespaces[activeNS] or importData.Namespaces
-		end
-
-		if nsData then
-			if not db.sv.namespaces then
-				db.sv.namespaces = {}
-			end
-			-- Reconstruct AceDB namespace structure from flat export
-			local reconstructed = {}
-			local profileData = {}
-			for key, value in pairs(nsData) do
-				if key == '$global' then
-					reconstructed.global = value
-				else
-					profileData[key] = value
-				end
-			end
-			reconstructed.profiles = { [targetProfileKey] = profileData }
-			db.sv.namespaces[activeNS] = reconstructed
-			importCount = 1
-		else
+		if not (importData.Namespaces and importData.Namespaces[activeNS]) then
 			LibAT:Print('|cffff0000Error:|r Import data does not contain namespace "' .. activeNS .. '"')
 			return
 		end
-	else
-		-- Import all namespaces
+	end
 
-		if importData.Namespaces then
-			if not db.sv.namespaces then
-				db.sv.namespaces = {}
+	local function Apply()
+		local importCount = 0
+
+		if activeNS == '__COREDB__' then
+			db.sv.profiles = db.sv.profiles or {}
+			db.sv.profiles[targetProfileKey] = importData.BaseDB
+			importCount = 1
+		elseif activeNS then
+			if ApplyNamespaceImport(db.sv, activeNS, importData.Namespaces[activeNS], targetProfileKey) then
+				importCount = 1
 			end
-			for namespace, nsData in pairs(importData.Namespaces) do
+		else
+			for namespace, nsData in pairs(importData.Namespaces or {}) do
 				if not tContains(ProfileManagerState.namespaceblacklist, namespace) then
-					if not db.sv.namespaces[namespace] then
-						db.sv.namespaces[namespace] = {}
+					if ApplyNamespaceImport(db.sv, namespace, nsData, targetProfileKey) then
+						importCount = importCount + 1
 					end
-					-- Extract $global and profile data from flat namespace
-					local profileData = {}
-					for key, value in pairs(nsData) do
-						if key == '$global' then
-							db.sv.namespaces[namespace].global = value
-						elseif key ~= 'profiles' then
-							profileData[key] = value
-						end
-					end
-					if next(profileData) then
-						if not db.sv.namespaces[namespace].profiles then
-							db.sv.namespaces[namespace].profiles = {}
-						end
-						db.sv.namespaces[namespace].profiles[targetProfileKey] = profileData
-					end
-					importCount = importCount + 1
 				end
 			end
+
+			if importData.BaseDB then
+				db.sv.profiles = db.sv.profiles or {}
+				db.sv.profiles[targetProfileKey] = importData.BaseDB
+				if type(importData.BaseDB.SetupWizard) == 'table' then
+					importData.BaseDB.SetupWizard.FirstLaunch = false
+				end
+				importCount = importCount + 1
+			end
+
+			if importData.GlobalDB then
+				db.sv.global = importData.GlobalDB
+				importCount = importCount + 1
+			end
 		end
 
-		-- Import core profile data (BaseDB)
-		if importData.BaseDB then
-			if not db.sv.profiles then
-				db.sv.profiles = {}
-			end
-			db.sv.profiles[targetProfileKey] = importData.BaseDB
-			if type(importData.BaseDB.SetupWizard) == 'table' then
-				importData.BaseDB.SetupWizard.FirstLaunch = false
-			end
-		end
-
-		-- Import core global data (GlobalDB)
-		if importData.GlobalDB then
-			db.sv.global = importData.GlobalDB
+		if importCount > 0 then
+			LibAT:Print('|cff00ff00Profile imported successfully!|r Imported ' .. importCount .. ' section(s) for ' .. addon.displayName .. ' to profile "' .. targetProfileKey .. '"')
+			LibAT:Print('|cffff9900Please /reload to apply changes.|r')
+		else
+			LibAT:Print('|cffff0000No data was imported.|r')
 		end
 	end
 
-	if importCount > 0 then
-		local destMsg = ' to profile "' .. targetProfileKey .. '"'
-		LibAT:Print('|cff00ff00Profile imported successfully!|r Imported ' .. importCount .. ' section(s) for ' .. addon.displayName .. destMsg)
-		LibAT:Print('|cffff9900Please /reload to apply changes.|r')
-	else
-		LibAT:Print('|cffff0000No data was imported.|r')
+	local exists = db.sv.profiles and db.sv.profiles[targetProfileKey] ~= nil
+	local question = string.format('Import these settings into %s, profile "%s"?', addon.displayName, targetProfileKey)
+	if exists then
+		question = question .. ' The current settings in that profile will be replaced.'
 	end
+	if not activeNS and importData.GlobalDB then
+		question = question .. ' Account-wide settings for this addon will be replaced too.'
+	end
+	StaticPopupDialogs['LIBAT_PROFILE_IMPORT_CONFIRM'] = {
+		text = '%s',
+		button1 = ACCEPT,
+		button2 = CANCEL,
+		OnAccept = Apply,
+		timeout = 0,
+		whileDead = true,
+		hideOnEscape = true,
+		preferredIndex = 3,
+	}
+	StaticPopup_Show('LIBAT_PROFILE_IMPORT_CONFIRM', question)
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1267,8 +1334,9 @@ end
 -- Initialize ProfileManager system
 function ProfileManager:OnInitialize()
 	-- Initialize logger
-	if LibAT.logger then
-		ProfileManager.logger = LibAT.logger:RegisterCategory('ProfileManager')
+	if LibAT.InternalLog then
+		ProfileManager.logger = LibAT.InternalLog:RegisterCategory('ProfileManager')
+		ProfileManagerState.logger = ProfileManager.logger
 	end
 
 	-- Load filter settings from database

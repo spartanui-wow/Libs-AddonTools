@@ -61,14 +61,15 @@ local BuiltInSystems = {
 				return nil
 			end
 
-			local activeLayout = layouts.layouts[layouts.activeLayout]
+			-- activeLayout counts Blizzard's preset layouts first; GetLayouts() only returns saved ones
+			local numPresets = (Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues) or 0
+			local activeLayout = layouts.layouts[layouts.activeLayout - numPresets]
 			if not activeLayout then
 				return nil
 			end
 
-			-- Export the active layout
 			return {
-				version = '1.0.0',
+				version = '1.1.0',
 				format = 'EditMode_Layout',
 				layoutInfo = C_EditMode.ConvertLayoutInfoToString(activeLayout),
 				accountSettings = C_EditMode.GetAccountSettings(),
@@ -85,57 +86,70 @@ local BuiltInSystems = {
 				return false, 'Cannot import Edit Mode during combat'
 			end
 
-			-- Validate data structure
-			if not data or not data.layoutInfo then
+			if type(data) ~= 'table' or type(data.layoutInfo) ~= 'string' then
 				return false, 'Invalid Edit Mode data'
 			end
 
-			-- Convert string to layout info
-			local layoutInfo = C_EditMode.ConvertStringToLayoutInfo(data.layoutInfo)
-			if not layoutInfo then
+			local ok, layoutInfo = pcall(C_EditMode.ConvertStringToLayoutInfo, data.layoutInfo)
+			if not ok or type(layoutInfo) ~= 'table' then
 				return false, 'Failed to decode Edit Mode layout'
 			end
 
-			-- Get current layouts
-			local currentLayouts = C_EditMode.GetLayouts()
-			if not currentLayouts then
+			local current = C_EditMode.GetLayouts()
+			if not current or type(current.layouts) ~= 'table' then
 				return false, 'Failed to get current layouts'
 			end
 
-			-- Find existing layout by name or create new
-			local existingLayoutIndex = nil
-			for i, layout in ipairs(currentLayouts.layouts) do
-				if layout.layoutName == data.layoutName then
-					existingLayoutIndex = i
+			local name = (type(data.layoutName) == 'string' and data.layoutName ~= '') and data.layoutName or 'Imported Layout'
+			layoutInfo.layoutName = name
+
+			-- Replace a saved layout with the same name, otherwise add a new account layout
+			local targetIndex
+			for i, layout in ipairs(current.layouts) do
+				if layout.layoutName == name then
+					targetIndex = i
 					break
 				end
 			end
 
-			-- Save the layout
-			if existingLayoutIndex then
-				-- Update existing layout
-				C_EditMode.SaveLayoutFromString(existingLayoutIndex, data.layoutInfo)
+			if targetIndex then
+				layoutInfo.layoutType = current.layouts[targetIndex].layoutType
+				current.layouts[targetIndex] = layoutInfo
 			else
-				-- Create new layout
-				local newLayoutIndex = #currentLayouts.layouts + 1
-				C_EditMode.SaveLayoutFromString(newLayoutIndex, data.layoutInfo)
+				if C_EditMode.IsValidLayoutName and not C_EditMode.IsValidLayoutName(name) then
+					return false, 'The layout name "' .. name .. '" is not allowed'
+				end
+				local accountType = Enum.EditModeLayoutType.Account
+				local accountCount, lastAccountIndex = 0, 0
+				for i, layout in ipairs(current.layouts) do
+					if layout.layoutType == accountType then
+						accountCount = accountCount + 1
+						lastAccountIndex = i
+					end
+				end
+				local maxLayouts = Constants and Constants.EditModeConsts and Constants.EditModeConsts.EditModeMaxLayoutsPerType
+				if maxLayouts and accountCount >= maxLayouts then
+					return false, 'You already have the most account layouts Edit Mode allows. Delete one and import again.'
+				end
+				-- Blizzard keeps account layouts ahead of character layouts
+				layoutInfo.layoutType = accountType
+				targetIndex = lastAccountIndex + 1
+				table.insert(current.layouts, targetIndex, layoutInfo)
 			end
 
-			-- Apply account settings if present
-			if data.accountSettings then
-				for key, value in pairs(data.accountSettings) do
-					C_EditMode.SetAccountSetting(key, value)
+			C_EditMode.SaveLayouts(current)
+
+			-- Account settings are a list of { setting, value } records
+			if type(data.accountSettings) == 'table' then
+				for _, entry in ipairs(data.accountSettings) do
+					if type(entry) == 'table' and entry.setting ~= nil and type(entry.value) == 'number' then
+						pcall(C_EditMode.SetAccountSetting, entry.setting, entry.value)
+					end
 				end
 			end
 
-			-- Activate the layout
-			local updatedLayouts = C_EditMode.GetLayouts()
-			for i, layout in ipairs(updatedLayouts.layouts) do
-				if layout.layoutName == data.layoutName then
-					C_EditMode.SetActiveLayout(i)
-					break
-				end
-			end
+			local numPresets = (Enum.EditModePresetLayoutsMeta and Enum.EditModePresetLayoutsMeta.NumValues) or 0
+			C_EditMode.SetActiveLayout(numPresets + targetIndex)
 
 			return true
 		end,

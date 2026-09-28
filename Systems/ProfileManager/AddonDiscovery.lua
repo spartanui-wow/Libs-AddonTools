@@ -345,10 +345,13 @@ function ProfileManager.WrapAceDBSavedVariables(globalName)
 		return nil
 	end
 
-	-- AceDB SavedVariables already have the right structure (profiles, namespaces, etc.)
+	-- AceDB SavedVariables already have the right structure (profiles, namespaces, etc.).
+	-- AceDB keys each character's profile choice by "Name - Realm".
+	local charKey = (UnitName('player') or '') .. ' - ' .. (GetRealmName() or '')
+	local activeProfile = type(sv.profileKeys) == 'table' and sv.profileKeys[charKey] or nil
 	local wrapper = {
 		sv = sv,
-		keys = sv.profileKeys and { profile = 'Default' } or { profile = 'Default' },
+		keys = { profile = activeProfile or 'Default' },
 	}
 
 	return wrapper
