@@ -1,309 +1,187 @@
 ---@class LibAT
 local LibAT = LibAT
 
--- Performance: CPU/memory/load time tracking system
--- IMPORTANT: Only active when Performance UI is open to avoid performance drag
+-- Performance: per-addon CPU and memory sampling. Nothing runs until the Performance tab asks
+-- for a sample, and all samples live in memory only; the database holds preferences.
 
 local Performance = LibAT:NewModule('Handler.Performance', 'AceEvent-3.0') ---@class LibAT.Performance : AceAddon, AceEvent-3.0
-Performance.description = 'Performance profiling for CPU, memory, and load time tracking'
+Performance.description = 'Per-addon CPU and memory usage'
 
-----------------------------------------------------------------------------------------------------
--- Module Lifecycle
-----------------------------------------------------------------------------------------------------
+---@class LibAT.Performance.Sample
+---@field name string Folder name
+---@field title string Title without color codes
+---@field memory number KB
+---@field memoryPeak number Highest KB seen since the last reset
+---@field cpuRecent number|nil ms per frame, recent average
+---@field cpuSession number|nil ms per frame, session average
+---@field cpuPeak number|nil Longest single frame in ms
+---@field cpuShare number|nil Share of UI time this session (0-1)
+
+---@type LibAT.Performance.Sample[]
+Performance.samples = {}
+Performance.lastSample = 0
+
+local memoryPeaks = {}
+local titles = {}
+local lastMemoryUpdate = 0
+local MEMORY_INTERVAL = 5
 
 function Performance:OnInitialize()
-	-- Register database namespace
 	local defaults = {
 		profile = {
-			tracking = {
-				enabled = false, -- Only true when UI is open
-				updateInterval = 1.0, -- Update metrics every 1 second
-				showSystemAddons = false, -- Include Blizzard_ addons
-			},
-			metrics = {}, -- Current metrics cache
+			showSystemAddons = false,
+			sort = 'cpuRecent',
+			sortDescending = true,
 		},
 	}
 	Performance.Database = LibAT.Database:RegisterNamespace('Performance', defaults)
 	Performance.DB = Performance.Database.profile
 
-	-- Register logger category
+	-- Older versions saved live tracking state and every sample; keep the preference, drop the rest
+	local legacy = Performance.DB.tracking
+	if type(legacy) == 'table' then
+		if legacy.showSystemAddons ~= nil then
+			Performance.DB.showSystemAddons = legacy.showSystemAddons
+		end
+		Performance.DB.tracking = nil
+	end
+	Performance.DB.metrics = nil
+
 	if LibAT.InternalLog then
 		Performance.logger = LibAT.InternalLog:RegisterCategory('Performance')
 	end
-
-	if Performance.logger then
-		Performance.logger.info('Performance system initialized (tracking OFF)')
-	end
-end
-
-function Performance:OnEnable()
-	-- Don't start tracking here - wait for UI to open
-	if Performance.logger then
-		Performance.logger.info('Performance system enabled (tracking OFF)')
-	end
-end
-
-function Performance:OnDisable()
-	-- Stop tracking if active
-	Performance.StopTracking()
-
-	if Performance.logger then
-		Performance.logger.info('Performance system disabled')
-	end
 end
 
 ----------------------------------------------------------------------------------------------------
--- Tracking Control
+-- Sampling
 ----------------------------------------------------------------------------------------------------
 
----Start performance tracking
-function Performance.StartTracking()
-	if Performance.DB.tracking.enabled then
-		return -- Already tracking
-	end
-
-	Performance.DB.tracking.enabled = true
-
-	-- Enable CPU and memory profiling
-	ResetCPUUsage()
-	UpdateAddOnCPUUsage()
-	UpdateAddOnMemoryUsage()
-
-	-- Start update timer
-	if not Performance.updateTimer then
-		Performance.updateTimer = C_Timer.NewTicker(Performance.DB.tracking.updateInterval, function()
-			Performance.UpdateMetrics()
-		end)
-	end
-
-	if Performance.logger then
-		Performance.logger.info('Performance tracking started')
-	end
+---@return boolean
+function Performance.HasProfiler()
+	return C_AddOnProfiler ~= nil and C_AddOnProfiler.IsEnabled ~= nil and C_AddOnProfiler.IsEnabled() and Enum ~= nil and Enum.AddOnProfilerMetric ~= nil
 end
 
----Stop performance tracking
-function Performance.StopTracking()
-	if not Performance.DB.tracking.enabled then
-		return -- Already stopped
-	end
-
-	Performance.DB.tracking.enabled = false
-
-	-- Stop update timer
-	if Performance.updateTimer then
-		Performance.updateTimer:Cancel()
-		Performance.updateTimer = nil
-	end
-
-	if Performance.logger then
-		Performance.logger.info('Performance tracking stopped')
-	end
+---@param name string
+---@param metric number
+---@return number
+local function Metric(name, metric)
+	return C_AddOnProfiler.GetAddOnMetric(name, metric) or 0
 end
 
----Check if tracking is active
----@return boolean active Whether tracking is active
-function Performance.IsTracking()
-	return Performance.DB.tracking.enabled or false
+---@param index number
+---@param name string
+---@return string
+local function TitleOf(index, name)
+	if not titles[name] then
+		local title = C_AddOns.GetAddOnTitle and C_AddOns.GetAddOnTitle(index) or select(2, C_AddOns.GetAddOnInfo(index))
+		title = (title or name):gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|cn[^:]*:', ''):gsub('|r', ''):gsub('|T.-|t', ''):gsub('|A.-|a', '')
+		title = strtrim(title)
+		titles[name] = title ~= '' and title or name
+	end
+	return titles[name]
 end
 
-----------------------------------------------------------------------------------------------------
--- Metrics Collection
-----------------------------------------------------------------------------------------------------
-
----Update all performance metrics
-function Performance.UpdateMetrics()
-	if not Performance.DB.tracking.enabled then
-		return
+---Take a fresh sample of every loaded addon. Memory is refreshed at most every few seconds and is
+---skipped in combat, where the full heap walk would cause a hitch.
+---@param force? boolean Refresh memory now, even in combat
+function Performance.Sample(force)
+	local now = GetTime()
+	if force or (not InCombatLockdown() and now - lastMemoryUpdate >= MEMORY_INTERVAL) then
+		lastMemoryUpdate = now
+		UpdateAddOnMemoryUsage()
 	end
 
-	-- Update CPU and memory usage
-	UpdateAddOnCPUUsage()
-	UpdateAddOnMemoryUsage()
-
-	-- Collect metrics for all addons
-	local numAddons = C_AddOns and C_AddOns.GetNumAddOns() or GetNumAddOns()
-
-	for i = 1, numAddons do
-		local name = (C_AddOns and C_AddOns.GetAddOnInfo or GetAddOnInfo)(i)
-
-		-- Skip if this is a system addon and we're not showing them
-		if not Performance.DB.tracking.showSystemAddons and name and name:match('^Blizzard_') then
-			-- Skip
-		else
-			Performance.UpdateAddonMetrics(i, name)
-		end
-	end
-end
-
----Update metrics for a specific addon
----@param index number Addon index
----@param name string Addon name
-function Performance.UpdateAddonMetrics(index, name)
-	if not name then
-		return
+	local profiler = Performance.HasProfiler()
+	local metrics = profiler and Enum.AddOnProfilerMetric
+	local appSession, overallSession = 0, 0
+	if profiler then
+		appSession = C_AddOnProfiler.GetApplicationMetric(metrics.SessionAverageTime) or 0
+		overallSession = C_AddOnProfiler.GetOverallMetric(metrics.SessionAverageTime) or 0
 	end
 
-	-- Initialize metrics if needed
-	if not Performance.DB.metrics[name] then
-		Performance.DB.metrics[name] = {
-			cpu = 0,
-			memory = 0,
-			loadTime = 0,
-			calls = 0,
-			peak = {
-				cpu = 0,
-				memory = 0,
-			},
-		}
-	end
+	local showSystem = Performance.DB.showSystemAddons
+	local samples = Performance.samples
+	wipe(samples)
 
-	local metrics = Performance.DB.metrics[name]
+	for i = 1, C_AddOns.GetNumAddOns() do
+		local name, _, _, _, _, security = C_AddOns.GetAddOnInfo(i)
+		if name and C_AddOns.IsAddOnLoaded(i) and (showSystem or security ~= 'SECURE') then
+			local memory = GetAddOnMemoryUsage(i) or 0
+			memoryPeaks[name] = math.max(memoryPeaks[name] or 0, memory)
 
-	-- Get CPU usage (milliseconds)
-	local cpu = GetAddOnCPUUsage(index)
-	if cpu then
-		metrics.cpu = cpu
-		metrics.peak.cpu = math.max(metrics.peak.cpu, cpu)
-	end
-
-	-- Get memory usage (kilobytes, convert to megabytes)
-	local memory = GetAddOnMemoryUsage(index)
-	if memory then
-		metrics.memory = memory / 1024 -- Convert KB to MB
-		metrics.peak.memory = math.max(metrics.peak.memory, metrics.memory)
-	end
-
-	-- Load time is captured separately during ADDON_LOADED event
-	-- We don't update it here as it's a one-time measurement
-end
-
-----------------------------------------------------------------------------------------------------
--- Load Time Tracking
-----------------------------------------------------------------------------------------------------
-
--- Track load times during addon loading
-Performance.loadTimes = {}
-
----Record addon load time
----@param addonName string Addon name
-function Performance.RecordLoadTime(addonName)
-	if not Performance.loadTimes[addonName] then
-		Performance.loadTimes[addonName] = {
-			start = debugprofilestop(),
-		}
-	else
-		Performance.loadTimes[addonName].finish = debugprofilestop()
-		local loadTime = Performance.loadTimes[addonName].finish - Performance.loadTimes[addonName].start
-
-		-- Store in metrics
-		if not Performance.DB.metrics[addonName] then
-			Performance.DB.metrics[addonName] = {
-				cpu = 0,
-				memory = 0,
-				loadTime = loadTime,
-				calls = 0,
-				peak = { cpu = 0, memory = 0 },
+			---@type LibAT.Performance.Sample
+			local sample = {
+				name = name,
+				title = TitleOf(i, name),
+				memory = memory,
+				memoryPeak = memoryPeaks[name],
 			}
-		else
-			Performance.DB.metrics[addonName].loadTime = loadTime
+			if profiler then
+				sample.cpuRecent = Metric(name, metrics.RecentAverageTime)
+				sample.cpuSession = Metric(name, metrics.SessionAverageTime)
+				sample.cpuPeak = Metric(name, metrics.PeakTime)
+				local relative = appSession - overallSession + sample.cpuSession
+				sample.cpuShare = relative > 0 and sample.cpuSession / relative or 0
+			end
+			samples[#samples + 1] = sample
 		end
 	end
+	Performance.lastSample = now
 end
 
-----------------------------------------------------------------------------------------------------
--- Metrics Retrieval
-----------------------------------------------------------------------------------------------------
-
----Get metrics for all addons
----@return table<string, table> metrics Map of addon name to metrics
-function Performance.GetAllMetrics()
-	return Performance.DB.metrics
-end
-
----Get metrics for a specific addon
----@param addonName string Addon name
----@return table|nil metrics Metrics or nil if not found
-function Performance.GetAddonMetrics(addonName)
-	return Performance.DB.metrics[addonName]
-end
-
----Get sorted addon list by metric
----@param sortBy string Metric to sort by ('cpu', 'memory', 'loadTime')
----@param descending? boolean Sort descending (default: true)
----@return table[] sorted List of {name, metrics} sorted by metric
-function Performance.GetSortedMetrics(sortBy, descending)
-	if descending == nil then
-		descending = true
+---Totals for the summary line
+---@return number memoryKB
+---@return number loaded Number of loaded addons sampled
+---@return number|nil addonShare Share of UI time spent in all addons this session (0-1)
+function Performance.GetTotals()
+	local memory = 0
+	for _, sample in ipairs(Performance.samples) do
+		memory = memory + sample.memory
 	end
-
-	local sorted = {}
-
-	for name, metrics in pairs(Performance.DB.metrics) do
-		table.insert(sorted, {
-			name = name,
-			metrics = metrics,
-		})
-	end
-
-	table.sort(sorted, function(a, b)
-		local aVal = a.metrics[sortBy] or 0
-		local bVal = b.metrics[sortBy] or 0
-
-		if descending then
-			return aVal > bVal
-		else
-			return aVal < bVal
+	local share
+	if Performance.HasProfiler() then
+		local metric = Enum.AddOnProfilerMetric.SessionAverageTime
+		local app = C_AddOnProfiler.GetApplicationMetric(metric) or 0
+		if app > 0 then
+			share = (C_AddOnProfiler.GetOverallMetric(metric) or 0) / app
 		end
+	end
+	return memory, #Performance.samples, share
+end
+
+---Samples sorted by a field. Ties fall back to the title so rows do not jump between refreshes.
+---@param field string title|cpuRecent|cpuSession|cpuPeak|memory
+---@param descending boolean
+---@return LibAT.Performance.Sample[]
+function Performance.GetSorted(field, descending)
+	local list = {}
+	for i, sample in ipairs(Performance.samples) do
+		list[i] = sample
+	end
+	table.sort(list, function(a, b)
+		if field ~= 'title' then
+			local av, bv = a[field] or 0, b[field] or 0
+			if av ~= bv then
+				if descending then
+					return av > bv
+				end
+				return av < bv
+			end
+		end
+		local at, bt = a.title:lower(), b.title:lower()
+		if field == 'title' and descending then
+			return at > bt
+		end
+		return at < bt
 	end)
-
-	return sorted
+	return list
 end
 
----Reset all metrics
-function Performance.ResetMetrics()
-	wipe(Performance.DB.metrics)
-	wipe(Performance.loadTimes)
-
-	-- Reset WoW's internal counters
-	ResetCPUUsage()
-
-	if Performance.logger then
-		Performance.logger.info('Performance metrics reset')
+---Forget the highest memory values seen so far
+function Performance.ResetPeaks()
+	wipe(memoryPeaks)
+	for _, sample in ipairs(Performance.samples) do
+		memoryPeaks[sample.name] = sample.memory
+		sample.memoryPeak = sample.memory
 	end
-end
-
-----------------------------------------------------------------------------------------------------
--- Summary Statistics
-----------------------------------------------------------------------------------------------------
-
----Get total CPU/memory usage across all addons
----@return number totalCPU Total CPU in milliseconds
----@return number totalMemory Total memory in megabytes
-function Performance.GetTotalUsage()
-	local totalCPU = 0
-	local totalMemory = 0
-
-	for name, metrics in pairs(Performance.DB.metrics) do
-		totalCPU = totalCPU + (metrics.cpu or 0)
-		totalMemory = totalMemory + (metrics.memory or 0)
-	end
-
-	return totalCPU, totalMemory
-end
-
----Get average metrics
----@return number avgCPU Average CPU per addon
----@return number avgMemory Average memory per addon
-function Performance.GetAverageUsage()
-	local count = 0
-	for _ in pairs(Performance.DB.metrics) do
-		count = count + 1
-	end
-
-	if count == 0 then
-		return 0, 0
-	end
-
-	local totalCPU, totalMemory = Performance.GetTotalUsage()
-	return totalCPU / count, totalMemory / count
 end

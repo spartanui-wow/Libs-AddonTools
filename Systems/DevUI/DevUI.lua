@@ -158,13 +158,26 @@ end
 -- Window and Tab Management
 ----------------------------------------------------------------------------------------------------
 
+---Tell a tab it is no longer visible so it can stop timers and tracking
+---@param tabIndex number|nil
+local function DeactivateTab(tabIndex)
+	local tabModule = tabIndex and DevUIState.TabModules[tabIndex]
+	if tabModule and tabModule.OnDeactivate then
+		tabModule.OnDeactivate()
+	end
+end
+
 ---Set the active tab, showing its content and updating tab button states
----@param tabIndex number The tab index to activate (1-4)
+---@param tabIndex number The tab index to activate
 function DevUI.SetActiveTab(tabIndex)
 	if tabIndex < 1 or tabIndex > #TAB_CONFIG then
 		return
 	end
 
+	if DevUIState.ActivatedTab and DevUIState.ActivatedTab ~= tabIndex then
+		DeactivateTab(DevUIState.ActivatedTab)
+	end
+	DevUIState.ActivatedTab = tabIndex
 	DevUIState.ActiveTab = tabIndex
 
 	-- Show/hide content frames
@@ -210,6 +223,12 @@ local function CreateDevUIWindow()
 		DevUIState.Window.Inset:Hide()
 	end
 
+	-- Closing the window (button, Escape or toggle) deactivates the visible tab
+	DevUIState.Window:HookScript('OnHide', function()
+		DeactivateTab(DevUIState.ActivatedTab)
+		DevUIState.ActivatedTab = nil
+	end)
+
 	-- Create content frames for each tab
 	for i = 1, #TAB_CONFIG do
 		local content = CreateFrame('Frame', 'LibAT_DevUI_Content' .. i, DevUIState.Window)
@@ -225,8 +244,9 @@ local function CreateDevUIWindow()
 	end
 
 	-- Build content for each tab module
-	for i, tabModule in ipairs(DevUIState.TabModules) do
-		if tabModule.BuildContent then
+	for i = 1, #TAB_CONFIG do
+		local tabModule = DevUIState.TabModules[i]
+		if tabModule and tabModule.BuildContent then
 			tabModule.BuildContent(DevUIState.ContentFrames[i])
 		end
 	end
@@ -239,10 +259,12 @@ end
 ---@param tabIndex number The tab to show (1-4)
 DevUI.GetTabIndex = GetTabIndex
 
-function DevUI.ShowTab(tabIndex)
+---@param tabIndex number
+---@param keepOpen? boolean Do not close the window when this tab is already showing
+function DevUI.ShowTab(tabIndex, keepOpen)
 	CreateDevUIWindow()
 
-	if DevUIState.Window:IsShown() and DevUIState.ActiveTab == tabIndex then
+	if not keepOpen and DevUIState.Window:IsShown() and DevUIState.ActiveTab == tabIndex then
 		-- Toggle off if already showing this tab
 		DevUIState.Window:Hide()
 	else
