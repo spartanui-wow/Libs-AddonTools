@@ -163,230 +163,275 @@ local function CreateReviewWindow()
 	return reviewWindow
 end
 
----Rebuild the review window content based on current pending imports
-local function RefreshReviewContent()
+local RefreshReviewContent
+
+---@param entry table|nil
+---@return string|nil targetKey
+---@return boolean ok False when "Create New" was picked without a name
+local function ResolveTarget(entry)
+	if entry and entry.selectedDest == '__NEW__' then
+		local newName = (entry.selectedNewName or ''):match('^%s*(.-)%s*$') or ''
+		if newName == '' then
+			return nil, false
+		end
+		return newName, true
+	end
+	return entry and entry.selectedDest or nil, true
+end
+
+local function ApplyAll()
+	local names = {}
+	for addonName in pairs(pendingImports) do
+		table.insert(names, addonName)
+	end
+	for _, name in ipairs(names) do
+		local targetKey, ok = ResolveTarget(pendingImports[name])
+		if ok then
+			ProfileManager:ApplyDesktopImport(name, targetKey)
+		else
+			-- A blank "Create New" name must not fall through to the current profile
+			LibAT:Print('|cffff0000Skipped ' .. name .. ':|r enter a name for the new profile, then apply it.')
+		end
+	end
+	RefreshReviewContent()
+end
+
+---@param row Frame
+---@return string currentKey
+---@return table|nil db
+local function CurrentProfileKey(row)
+	local addon = row.addonId and ProfileManagerState.registeredAddons[row.addonId]
+	local db = addon and addon.db
+	return (db and db.keys and db.keys.profile) or 'Default', db
+end
+
+local ROW_HEIGHT = 88
+
+---Build one review row. Rows are reused, so every handler reads the row's current entry.
+---@param parent Frame
+---@return Frame
+local function CreateReviewRow(parent)
+	local row = CreateFrame('Frame', nil, parent)
+	row:SetHeight(ROW_HEIGHT)
+
+	local bg = row:CreateTexture(nil, 'BACKGROUND')
+	bg:SetAllPoints()
+	bg:SetColorTexture(0.15, 0.15, 0.15, 0.5)
+
+	row.nameText = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+	row.nameText:SetPoint('TOPLEFT', 8, -6)
+
+	row.titleText = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	row.titleText:SetPoint('TOPLEFT', row.nameText, 'BOTTOMLEFT', 0, -2)
+
+	row.dateText = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
+	row.dateText:SetPoint('TOPLEFT', row.titleText, 'BOTTOMLEFT', 0, -2)
+
+	row.destLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
+	row.destLabel:SetText('To:')
+
+	row.destDropdown = LibAT.UI.CreateDropdown(row, '', 160, 20)
+	row.destDropdown:SetPoint('LEFT', row.destLabel, 'RIGHT', 4, 0)
+
+	row.newProfileInput = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
+	row.newProfileInput:SetSize(100, 18)
+	row.newProfileInput:SetPoint('LEFT', row.destDropdown, 'RIGHT', 4, 0)
+	row.newProfileInput:SetAutoFocus(false)
+	row.newProfileInput:SetFontObject('GameFontHighlightSmall')
+	row.newProfileInput:SetScript('OnEscapePressed', row.newProfileInput.ClearFocus)
+	row.newProfileInput:SetScript('OnTextChanged', function(self)
+		if row.entry then
+			row.entry.selectedNewName = self:GetText()
+		end
+	end)
+
+	if row.destDropdown.SetupMenu then
+		row.destDropdown:SetupMenu(function(_, rootDescription)
+			local entry = row.entry
+			if not entry then
+				return
+			end
+			local currentKey, db = CurrentProfileKey(row)
+			rootDescription:CreateButton('Current (' .. currentKey .. ')', function()
+				entry.selectedDest = nil
+				entry.selectedNewName = nil
+				row.destDropdown:SetText('Current (' .. currentKey .. ')')
+				row.newProfileInput:Hide()
+			end)
+			if db and db.sv and db.sv.profiles then
+				local sorted = {}
+				for name in pairs(db.sv.profiles) do
+					if name ~= currentKey then
+						table.insert(sorted, name)
+					end
+				end
+				table.sort(sorted)
+				for _, name in ipairs(sorted) do
+					rootDescription:CreateButton(name, function()
+						entry.selectedDest = name
+						entry.selectedNewName = nil
+						row.destDropdown:SetText(name)
+						row.newProfileInput:Hide()
+					end)
+				end
+			end
+			rootDescription:CreateButton('|cff00ff00Create New...|r', function()
+				entry.selectedDest = '__NEW__'
+				row.destDropdown:SetText('New Profile:')
+				row.newProfileInput:SetText(entry.selectedNewName or '')
+				row.newProfileInput:Show()
+				row.newProfileInput:SetFocus()
+			end)
+		end)
+	end
+
+	row.applyBtn = LibAT.UI.CreateButton(row, 70, 22, 'Apply')
+	row.applyBtn:SetPoint('TOPRIGHT', row, 'TOPRIGHT', -80, -6)
+	row.applyBtn:SetScript('OnClick', function()
+		local targetKey, ok = ResolveTarget(row.entry)
+		if not ok then
+			LibAT:Print('|cffff0000Error:|r Please enter a name for the new profile.')
+			return
+		end
+		ProfileManager:ApplyDesktopImport(row.addonName, targetKey)
+		RefreshReviewContent()
+	end)
+
+	row.dismissBtn = LibAT.UI.CreateButton(row, 70, 22, 'Dismiss')
+	row.dismissBtn:SetPoint('TOPRIGHT', row, 'TOPRIGHT', -5, -6)
+	row.dismissBtn:SetScript('OnClick', function()
+		pendingImports[row.addonName] = nil
+		if LibAT_ProfileHub_PendingImports then
+			LibAT_ProfileHub_PendingImports[row.addonName] = nil
+		end
+		RefreshReviewContent()
+	end)
+
+	return row
+end
+
+---@param row Frame
+---@param addonName string
+---@param entry table
+local function PaintReviewRow(row, addonName, entry)
+	row.addonName = addonName
+	row.entry = entry
+	row.addonId = FindAddonByName(addonName)
+
+	local statusColor = row.addonId and '|cff00ff00' or '|cffff9900'
+	local statusNote = row.addonId and '' or ' (not loaded)'
+	row.nameText:SetText(statusColor .. addonName .. statusNote .. '|r')
+	row.titleText:SetText(entry.title or '')
+
+	local lastAnchor = row.titleText
+	if entry.imported_at and entry.imported_at ~= '' then
+		row.dateText:SetText('Staged: ' .. entry.imported_at:sub(1, 10))
+		row.dateText:Show()
+		lastAnchor = row.dateText
+	else
+		row.dateText:Hide()
+	end
+
+	local registered = row.addonId ~= nil
+	row.destLabel:ClearAllPoints()
+	row.destLabel:SetPoint('TOPLEFT', lastAnchor, 'BOTTOMLEFT', 0, -4)
+	row.destLabel:SetShown(registered)
+	row.destDropdown:SetShown(registered)
+	row.applyBtn:SetShown(registered)
+
+	if registered and entry.selectedDest == '__NEW__' then
+		row.destDropdown:SetText('New Profile:')
+		row.newProfileInput:SetText(entry.selectedNewName or '')
+		row.newProfileInput:Show()
+	else
+		if registered then
+			local currentKey = CurrentProfileKey(row)
+			row.destDropdown:SetText(entry.selectedDest or ('Current (' .. currentKey .. ')'))
+		end
+		row.newProfileInput:Hide()
+	end
+end
+
+---Build the parts of the review window that live as long as the window
+local function EnsureReviewLayout()
+	if reviewWindow.review then
+		return reviewWindow.review
+	end
+	local review = { rows = {} }
+
+	review.emptyText = reviewWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+	review.emptyText:SetPoint('CENTER', 0, 20)
+	review.emptyText:SetText('No pending imports.')
+
+	review.header = reviewWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	review.header:SetPoint('TOPLEFT', 20, -35)
+
+	review.scrollFrame = CreateFrame('ScrollFrame', nil, reviewWindow, 'UIPanelScrollFrameTemplate')
+	review.scrollFrame:SetPoint('TOPLEFT', review.header, 'BOTTOMLEFT', 0, -10)
+	review.scrollFrame:SetPoint('BOTTOMRIGHT', -35, 50)
+
+	review.content = CreateFrame('Frame', nil, review.scrollFrame)
+	review.content:SetSize(1, 1)
+	review.scrollFrame:SetScrollChild(review.content)
+	review.scrollFrame:HookScript('OnSizeChanged', function(_, width)
+		review.content:SetWidth(math.max(width or 1, 1))
+	end)
+
+	review.applyAllBtn = LibAT.UI.CreateButton(reviewWindow, 120, 26, 'Apply All')
+	review.applyAllBtn:SetPoint('BOTTOM', 0, 15)
+	review.applyAllBtn:SetScript('OnClick', ApplyAll)
+
+	reviewWindow.review = review
+	return review
+end
+
+---Refresh the review window from the current pending imports
+RefreshReviewContent = function()
 	if not reviewWindow then
 		return
 	end
+	local review = EnsureReviewLayout()
 
-	-- Clear old dynamic children
-	if reviewWindow.dynamicChildren then
-		for _, child in ipairs(reviewWindow.dynamicChildren) do
-			child:Hide()
-			child:SetParent(nil)
-		end
+	local names = {}
+	for addonName in pairs(pendingImports) do
+		table.insert(names, addonName)
 	end
-	reviewWindow.dynamicChildren = {}
+	table.sort(names)
+	local count = #names
 
-	local count = 0
-	for _ in pairs(pendingImports) do
-		count = count + 1
-	end
-
-	if count == 0 then
-		local emptyText = reviewWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-		emptyText:SetPoint('CENTER', 0, 20)
-		emptyText:SetText('No pending imports.')
-		table.insert(reviewWindow.dynamicChildren, emptyText)
-		return
-	end
-
-	-- Header
-	local header = reviewWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	header:SetPoint('TOPLEFT', 20, -35)
-	header:SetText(count .. ' pending import(s) from the desktop app:')
-	table.insert(reviewWindow.dynamicChildren, header)
-
-	-- Scrollable list
-	local scrollFrame = CreateFrame('ScrollFrame', nil, reviewWindow, 'UIPanelScrollFrameTemplate')
-	scrollFrame:SetPoint('TOPLEFT', header, 'BOTTOMLEFT', 0, -10)
-	scrollFrame:SetPoint('BOTTOMRIGHT', -35, 50)
-	table.insert(reviewWindow.dynamicChildren, scrollFrame)
-
-	local contentFrame = CreateFrame('Frame', nil, scrollFrame)
-	contentFrame:SetSize(scrollFrame:GetWidth(), 1)
-	scrollFrame:SetScrollChild(contentFrame)
+	review.emptyText:SetShown(count == 0)
+	review.header:SetShown(count > 0)
+	review.scrollFrame:SetShown(count > 0)
+	review.header:SetText(count .. ' pending import(s) from the desktop app:')
 
 	local yOffset = 0
-	local ROW_HEIGHT = 88
-
-	for addonName, entry in pairs(pendingImports) do
-		-- Row container
-		local row = CreateFrame('Frame', nil, contentFrame)
-		row:SetSize(contentFrame:GetWidth() - 10, ROW_HEIGHT)
-		row:SetPoint('TOPLEFT', 0, yOffset)
-
-		-- Background
-		local bg = row:CreateTexture(nil, 'BACKGROUND')
-		bg:SetAllPoints()
-		bg:SetColorTexture(0.15, 0.15, 0.15, 0.5)
-
-		-- Addon name + title
-		local addonId = FindAddonByName(addonName)
-		local statusColor = addonId and '|cff00ff00' or '|cffff9900'
-		local statusIcon = addonId and '' or ' (not loaded)'
-
-		local nameText = row:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-		nameText:SetPoint('TOPLEFT', 8, -6)
-		nameText:SetText(statusColor .. addonName .. statusIcon .. '|r')
-
-		local titleText = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
-		titleText:SetPoint('TOPLEFT', nameText, 'BOTTOMLEFT', 0, -2)
-		titleText:SetText(entry.title)
-
-		-- Date
-		local lastAnchor = titleText
-		if entry.imported_at and entry.imported_at ~= '' then
-			local dateText = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
-			dateText:SetPoint('TOPLEFT', titleText, 'BOTTOMLEFT', 0, -2)
-			dateText:SetText('Staged: ' .. entry.imported_at:sub(1, 10))
-			lastAnchor = dateText
+	for i, addonName in ipairs(names) do
+		local row = review.rows[i]
+		if not row then
+			row = CreateReviewRow(review.content)
+			review.rows[i] = row
 		end
-
-		-- Profile destination dropdown (only when addon is registered)
-		if addonId then
-			local addon = ProfileManagerState.registeredAddons[addonId]
-			local db = addon.db
-			local currentProfileKey = (db and db.keys and db.keys.profile) or 'Default'
-
-			local destLabel = row:CreateFontString(nil, 'OVERLAY', 'GameFontDisableSmall')
-			destLabel:SetPoint('TOPLEFT', lastAnchor, 'BOTTOMLEFT', 0, -4)
-			destLabel:SetText('To:')
-
-			local destDropdown = LibAT.UI.CreateDropdown(row, 'Current (' .. currentProfileKey .. ')', 160, 20)
-			destDropdown:SetPoint('LEFT', destLabel, 'RIGHT', 4, 0)
-
-			-- New profile name input (hidden by default)
-			local newProfileInput = CreateFrame('EditBox', nil, row, 'InputBoxTemplate')
-			newProfileInput:SetSize(100, 18)
-			newProfileInput:SetPoint('LEFT', destDropdown, 'RIGHT', 4, 0)
-			newProfileInput:SetAutoFocus(false)
-			newProfileInput:SetFontObject('GameFontHighlightSmall')
-			newProfileInput:SetScript('OnEscapePressed', newProfileInput.ClearFocus)
-			newProfileInput:SetScript('OnTextChanged', function(self)
-				entry.selectedNewName = self:GetText()
-			end)
-			newProfileInput:Hide()
-
-			if destDropdown.SetupMenu then
-				destDropdown:SetupMenu(function(owner, rootDescription)
-					-- Current profile option
-					rootDescription:CreateButton('Current (' .. currentProfileKey .. ')', function()
-						entry.selectedDest = nil
-						entry.selectedNewName = nil
-						destDropdown:SetText('Current (' .. currentProfileKey .. ')')
-						newProfileInput:Hide()
-					end)
-
-					-- Existing profiles
-					if db and db.sv and db.sv.profiles then
-						local sorted = {}
-						for name in pairs(db.sv.profiles) do
-							if name ~= currentProfileKey then
-								table.insert(sorted, name)
-							end
-						end
-						table.sort(sorted)
-						for _, name in ipairs(sorted) do
-							rootDescription:CreateButton(name, function()
-								entry.selectedDest = name
-								entry.selectedNewName = nil
-								destDropdown:SetText(name)
-								newProfileInput:Hide()
-							end)
-						end
-					end
-
-					-- Create New option
-					rootDescription:CreateButton('|cff00ff00Create New...|r', function()
-						entry.selectedDest = '__NEW__'
-						destDropdown:SetText('New Profile:')
-						newProfileInput:Show()
-						newProfileInput:SetFocus()
-					end)
-				end)
-			end
-		end
-
-		-- Apply button
-		if addonId then
-			local applyBtn = LibAT.UI.CreateButton(row, 70, 22, 'Apply')
-			applyBtn:SetPoint('TOPRIGHT', row, 'TOPRIGHT', -80, -6)
-			applyBtn:SetScript('OnClick', function()
-				local targetKey
-				if entry.selectedDest == '__NEW__' then
-					local newName = (entry.selectedNewName or ''):match('^%s*(.-)%s*$') or ''
-					if newName == '' then
-						LibAT:Print('|cffff0000Error:|r Please enter a name for the new profile.')
-						return
-					end
-					targetKey = newName
-				elseif entry.selectedDest then
-					targetKey = entry.selectedDest
-				end
-				ProfileManager:ApplyDesktopImport(addonName, targetKey)
-				RefreshReviewContent()
-			end)
-		end
-
-		-- Dismiss button
-		local dismissBtn = LibAT.UI.CreateButton(row, 70, 22, 'Dismiss')
-		dismissBtn:SetPoint('TOPRIGHT', row, 'TOPRIGHT', -5, -6)
-		dismissBtn:SetScript('OnClick', function()
-			pendingImports[addonName] = nil
-			if LibAT_ProfileHub_PendingImports then
-				LibAT_ProfileHub_PendingImports[addonName] = nil
-			end
-			RefreshReviewContent()
-		end)
-
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', review.content, 'TOPLEFT', 0, yOffset)
+		row:SetPoint('TOPRIGHT', review.content, 'TOPRIGHT', -10, yOffset)
+		PaintReviewRow(row, addonName, pendingImports[addonName])
+		row:Show()
 		yOffset = yOffset - ROW_HEIGHT - 4
 	end
+	for i = count + 1, #review.rows do
+		review.rows[i]:Hide()
+	end
+	review.content:SetHeight(math.max(-yOffset, 1))
 
-	contentFrame:SetHeight(math.abs(yOffset))
-
-	-- Apply All button (only if multiple and all addons are registered)
-	if count > 1 then
-		local allRegistered = true
-		for addonName in pairs(pendingImports) do
-			if not FindAddonByName(addonName) then
-				allRegistered = false
-				break
-			end
-		end
-		if allRegistered then
-			local applyAllBtn = LibAT.UI.CreateButton(reviewWindow, 120, 26, 'Apply All')
-			applyAllBtn:SetPoint('BOTTOM', 0, 15)
-			applyAllBtn:SetScript('OnClick', function()
-				local names = {}
-				for addonName in pairs(pendingImports) do
-					table.insert(names, addonName)
-				end
-				for _, name in ipairs(names) do
-					local entry = pendingImports[name]
-					local targetKey
-					local skip = false
-					if entry and entry.selectedDest == '__NEW__' then
-						local newName = (entry.selectedNewName or ''):match('^%s*(.-)%s*$') or ''
-						if newName ~= '' then
-							targetKey = newName
-						else
-							-- A blank "Create New" name must not fall through to the current profile
-							skip = true
-							LibAT:Print('|cffff0000Skipped ' .. name .. ':|r enter a name for the new profile, then apply it.')
-						end
-					elseif entry and entry.selectedDest then
-						targetKey = entry.selectedDest
-					end
-					if not skip then
-						ProfileManager:ApplyDesktopImport(name, targetKey)
-					end
-				end
-				RefreshReviewContent()
-			end)
-			table.insert(reviewWindow.dynamicChildren, applyAllBtn)
+	-- Apply All only when several imports are staged and every addon is loaded
+	local allRegistered = count > 1
+	for _, addonName in ipairs(names) do
+		if not FindAddonByName(addonName) then
+			allRegistered = false
+			break
 		end
 	end
+	review.applyAllBtn:SetShown(allRegistered)
 end
 
 ----------------------------------------------------------------------------------------------------

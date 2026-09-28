@@ -116,24 +116,41 @@ end
 -- Page Rendering
 ----------------------------------------------------------------------------------------------------
 
----Clear the right panel content
+---Hide whatever the right panel is showing (welcome text and page containers)
 local function ClearContentPanel()
-	if not SetupWizard.window or not SetupWizard.window.ContentScroll then
+	if not SetupWizard.window or not SetupWizard.window.ContentScrollChild then
 		return
 	end
-
-	local scrollChild = SetupWizard.window.ContentScrollChild
-	if scrollChild then
-		-- Hide and release all child frames
-		for _, child in ipairs({ scrollChild:GetChildren() }) do
-			child:Hide()
-			child:SetParent(nil)
-		end
-		-- Clear any font strings
-		for _, region in ipairs({ scrollChild:GetRegions() }) do
-			region:Hide()
-		end
+	if SetupWizard.window.WelcomeText then
+		SetupWizard.window.WelcomeText:Hide()
 	end
+	for _, container in pairs(SetupWizard.window.PageContainers or {}) do
+		container:Hide()
+	end
+end
+
+---Get the frame a page renders into. Pages are rebuilt on every visit because builders may show
+---state other pages change; a page registered with cache = true is built once and reused.
+---@param key string addonId.pageId
+---@param page SetupWizardPage
+---@return Frame container
+---@return boolean needsBuild
+local function GetPageContainer(key, page)
+	local window = SetupWizard.window
+	window.PageContainers = window.PageContainers or {}
+	local existing = window.PageContainers[key]
+	if existing and page.cache then
+		return existing, false
+	end
+
+	local scrollChild = window.ContentScrollChild
+	local container = CreateFrame('Frame', nil, scrollChild)
+	container:SetPoint('TOPLEFT', scrollChild, 'TOPLEFT', 0, 0)
+	container:SetPoint('TOPRIGHT', scrollChild, 'TOPRIGHT', 0, 0)
+	container:SetWidth(math.max(scrollChild:GetWidth(), 1))
+	container:SetHeight(1)
+	window.PageContainers[key] = container
+	return container, true
 end
 
 ---Show a specific page in the right panel
@@ -166,10 +183,17 @@ function SetupWizard:ShowPage(addonId, pageId)
 	-- Clear existing content
 	ClearContentPanel()
 
-	-- Call the page builder to populate content
+	-- Render the page into its own container; the scroll area follows the container's height
 	local scrollChild = self.window.ContentScrollChild
-	if scrollChild and page.builder then
-		page.builder(scrollChild)
+	if scrollChild then
+		local container, needsBuild = GetPageContainer(addonId .. '.' .. pageId, page)
+		container:Show()
+		if needsBuild and page.builder then
+			page.builder(container)
+		elseif page.onShow then
+			page.onShow(container)
+		end
+		scrollChild:SetHeight(math.max(container:GetHeight(), 1))
 	end
 
 	-- Update navigation tree highlights

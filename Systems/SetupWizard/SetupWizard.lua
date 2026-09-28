@@ -12,6 +12,8 @@ local LibAT = LibAT
 ---@field builder function(contentFrame: Frame) Populates the right panel content
 ---@field isComplete? function(): boolean Dynamic completion check (returns true if page setup is done)
 ---@field onLeave? function() Called when navigating away from this page
+---@field cache? boolean Build the page once and reuse it on later visits (only for pages that do not show state other pages change)
+---@field onShow? function(contentFrame: Frame) Called when a cached page is shown again
 ---@field children? SetupWizardPage[] Optional child pages (shown as sub-subcategories in nav tree)
 
 ---@class SetupWizardAddonConfig

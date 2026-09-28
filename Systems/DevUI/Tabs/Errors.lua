@@ -73,16 +73,29 @@ end
 
 ---Rebuild the session-based error list in the left panel
 RebuildErrorList = function()
-	-- Clear existing buttons
-	for _, button in pairs(TabState.ErrorButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
 	TabState.ErrorButtons = {}
 	TabState.CurrentErrorList = {}
 
 	if not TabState.ErrorTree then
 		return
+	end
+
+	-- List buttons are pooled; each rebuild takes them from the start of the pool again
+	TabState.ErrorPool = TabState.ErrorPool or {}
+	local pool = TabState.ErrorPool
+	local used = 0
+	local function AcquireListButton()
+		used = used + 1
+		local button = pool[used]
+		if not button then
+			button = LibAT.UI.CreateFilterButton(TabState.ErrorTree, nil)
+			pool[used] = button
+		end
+		button:ClearAllPoints()
+		button.SelectedTexture:Hide()
+		button.HighlightTexture:Hide()
+		button:Show()
+		return button
 	end
 
 	local handler = GetErrorHandler()
@@ -108,7 +121,7 @@ RebuildErrorList = function()
 		local errors = handler:GetErrors(sessionData.id)
 		if #errors > 0 or sessionData.isCurrent then
 			-- Session header
-			local headerButton = LibAT.UI.CreateFilterButton(TabState.ErrorTree, nil)
+			local headerButton = AcquireListButton()
 			headerButton:SetPoint('TOPLEFT', TabState.ErrorTree, 'TOPLEFT', 3, yOffset)
 
 			local headerText
@@ -131,16 +144,13 @@ RebuildErrorList = function()
 				-- Show all errors from this session in the display
 				local sessionErrors = handler:GetErrors(sessionData.id)
 				if #sessionErrors > 0 then
-					local allText = ''
+					local parts = {}
 					local showLocals = TabState.ShowLocals and TabState.ShowLocals:GetChecked()
 					for i, err in ipairs(sessionErrors) do
-						if i > 1 then
-							allText = allText .. '\n|cff444444' .. string.rep('-', 60) .. '|r\n\n'
-						end
-						allText = allText .. handler:FormatError(err, showLocals) .. '\n'
+						parts[i] = handler:FormatError(err, showLocals) .. '\n'
 					end
 					if TabState.EditBox then
-						TabState.EditBox:SetText(allText)
+						TabState.EditBox:SetText(table.concat(parts, '\n|cff444444' .. string.rep('-', 60) .. '|r\n\n'))
 					end
 				end
 			end)
@@ -161,7 +171,7 @@ RebuildErrorList = function()
 				table.insert(TabState.CurrentErrorList, err)
 				local errorIndex = #TabState.CurrentErrorList
 
-				local errorButton = LibAT.UI.CreateFilterButton(TabState.ErrorTree, nil)
+				local errorButton = AcquireListButton()
 				errorButton:SetPoint('TOPLEFT', TabState.ErrorTree, 'TOPLEFT', 3, yOffset)
 
 				-- Truncate error message for button display
@@ -220,6 +230,10 @@ RebuildErrorList = function()
 				yOffset = yOffset - (buttonHeight + 1)
 			end
 		end
+	end
+
+	for i = used + 1, #pool do
+		pool[i]:Hide()
 	end
 
 	-- Update tree height

@@ -818,10 +818,23 @@ function ProfileManager:ShowCompositeExport(compositeId)
 		win.CompositePanel.Checkboxes = {}
 	end
 
-	-- Clear existing checkboxes
-	for _, checkbox in pairs(win.CompositePanel.Checkboxes) do
-		checkbox:Hide()
-		checkbox:SetParent(nil)
+	-- Checkboxes are pooled and relabeled on each open
+	win.CompositePanel.CheckboxPool = win.CompositePanel.CheckboxPool or {}
+	local checkboxPool = win.CompositePanel.CheckboxPool
+	local usedCheckboxes = 0
+	local function AcquireCheckbox(label)
+		usedCheckboxes = usedCheckboxes + 1
+		local checkbox = checkboxPool[usedCheckboxes]
+		if not checkbox then
+			checkbox = LibAT.UI.CreateCheckbox(win.CompositePanel.Content, label, 180)
+			checkboxPool[usedCheckboxes] = checkbox
+		else
+			checkbox:SetText(label)
+		end
+		checkbox:ClearAllPoints()
+		checkbox:SetScript('OnClick', nil)
+		checkbox:Show()
+		return checkbox
 	end
 	wipe(win.CompositePanel.Checkboxes)
 
@@ -886,7 +899,7 @@ function ProfileManager:ShowCompositeExport(compositeId)
 
 	-- Primary addon (always checked, disabled)
 	local primaryAddon = ProfileManagerState.registeredAddons[composite.primaryAddonId]
-	local primaryCheckbox = LibAT.UI.CreateCheckbox(win.CompositePanel.Content, primaryAddon.displayName .. '\n|cff888888(always included)|r')
+	local primaryCheckbox = AcquireCheckbox(primaryAddon.displayName .. '\n|cff888888(always included)|r')
 	primaryCheckbox:SetPoint('TOPLEFT', 5, yOffset)
 	primaryCheckbox:SetChecked(true)
 	primaryCheckbox:SetEnabled(false)
@@ -901,7 +914,7 @@ function ProfileManager:ShowCompositeExport(compositeId)
 			label = label .. '\n|cff888888(not available)|r'
 		end
 
-		local checkbox = LibAT.UI.CreateCheckbox(win.CompositePanel.Content, label)
+		local checkbox = AcquireCheckbox(label)
 		checkbox:SetPoint('TOPLEFT', 5, yOffset)
 		checkbox:SetChecked(available)
 		checkbox:SetEnabled(available)
@@ -913,6 +926,10 @@ function ProfileManager:ShowCompositeExport(compositeId)
 
 		win.CompositePanel.Checkboxes[component.id] = checkbox
 		yOffset = yOffset - 40
+	end
+
+	for i = usedCheckboxes + 1, #checkboxPool do
+		checkboxPool[i]:Hide()
 	end
 
 	win.CompositePanel.Content:SetHeight(math.abs(yOffset))
@@ -936,7 +953,6 @@ end
 
 ---Show composite import window with confirmation dialog
 ---@param encodedData string The base64-encoded composite data
----@param encodedData string
 ---@param onImported? fun() Called after at least one component imported
 function ProfileManager:ShowCompositeImport(encodedData, onImported)
 	-- Decode data
@@ -953,90 +969,105 @@ function ProfileManager:ShowCompositeImport(encodedData, onImported)
 		return
 	end
 
-	-- Only one confirmation at a time
-	if ProfileManagerState.compositeConfirm then
-		ProfileManagerState.compositeConfirm:Hide()
+	-- The confirmation window is built once and refilled for each import
+	local confirmWindow = ProfileManagerState.compositeConfirm
+	if not confirmWindow then
+		confirmWindow = LibAT.UI.CreateWindow({
+			name = 'LibAT_CompositeImportConfirm',
+			title = 'Import',
+			width = 500,
+			height = 450,
+		})
+
+		local warning = confirmWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+		warning:SetPoint('TOP', 0, -15)
+		warning:SetText('|cffff9900This will import the following:|r')
+
+		local scrollFrame = CreateFrame('ScrollFrame', nil, confirmWindow, 'UIPanelScrollFrameTemplate')
+		scrollFrame:SetPoint('TOPLEFT', warning, 'BOTTOMLEFT', 0, -10)
+		scrollFrame:SetPoint('BOTTOMRIGHT', -35, 80)
+
+		confirmWindow.Content = CreateFrame('Frame', nil, scrollFrame)
+		confirmWindow.Content:SetSize(1, 1)
+		scrollFrame:SetScrollChild(confirmWindow.Content)
+		scrollFrame:HookScript('OnSizeChanged', function(_, width)
+			confirmWindow.Content:SetWidth(math.max(width or 1, 1))
+		end)
+		confirmWindow.Lines = {}
+
+		local overwriteWarning = confirmWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+		overwriteWarning:SetPoint('BOTTOM', 0, 55)
+		overwriteWarning:SetText('|cffff0000This will overwrite your current settings!|r')
+
+		local buttonFrame = CreateFrame('Frame', nil, confirmWindow)
+		buttonFrame:SetPoint('BOTTOM', 0, 15)
+		buttonFrame:SetSize(250, 30)
+
+		local importButton = LibAT.UI.CreateButton(buttonFrame, 110, 30, 'Import')
+		importButton:SetPoint('LEFT', 0, 0)
+		importButton:SetScript('OnClick', function()
+			local pending = confirmWindow.pending
+			confirmWindow:Hide()
+			if not pending then
+				return
+			end
+
+			local success, results = ProfileManager:ImportComposite(pending.data)
+			if results and results.successCount and results.successCount > 0 and pending.onImported then
+				pending.onImported()
+			end
+
+			if success then
+				LibAT:Print('|cff00ff00Successfully imported ' .. results.successCount .. ' component(s).|r Please /reload to apply changes.')
+			else
+				LibAT:Print('|cffff0000Import completed with errors.|r')
+				if results and results.successCount and results.successCount > 0 then
+					LibAT:Print('|cff00ff00' .. results.successCount .. ' component(s) imported successfully.|r')
+				end
+				if results and results.errorCount and results.errorCount > 0 then
+					LibAT:Print('|cffff0000' .. results.errorCount .. ' component(s) failed to import.|r')
+				end
+			end
+		end)
+
+		local cancelButton = LibAT.UI.CreateButton(buttonFrame, 110, 30, 'Cancel')
+		cancelButton:SetPoint('RIGHT', 0, 0)
+		cancelButton:SetScript('OnClick', function()
+			confirmWindow:Hide()
+		end)
+
+		confirmWindow:HookScript('OnHide', function()
+			confirmWindow.pending = nil
+		end)
+
+		ProfileManagerState.compositeConfirm = confirmWindow
 	end
 
-	-- Create confirmation window
-	local confirmWindow = LibAT.UI.CreateWindow({
-		name = 'LibAT_CompositeImportConfirm',
-		title = 'Import ' .. analysis.compositeName,
-		width = 500,
-		height = 450,
-	})
-
-	-- Warning text
-	local warning = confirmWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
-	warning:SetPoint('TOP', 0, -15)
-	warning:SetText('|cffff9900This will import the following:|r')
-
-	-- Scrollable component list
-	local scrollFrame = CreateFrame('ScrollFrame', nil, confirmWindow, 'UIPanelScrollFrameTemplate')
-	scrollFrame:SetPoint('TOPLEFT', warning, 'BOTTOMLEFT', 0, -10)
-	scrollFrame:SetPoint('BOTTOMRIGHT', -35, 80)
-
-	local contentFrame = CreateFrame('Frame', nil, scrollFrame)
-	contentFrame:SetSize(scrollFrame:GetWidth(), 1)
-	scrollFrame:SetScrollChild(contentFrame)
+	confirmWindow:Hide()
+	confirmWindow:SetTitle('Import ' .. analysis.compositeName)
+	confirmWindow.pending = { data = compositeData, onImported = onImported }
 
 	local yOffset = 0
-
-	for _, component in ipairs(analysis.components) do
+	for i, component in ipairs(analysis.components) do
+		local line = confirmWindow.Lines[i]
+		if not line then
+			line = confirmWindow.Content:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+			line:SetJustifyH('LEFT')
+			confirmWindow.Lines[i] = line
+		end
 		local color = component.available and '|cff00ff00' or '|cff888888'
 		local status = component.available and '' or ' (not installed, will be skipped)'
-
-		local text = contentFrame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-		text:SetPoint('TOPLEFT', 5, yOffset)
-		text:SetJustifyH('LEFT')
-		text:SetText(color .. component.name .. status .. '|r')
-
+		line:ClearAllPoints()
+		line:SetPoint('TOPLEFT', 5, yOffset)
+		line:SetText(color .. component.name .. status .. '|r')
+		line:Show()
 		yOffset = yOffset - 25
 	end
+	for i = #analysis.components + 1, #confirmWindow.Lines do
+		confirmWindow.Lines[i]:Hide()
+	end
+	confirmWindow.Content:SetHeight(math.max(math.abs(yOffset), 1))
 
-	contentFrame:SetHeight(math.abs(yOffset))
-
-	-- Overwrite warning
-	local overwriteWarning = confirmWindow:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	overwriteWarning:SetPoint('BOTTOM', 0, 55)
-	overwriteWarning:SetText('|cffff0000This will overwrite your current settings!|r')
-
-	-- Buttons
-	local buttonFrame = CreateFrame('Frame', nil, confirmWindow)
-	buttonFrame:SetPoint('BOTTOM', 0, 15)
-	buttonFrame:SetSize(250, 30)
-
-	local importButton = LibAT.UI.CreateButton(buttonFrame, 110, 30, 'Import')
-	importButton:SetPoint('LEFT', 0, 0)
-	importButton:SetScript('OnClick', function()
-		-- Perform import
-		local success, results = self:ImportComposite(compositeData)
-		if results and results.successCount and results.successCount > 0 and onImported then
-			onImported()
-		end
-
-		if success then
-			LibAT:Print('|cff00ff00Successfully imported ' .. results.successCount .. ' component(s).|r Please /reload to apply changes.')
-		else
-			LibAT:Print('|cffff0000Import completed with errors.|r')
-			if results.successCount > 0 then
-				LibAT:Print('|cff00ff00' .. results.successCount .. ' component(s) imported successfully.|r')
-			end
-			if results.errorCount > 0 then
-				LibAT:Print('|cffff0000' .. results.errorCount .. ' component(s) failed to import.|r')
-			end
-		end
-
-		confirmWindow:Hide()
-	end)
-
-	local cancelButton = LibAT.UI.CreateButton(buttonFrame, 110, 30, 'Cancel')
-	cancelButton:SetPoint('RIGHT', 0, 0)
-	cancelButton:SetScript('OnClick', function()
-		confirmWindow:Hide()
-	end)
-
-	ProfileManagerState.compositeConfirm = confirmWindow
 	confirmWindow:Show()
 end
 
