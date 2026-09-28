@@ -11,6 +11,7 @@ local DevUI, DevUIState
 -- Forward declarations (must be before InitMacros so closures capture the locals)
 local RebuildMacroList
 local BuildContent
+local FindMacroByName
 
 -- Tab-local UI state
 local TabState = {
@@ -47,6 +48,25 @@ function LibAT.DevUI.InitMacros(devUIModule, state)
 			RebuildMacroList()
 		end,
 	}
+
+	-- Macros changed elsewhere (Blizzard's macro UI, other addons): follow the selection by name
+	local watcher = CreateFrame('Frame')
+	watcher:RegisterEvent('UPDATE_MACROS')
+	watcher:SetScript('OnEvent', function()
+		if not TabState.ContentFrame or not TabState.ContentFrame:IsVisible() then
+			return
+		end
+		if TabState.CurrentMacroIndex then
+			local index = FindMacroByName(TabState.CurrentMacroName)
+			if index then
+				TabState.CurrentMacroIndex = index
+			else
+				TabState.CurrentMacroIndex = nil
+				TabState.CurrentMacroName = nil
+			end
+		end
+		RebuildMacroList()
+	end)
 end
 
 -- Additional forward declarations
@@ -57,15 +77,40 @@ local UpdateCharCount
 -- Macro List Building
 ----------------------------------------------------------------------------------------------------
 
+---Take a list button from the pool, creating it the first time
+---@param index number
+---@return Button
+local function AcquireListButton(index)
+	local button = TabState.MacroButtons[index]
+	if not button then
+		button = LibAT.UI.CreateFilterButton(TabState.MacroTree, nil)
+		button.MacroIcon = button:CreateTexture(nil, 'ARTWORK')
+		button.MacroIcon:SetSize(16, 16)
+		button.MacroIcon:SetPoint('LEFT', button, 'LEFT', 12, 0)
+		button:SetScript('OnEnter', function(self)
+			self.HighlightTexture:Show()
+		end)
+		button:SetScript('OnLeave', function(self)
+			self.HighlightTexture:Hide()
+		end)
+		button:SetScript('OnClick', function(self)
+			if not self.macroIndex then
+				return
+			end
+			for _, btn in ipairs(TabState.MacroButtons) do
+				btn.SelectedTexture:Hide()
+			end
+			self.SelectedTexture:Show()
+			LoadMacro(self.macroIndex)
+		end)
+		TabState.MacroButtons[index] = button
+	end
+	button:Show()
+	return button
+end
+
 ---Rebuild the macro list in the left panel
 RebuildMacroList = function()
-	-- Clear existing buttons
-	for _, button in pairs(TabState.MacroButtons) do
-		button:Hide()
-		button:SetParent(nil)
-	end
-	TabState.MacroButtons = {}
-
 	if not TabState.MacroTree then
 		return
 	end
@@ -73,145 +118,78 @@ RebuildMacroList = function()
 	local numGlobal, numPerChar = GetNumMacros()
 	local yOffset = 0
 	local buttonHeight = 21
+	local used = 0
 
-	-- Account Macros header
-	local accountHeader = LibAT.UI.CreateFilterButton(TabState.MacroTree, nil)
-	accountHeader:SetPoint('TOPLEFT', TabState.MacroTree, 'TOPLEFT', 3, yOffset)
-	LibAT.UI.SetupFilterButton(accountHeader, {
-		type = 'category',
-		name = 'Account (' .. numGlobal .. ')',
-		categoryIndex = 'account',
-		selected = false,
-	})
-	accountHeader.Text:SetTextColor(1, 0.82, 0)
-	accountHeader:SetScript('OnEnter', function(self)
-		self.HighlightTexture:Show()
-	end)
-	accountHeader:SetScript('OnLeave', function(self)
-		self.HighlightTexture:Hide()
-	end)
-	table.insert(TabState.MacroButtons, accountHeader)
-	yOffset = yOffset - (buttonHeight + 1)
+	local function AddHeader(label, key)
+		used = used + 1
+		local header = AcquireListButton(used)
+		header:ClearAllPoints()
+		header:SetPoint('TOPLEFT', TabState.MacroTree, 'TOPLEFT', 3, yOffset)
+		LibAT.UI.SetupFilterButton(header, { type = 'category', name = label, categoryIndex = key, selected = false })
+		header.Text:SetText(label)
+		header.Text:SetTextColor(1, 0.82, 0)
+		header.MacroIcon:Hide()
+		header.macroIndex = nil
+		yOffset = yOffset - (buttonHeight + 1)
+	end
 
-	-- Account macro entries
+	local function AddMacro(macroIndex)
+		local name, icon = GetMacroInfo(macroIndex)
+		if not name then
+			return
+		end
+		used = used + 1
+		local button = AcquireListButton(used)
+		button:ClearAllPoints()
+		button:SetPoint('TOPLEFT', TabState.MacroTree, 'TOPLEFT', 3, yOffset)
+		LibAT.UI.SetupFilterButton(button, {
+			type = 'subCategory',
+			name = '',
+			subCategoryIndex = macroIndex,
+			selected = (TabState.CurrentMacroIndex == macroIndex),
+		})
+		button.MacroIcon:SetTexture(icon)
+		button.MacroIcon:Show()
+		button.Text:ClearAllPoints()
+		button.Text:SetPoint('LEFT', button, 'LEFT', 32, 0)
+		button.Text:SetPoint('RIGHT', button, 'RIGHT', -4, 0)
+		button.Text:SetJustifyH('LEFT')
+		button.Text:SetText(name)
+		button.Text:SetTextColor(1, 1, 1)
+		button.macroIndex = macroIndex
+		yOffset = yOffset - (buttonHeight + 1)
+	end
+
+	AddHeader('Account (' .. numGlobal .. ')', 'account')
 	for i = 1, numGlobal do
-		local name, icon, body = GetMacroInfo(i)
-		if name then
-			local macroButton = LibAT.UI.CreateFilterButton(TabState.MacroTree, nil)
-			macroButton:SetPoint('TOPLEFT', TabState.MacroTree, 'TOPLEFT', 3, yOffset)
-
-			LibAT.UI.SetupFilterButton(macroButton, {
-				type = 'subCategory',
-				name = '  ' .. name,
-				subCategoryIndex = i,
-				selected = (TabState.CurrentMacroIndex == i),
-			})
-			macroButton:SetText('') -- Clear template text to avoid duplicate label
-
-			-- Add icon texture to the button
-			local iconTexture = macroButton:CreateTexture(nil, 'ARTWORK')
-			iconTexture:SetSize(16, 16)
-			iconTexture:SetPoint('LEFT', macroButton, 'LEFT', 12, 0)
-			iconTexture:SetTexture(icon)
-			-- Shift text right for icon
-			macroButton.Text:ClearAllPoints()
-			macroButton.Text:SetPoint('LEFT', macroButton, 'LEFT', 32, 0)
-			macroButton.Text:SetPoint('RIGHT', macroButton, 'RIGHT', -4, 0)
-			macroButton.Text:SetJustifyH('LEFT')
-			macroButton.Text:SetText(name)
-			macroButton.Text:SetTextColor(1, 1, 1)
-
-			local macroIndex = i
-			macroButton:SetScript('OnClick', function(self)
-				for _, btn in pairs(TabState.MacroButtons) do
-					btn.SelectedTexture:Hide()
-				end
-				self.SelectedTexture:Show()
-				LoadMacro(macroIndex)
-			end)
-
-			macroButton:SetScript('OnEnter', function(self)
-				self.HighlightTexture:Show()
-			end)
-			macroButton:SetScript('OnLeave', function(self)
-				self.HighlightTexture:Hide()
-			end)
-
-			table.insert(TabState.MacroButtons, macroButton)
-			yOffset = yOffset - (buttonHeight + 1)
-		end
+		AddMacro(i)
 	end
 
-	-- Character Macros header
-	local charHeader = LibAT.UI.CreateFilterButton(TabState.MacroTree, nil)
-	charHeader:SetPoint('TOPLEFT', TabState.MacroTree, 'TOPLEFT', 3, yOffset)
-	LibAT.UI.SetupFilterButton(charHeader, {
-		type = 'category',
-		name = 'Character (' .. numPerChar .. ')',
-		categoryIndex = 'character',
-		selected = false,
-	})
-	charHeader.Text:SetTextColor(1, 0.82, 0)
-	charHeader:SetScript('OnEnter', function(self)
-		self.HighlightTexture:Show()
-	end)
-	charHeader:SetScript('OnLeave', function(self)
-		self.HighlightTexture:Hide()
-	end)
-	table.insert(TabState.MacroButtons, charHeader)
-	yOffset = yOffset - (buttonHeight + 1)
-
-	-- Character macro entries
+	AddHeader('Character (' .. numPerChar .. ')', 'character')
 	for i = CHARACTER_MACRO_OFFSET + 1, CHARACTER_MACRO_OFFSET + numPerChar do
-		local name, icon, body = GetMacroInfo(i)
-		if name then
-			local macroButton = LibAT.UI.CreateFilterButton(TabState.MacroTree, nil)
-			macroButton:SetPoint('TOPLEFT', TabState.MacroTree, 'TOPLEFT', 3, yOffset)
-
-			LibAT.UI.SetupFilterButton(macroButton, {
-				type = 'subCategory',
-				name = '  ' .. name,
-				subCategoryIndex = i,
-				selected = (TabState.CurrentMacroIndex == i),
-			})
-			macroButton:SetText('') -- Clear template text to avoid duplicate label
-
-			-- Add icon texture
-			local iconTexture = macroButton:CreateTexture(nil, 'ARTWORK')
-			iconTexture:SetSize(16, 16)
-			iconTexture:SetPoint('LEFT', macroButton, 'LEFT', 12, 0)
-			iconTexture:SetTexture(icon)
-			macroButton.Text:ClearAllPoints()
-			macroButton.Text:SetPoint('LEFT', macroButton, 'LEFT', 32, 0)
-			macroButton.Text:SetPoint('RIGHT', macroButton, 'RIGHT', -4, 0)
-			macroButton.Text:SetJustifyH('LEFT')
-			macroButton.Text:SetText(name)
-			macroButton.Text:SetTextColor(1, 1, 1)
-
-			local macroIndex = i
-			macroButton:SetScript('OnClick', function(self)
-				for _, btn in pairs(TabState.MacroButtons) do
-					btn.SelectedTexture:Hide()
-				end
-				self.SelectedTexture:Show()
-				LoadMacro(macroIndex)
-			end)
-
-			macroButton:SetScript('OnEnter', function(self)
-				self.HighlightTexture:Show()
-			end)
-			macroButton:SetScript('OnLeave', function(self)
-				self.HighlightTexture:Hide()
-			end)
-
-			table.insert(TabState.MacroButtons, macroButton)
-			yOffset = yOffset - (buttonHeight + 1)
-		end
+		AddMacro(i)
 	end
 
-	-- Update tree height
+	for i = used + 1, #TabState.MacroButtons do
+		TabState.MacroButtons[i]:Hide()
+	end
+
 	local totalHeight = math.abs(yOffset) + 20
 	TabState.MacroTree:SetHeight(math.max(totalHeight, TabState.MacroScrollFrame:GetHeight()))
+end
+
+---Find a macro index by name (indexes shift when macros are renamed, created or deleted)
+---@param name string
+---@return number|nil
+FindMacroByName = function(name)
+	if not name then
+		return nil
+	end
+	local index = GetMacroIndexByName(name)
+	if index and index > 0 then
+		return index
+	end
+	return nil
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -227,7 +205,9 @@ LoadMacro = function(macroIndex)
 	end
 
 	TabState.CurrentMacroIndex = macroIndex
+	TabState.CurrentMacroName = name
 	TabState.CurrentMacroIcon = icon
+	TabState.IconChanged = false
 
 	if TabState.NameBox then
 		TabState.NameBox:SetText(name)
@@ -278,14 +258,26 @@ local function SaveCurrentMacro()
 		return
 	end
 
-	local name = TabState.NameBox and TabState.NameBox:GetText() or nil
+	-- Macro names cannot contain quotes; an empty name keeps the current one
+	local name = TabState.NameBox and TabState.NameBox:GetText() or ''
+	name = strtrim((name:gsub('"', '')))
+	if name == '' then
+		name = nil
+	end
 	local body = TabState.BodyBox and TabState.BodyBox:GetValue() or nil
+	-- Passing the displayed icon back would freeze dynamic (#showtooltip) icons; only send a picked one
+	local icon = TabState.IconChanged and TabState.CurrentMacroIcon or nil
 
-	local success, err = pcall(function()
-		EditMacro(TabState.CurrentMacroIndex, name, TabState.CurrentMacroIcon, body)
-	end)
+	local success, result = pcall(EditMacro, TabState.CurrentMacroIndex, name, icon, body)
+	local err = result
 
 	if success then
+		-- Renaming re-sorts the list, so the macro may now live at a different index
+		if type(result) == 'number' and result > 0 then
+			TabState.CurrentMacroIndex = result
+		end
+		TabState.CurrentMacroName = name or TabState.CurrentMacroName
+		TabState.IconChanged = false
 		if TabState.CharCountLabel then
 			TabState.CharCountLabel:SetText('|cff00ff00Saved!|r')
 			C_Timer.After(2, UpdateCharCount) -- Restore char count after 2s
@@ -360,6 +352,7 @@ BuildContent = function(contentFrame)
 		-- Set callback to apply the selected icon back to the editor
 		LibAT_MacroIconSelector.onIconSelected = function(iconTexture)
 			TabState.CurrentMacroIcon = iconTexture
+			TabState.IconChanged = true
 			TabState.IconTexture:SetTexture(iconTexture)
 		end
 
@@ -391,6 +384,7 @@ BuildContent = function(contentFrame)
 	TabState.NameBox:SetPoint('RIGHT', saveButton, 'LEFT', -6, 0)
 	TabState.NameBox:SetAutoFocus(false)
 	TabState.NameBox:SetFontObject('GameFontHighlight')
+	TabState.NameBox:SetMaxLetters(16)
 	TabState.NameBox:SetScript('OnEnterPressed', function(self)
 		self:ClearFocus()
 		SaveCurrentMacro()
