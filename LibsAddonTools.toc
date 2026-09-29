@@ -75,6 +75,9 @@ Systems\ProfileManager\DesktopImport.lua
 
 # Setup System (the old Setup Wizard API is a thin layer over it)
 Systems\Setup\Setup.lua
+Systems\Setup\Skins.lua
+Systems\Setup\Skins\Stage.lua
+Systems\Setup\Skins\WarTable.lua
 Systems\Setup\SetupHub.lua
 Systems\SetupWizard\SetupWizard.lua
 

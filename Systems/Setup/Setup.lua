@@ -78,7 +78,7 @@ local LibAT = LibAT
 ---@field name string Display name
 ---@field icon? string|number
 ---@field summary? string One line about the addon for the Start page
----@field priority? number Lower opens first (SpartanUI uses 10; default 100)
+---@field priority? number Lower opens first (a host UI may use 10; default 100)
 ---@field isExistingUser? fun(): boolean True when the player used this addon before Setup knew about it
 ---@field isNewProfile? fun(): boolean True when the current profile has never been set up
 ---@field profileKey? fun(): string Name of the current profile (needed for scope = 'profile')
@@ -177,6 +177,9 @@ function Setup:GetStore()
 	if store.autoOpen == nil then
 		store.autoOpen = true
 	end
+	if store.skin == nil then
+		store.skin = 'stage'
+	end
 	if not self.storeChecked then
 		self.storeChecked = true
 		-- The old window had one account-wide "Don't Ask Again". Honor it once for the addons that are
@@ -188,6 +191,34 @@ function Setup:GetStore()
 		end
 	end
 	return store
+end
+
+---The account-wide setup window skin.
+---@return string
+function Setup:GetSkin()
+	local store = self:GetStore()
+	return (store and store.skin) or 'stage'
+end
+
+---Save and apply a setup window skin.
+---@param skinId string
+---@return boolean changed
+function Setup:SetSkin(skinId)
+	if not self.Skins or not self.Skins.registry[skinId] then
+		return false
+	end
+	local store = self:GetStore()
+	if not store then
+		return false
+	end
+	if store.skin == skinId then
+		return true
+	end
+	store.skin = skinId
+	if self.Hub then
+		self.Hub:RebuildWindow()
+	end
+	return true
 end
 
 ---Does the old wizard have saved progress for this addon?
@@ -1173,7 +1204,7 @@ Setup.Context = Context
 ---Stage a change that needs a reload. Steps never reload by themselves: apply runs when the player
 ---presses "Finish and reload" (or at the next reload if they finish without reloading).
 ---@param key string Unique within this addon; staging the same key again replaces it
----@param label string Short text for the list, e.g. 'Use SpartanUI action bars'
+---@param label string Short text for the list, e.g. 'Use the host action bars'
 ---@param apply? fun() Optional work to do just before the reload
 function Context:NeedsReload(key, label, apply)
 	Setup:StageReload(self.addonId .. ':' .. tostring(key), label, apply, self.addonId)
@@ -1434,6 +1465,16 @@ end
 ---@param msg? string Anything after the command
 function Setup:HandleSlash(msg)
 	msg = strtrim and strtrim(msg or '') or (msg or '')
+	local skinId = msg:match('^skin%s+(%S+)$')
+	if skinId then
+		skinId = skinId:lower()
+		if self:SetSkin(skinId) then
+			LibAT:Print('Setup skin: ' .. skinId)
+		else
+			LibAT:Print('Unknown setup skin. Try: stage, wartable, classic')
+		end
+		return
+	end
 	if msg == '' then
 		if self.Hub and self.Hub:IsShown() then
 			self.Hub:Close()

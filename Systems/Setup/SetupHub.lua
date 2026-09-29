@@ -30,6 +30,7 @@ Hub.formFrames = {}
 Hub.importChoice = {}
 Hub.grids = {}
 Hub.toastQueue = {}
+Hub.views = {}
 
 ----------------------------------------------------------------------------------------------------
 -- Small helpers
@@ -53,11 +54,15 @@ local function IconMarkup(reg)
 	return '|T' .. tostring(icon) .. ':16:16:0:0|t '
 end
 
----A scroll frame with the thin scroll bar where the client has it, or mouse wheel scrolling
+---A scroll frame owned by the active skin
 ---@param parent Frame
+---@param skin? table
 ---@return ScrollFrame scroll
 ---@return Frame child
-local function CreateScroll(parent)
+local function CreateScroll(parent, skin)
+	if skin and skin.owned then
+		return skin:CreateScroll(parent)
+	end
 	local scroll = CreateFrame('ScrollFrame', nil, parent)
 	local child = CreateFrame('Frame', nil, scroll)
 	child:SetSize(1, 1)
@@ -81,7 +86,10 @@ end
 ---@param parent Frame
 ---@param fontObject? string
 ---@return Button
-local function CreateTextButton(parent, fontObject)
+local function CreateTextButton(parent, fontObject, skin)
+	if skin and skin.owned then
+		return skin:CreateTextButton(parent)
+	end
 	local button = CreateFrame('Button', nil, parent)
 	button:SetHeight(16)
 	button.text = button:CreateFontString(nil, 'OVERLAY', fontObject or 'GameFontHighlightSmall')
@@ -104,6 +112,17 @@ local function CreateTextButton(parent, fontObject)
 	end
 	button:ApplyColor()
 	return button
+end
+
+local function CreateSkinFontString(parent, layer, skin, classicFont)
+	if skin and skin.owned then
+		return parent:CreateFontString(nil, layer)
+	end
+	return parent:CreateFontString(nil, layer, classicFont)
+end
+
+function Hub:GetLeftWidth()
+	return self.skin and self.skin.owned and 218 or LEFT_WIDTH
 end
 
 ---Get the entry list positions of one addon inside the run
@@ -137,38 +156,68 @@ end
 ----------------------------------------------------------------------------------------------------
 
 function Hub:EnsureWindow()
-	if self.window then
+	local skin = Setup.Skins:GetActive()
+	if self.window and self.window._setupSkinId == skin.id then
 		return self.window
 	end
+	self.skin = skin
+	local view = self.views[skin.id]
+	if view then
+		self.window = view.window
+		self.grids = view.grids
+		self.toggleGroups = view.toggleGroups
+		self.formFrames = view.formFrames
+		self.customFrames = view.customFrames
+		self.summaryFrame = view.summaryFrame
+		if LibAT.SetupWizard then
+			LibAT.SetupWizard.window = self.window
+		end
+		return self.window
+	end
+	self.grids = {}
+	self.toggleGroups = {}
+	self.formFrames = {}
+	self.customFrames = {}
+	self.summaryFrame = nil
 
-	local w = LibAT.UI.CreateWindow({
-		name = 'LibAT_SetupHub',
-		title = 'Setup',
-		width = 800,
-		height = 538,
-		minWidth = 800,
-		minHeight = 538,
-		resizable = true,
-	})
+	local w
+	if skin.owned then
+		w = skin:CreateWindow()
+	else
+		w = LibAT.UI.CreateWindow({
+			name = 'LibAT_SetupHub',
+			title = 'Setup',
+			width = 800,
+			height = 538,
+			minWidth = 800,
+			minHeight = 538,
+			resizable = true,
+		})
+	end
+	w._setupSkinId = skin.id
 	self.window = w
 	if LibAT.SetupWizard then
 		LibAT.SetupWizard.window = w
 	end
 	w:HookScript('OnHide', function()
-		Hub:OnHidden()
+		if not Hub.rebuildingSkin then
+			Hub:OnHidden()
+		end
 	end)
 
-	-- 2px accent line under the title bar
-	w.AccentLine = CreateFrame('Frame', nil, w)
-	w.AccentLine:SetPoint('TOPLEFT', w, 'TOPLEFT', 3, -24)
-	w.AccentLine:SetPoint('TOPRIGHT', w, 'TOPRIGHT', -3, -24)
-	w.AccentLine:SetHeight(2)
-	w.AccentLine.tex = w.AccentLine:CreateTexture(nil, 'ARTWORK')
-	w.AccentLine.tex:SetAllPoints()
+	if not skin.owned then
+		-- 2px accent line under the title bar
+		w.AccentLine = CreateFrame('Frame', nil, w)
+		w.AccentLine:SetPoint('TOPLEFT', w, 'TOPLEFT', 3, -24)
+		w.AccentLine:SetPoint('TOPRIGHT', w, 'TOPRIGHT', -3, -24)
+		w.AccentLine:SetHeight(2)
+		w.AccentLine.tex = w.AccentLine:CreateTexture(nil, 'ARTWORK')
+		w.AccentLine.tex:SetAllPoints()
 
-	w.MainContent = LibAT.UI.CreateContentFrame(w, w.AccentLine, -8, 40)
-	w.LeftPanel = LibAT.UI.CreateLeftPanel(w.MainContent, LEFT_WIDTH)
-	w.RightPanel = LibAT.UI.CreateRightPanel(w.MainContent, w.LeftPanel, 14)
+		w.MainContent = LibAT.UI.CreateContentFrame(w, w.AccentLine, -8, 40)
+		w.LeftPanel = LibAT.UI.CreateLeftPanel(w.MainContent, LEFT_WIDTH)
+		w.RightPanel = LibAT.UI.CreateRightPanel(w.MainContent, w.LeftPanel, 14)
+	end
 
 	self:CreateLeftSide(w)
 	self:CreateRightSide(w)
@@ -176,15 +225,50 @@ function Hub:EnsureWindow()
 
 	self:RegisterMessage(LibAT.UI.ACCENT_CHANGED, 'ApplyAccent')
 	self:ApplyAccent()
+	self.views[skin.id] = {
+		window = w,
+		grids = self.grids,
+		toggleGroups = self.toggleGroups,
+		formFrames = self.formFrames,
+		customFrames = self.customFrames,
+		summaryFrame = self.summaryFrame,
+	}
 	return w
+end
+
+---Discard the current skin view and recreate it without changing the setup run.
+function Hub:RebuildWindow()
+	local shown = self:IsShown()
+	if self.window and self.skin then
+		local view = self.views[self.skin.id]
+		if view then
+			view.summaryFrame = self.summaryFrame
+		end
+	end
+	self.rebuildingSkin = true
+	if self.window then
+		self.window:Hide()
+	end
+	if self.toast then
+		self.toast:Hide()
+		self.toast = nil
+	end
+	self.window = nil
+	self.rebuildingSkin = false
+	if shown then
+		local window = self:EnsureWindow()
+		window:Show()
+		self:Render(true)
+	end
 end
 
 ---@param w Frame
 function Hub:CreateLeftSide(w)
 	local left = w.LeftPanel
-	left.Scroll, left.List = CreateScroll(left)
-	left.Scroll:SetPoint('TOPLEFT', left, 'TOPLEFT', 4, -6)
-	left.Scroll:SetPoint('BOTTOMRIGHT', left, 'BOTTOMRIGHT', -14, 56)
+	local skin = self.skin
+	left.Scroll, left.List = CreateScroll(left, skin)
+	left.Scroll:SetPoint('TOPLEFT', left, 'TOPLEFT', skin.owned and 12 or 4, skin.owned and -12 or -6)
+	left.Scroll:SetPoint('BOTTOMRIGHT', left, 'BOTTOMRIGHT', skin.owned and -24 or -14, skin.owned and 64 or 56)
 	left.rows = {}
 
 	left.WhatsNew = CreateFrame('Button', nil, left)
@@ -196,39 +280,56 @@ function Hub:CreateLeftSide(w)
 	left.WhatsNew.line:SetPoint('TOPRIGHT', left.WhatsNew, 'TOPRIGHT', 0, 4)
 	left.WhatsNew.line:SetHeight(1)
 	left.WhatsNew.line:SetColorTexture(0.3, 0.3, 0.3, 0.8)
-	left.WhatsNew.text = left.WhatsNew:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	left.WhatsNew.text = CreateSkinFontString(left.WhatsNew, 'OVERLAY', skin, 'GameFontNormal')
+	if skin.owned then
+		skin:SetFont(left.WhatsNew.text, 12)
+		left.WhatsNew.line:SetColorTexture(skin.colors.rim[1], skin.colors.rim[2], skin.colors.rim[3], 0.35)
+	end
 	left.WhatsNew.text:SetPoint('LEFT', left.WhatsNew, 'LEFT', 2, 0)
 	left.WhatsNew:SetScript('OnClick', function()
 		Hub:OpenWhatsNew()
 	end)
 
-	left.AutoOpen = LibAT.UI.CreateCheckbox(left, 'Open after login', LEFT_WIDTH - 16)
-	left.AutoOpen:SetPoint('BOTTOMLEFT', left, 'BOTTOMLEFT', 6, 6)
-	left.AutoOpen:SetScript('OnClick', function(self)
-		Setup:SetAutoOpen(self:GetChecked() and true or false)
-	end)
-	left.AutoOpen:SetScript('OnEnter', function(self)
-		if GameTooltip then
-			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
-			GameTooltip:SetText('Open after login', 1, 1, 1)
-			GameTooltip:AddLine('When this is off, a small note tells you when an addon is ready to set up.', nil, nil, nil, true)
-			GameTooltip:Show()
+	if skin.owned then
+		left.AutoOpen = skin:CreateSwitchRow(left, 'Open after login')
+		left.AutoOpen:SetPoint('BOTTOMLEFT', left, 'BOTTOMLEFT', 8, 8)
+		left.AutoOpen:SetPoint('BOTTOMRIGHT', left, 'BOTTOMRIGHT', -8, 8)
+		left.AutoOpen.onToggle = function(checked)
+			Setup:SetAutoOpen(checked)
 		end
-	end)
-	left.AutoOpen:SetScript('OnLeave', function()
-		if GameTooltip then
-			GameTooltip:Hide()
-		end
-	end)
+	else
+		left.AutoOpen = LibAT.UI.CreateCheckbox(left, 'Open after login', LEFT_WIDTH - 16)
+		left.AutoOpen:SetPoint('BOTTOMLEFT', left, 'BOTTOMLEFT', 6, 6)
+		left.AutoOpen:SetScript('OnClick', function(self)
+			Setup:SetAutoOpen(self:GetChecked() and true or false)
+		end)
+		left.AutoOpen:SetScript('OnEnter', function(self)
+			if GameTooltip then
+				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+				GameTooltip:SetText('Open after login', 1, 1, 1)
+				GameTooltip:AddLine('When this is off, a small note tells you when an addon is ready to set up.', nil, nil, nil, true)
+				GameTooltip:Show()
+			end
+		end)
+		left.AutoOpen:SetScript('OnLeave', function()
+			if GameTooltip then
+				GameTooltip:Hide()
+			end
+		end)
+	end
 end
 
 ---@param w Frame
 function Hub:CreateRightSide(w)
 	local right = w.RightPanel
+	local skin = self.skin
 
-	right.AddonLabel = right:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	right.AddonLabel = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontHighlightSmall')
+	if skin.owned then
+		skin:SetFont(right.AddonLabel, 14)
+	end
 	right.AddonLabel:SetPoint('TOPLEFT', right, 'TOPLEFT', 14, -10)
-	right.AddonLabel:SetTextColor(0.65, 0.65, 0.65)
+	right.AddonLabel:SetTextColor(skin.owned and skin.colors.secondary[1] or 0.65, skin.owned and skin.colors.secondary[2] or 0.65, skin.owned and skin.colors.secondary[3] or 0.65)
 	right.AddonLabel:SetJustifyH('LEFT')
 
 	right.Badge = CreateFrame('Frame', nil, right)
@@ -237,7 +338,10 @@ function Hub:CreateRightSide(w)
 	right.Badge.bg = right.Badge:CreateTexture(nil, 'BACKGROUND')
 	right.Badge.bg:SetAllPoints()
 	right.Badge.bg:SetColorTexture(0.55, 0.42, 0.05, 0.85)
-	right.Badge.text = right.Badge:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	right.Badge.text = CreateSkinFontString(right.Badge, 'OVERLAY', skin, 'GameFontHighlightSmall')
+	if skin.owned then
+		skin:SetFont(right.Badge.text, 11)
+	end
 	right.Badge.text:SetPoint('CENTER')
 	right.Badge.text:SetText('Recommended')
 	right.Badge:EnableMouse(true)
@@ -256,48 +360,67 @@ function Hub:CreateRightSide(w)
 	end)
 	right.Badge:Hide()
 
-	right.Title = right:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+	right.Title = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontNormalLarge')
+	if skin.owned then
+		skin:SetFont(right.Title, 26)
+		right.Title:SetTextColor(skin.colors.text[1], skin.colors.text[2], skin.colors.text[3])
+	end
 	right.Title:SetPoint('TOPLEFT', right.AddonLabel, 'BOTTOMLEFT', 0, -3)
 	right.Title:SetPoint('RIGHT', right.Badge, 'LEFT', -10, 0)
 	right.Title:SetJustifyH('LEFT')
 
-	right.Text = right:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	right.Text = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontHighlight')
+	if skin.owned then
+		skin:SetFont(right.Text, 14)
+	end
 	right.Text:SetPoint('TOPLEFT', right.Title, 'BOTTOMLEFT', 0, -4)
 	right.Text:SetPoint('RIGHT', right, 'RIGHT', -14, 0)
 	right.Text:SetJustifyH('LEFT')
 	right.Text:SetWordWrap(true)
-	right.Text:SetTextColor(0.85, 0.85, 0.85)
+	right.Text:SetTextColor(skin.owned and skin.colors.secondary[1] or 0.85, skin.owned and skin.colors.secondary[2] or 0.85, skin.owned and skin.colors.secondary[3] or 0.85)
 
-	right.Scroll, right.Content = CreateScroll(right)
+	right.Scroll, right.Content = CreateScroll(right, skin)
 	right.Scroll:SetPoint('TOPLEFT', right.Text, 'BOTTOMLEFT', 0, -12)
 	right.Scroll:SetPoint('BOTTOMRIGHT', right, 'BOTTOMRIGHT', -24, 34)
 	right.Scroll:HookScript('OnSizeChanged', function()
 		Hub:OnContentResized()
 	end)
 
-	right.Message = right.Content:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	right.Message = CreateSkinFontString(right.Content, 'OVERLAY', skin, 'GameFontHighlight')
+	if skin.owned then
+		skin:SetFont(right.Message, 14)
+		right.Message:SetTextColor(skin.colors.text[1], skin.colors.text[2], skin.colors.text[3])
+	end
 	right.Message:SetPoint('TOPLEFT', right.Content, 'TOPLEFT', 0, -6)
 	right.Message:SetPoint('RIGHT', right.Content, 'RIGHT', 0, 0)
 	right.Message:SetJustifyH('LEFT')
 	right.Message:SetWordWrap(true)
 
-	right.Progress = LibAT.UI.CreateProgressBar(right, 200, 14)
+	right.Progress = skin.owned and skin:CreateProgress(right) or LibAT.UI.CreateProgressBar(right, 200, 14)
 	right.Progress:ClearAllPoints()
 	right.Progress:SetPoint('BOTTOMLEFT', right, 'BOTTOMLEFT', 14, 10)
 	right.Progress:SetPoint('BOTTOMRIGHT', right, 'BOTTOMRIGHT', -190, 10)
 
-	right.ReloadText = right:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	right.ReloadText = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontNormalSmall')
+	if skin.owned then
+		skin:SetFont(right.ReloadText, 11)
+		right.ReloadText:SetTextColor(skin.colors.secondary[1], skin.colors.secondary[2], skin.colors.secondary[3])
+	end
 	right.ReloadText:SetPoint('LEFT', right.Progress, 'RIGHT', 10, 0)
 	right.ReloadText:SetPoint('RIGHT', right, 'RIGHT', -14, 0)
 	right.ReloadText:SetJustifyH('RIGHT')
 
-	right.Combat = CreateFrame('Frame', nil, right)
+	right.Combat = CreateFrame('Frame', nil, skin.owned and w or right)
 	right.Combat:SetAllPoints(right)
-	right.Combat:SetFrameLevel(right:GetFrameLevel() + 50)
+	right.Combat:SetFrameLevel(w:GetFrameLevel() + 80)
 	right.Combat.bg = right.Combat:CreateTexture(nil, 'BACKGROUND')
 	right.Combat.bg:SetAllPoints()
 	right.Combat.bg:SetColorTexture(0, 0, 0, 0.55)
-	right.Combat.text = right.Combat:CreateFontString(nil, 'OVERLAY', 'GameFontNormalLarge')
+	right.Combat.text = CreateSkinFontString(right.Combat, 'OVERLAY', skin, 'GameFontNormalLarge')
+	if skin.owned then
+		skin:SetFont(right.Combat.text, 18)
+		right.Combat.text:SetTextColor(1, 1, 1)
+	end
 	right.Combat.text:SetPoint('CENTER')
 	right.Combat.text:SetText('Waiting for combat to end')
 	right.Combat:Hide()
@@ -305,11 +428,85 @@ end
 
 ---@param w Frame
 function Hub:CreateFooter(w)
-	local bar = CreateFrame('Frame', nil, w)
-	bar:SetPoint('BOTTOMLEFT', w, 'BOTTOMLEFT', 0, 0)
-	bar:SetPoint('BOTTOMRIGHT', w, 'BOTTOMRIGHT', 0, 0)
-	bar:SetHeight(36)
-	w.Footer = bar
+	local skin = self.skin
+	local bar = w.Footer
+	if not skin.owned then
+		bar = CreateFrame('Frame', nil, w)
+		bar:SetPoint('BOTTOMLEFT', w, 'BOTTOMLEFT', 0, 0)
+		bar:SetPoint('BOTTOMRIGHT', w, 'BOTTOMRIGHT', 0, 0)
+		bar:SetHeight(36)
+		w.Footer = bar
+	end
+
+	if skin.owned then
+		w.ownedButtons = {}
+		w.BackButton = skin:CreateButton(bar, 'Back', false)
+		w.BackButton:SetPoint('LEFT', bar, 'LEFT', 18, 0)
+		w.BackButton:SetScript('OnClick', function()
+			Hub:GoBack()
+		end)
+
+		w.NextButton = skin:CreateButton(bar, 'Next', true)
+		w.NextButton:SetPoint('RIGHT', bar, 'RIGHT', -18, 0)
+		w.NextButton:SetScript('OnClick', function()
+			Hub:GoNext()
+		end)
+
+		w.SkipAheadButton = skin:CreateButton(bar, 'Skip ahead', false)
+		w.SkipAheadButton:SetPoint('RIGHT', w.NextButton, 'LEFT', -10, 0)
+		w.SkipAheadButton:SetScript('OnClick', function()
+			Hub:ToggleSkipMenu()
+		end)
+		w.ownedButtons[1], w.ownedButtons[2], w.ownedButtons[3] = w.BackButton, w.NextButton, w.SkipAheadButton
+
+		local popup = CreateFrame('Frame', nil, w)
+		popup:SetSize(300, 74)
+		popup:SetPoint('BOTTOMRIGHT', w.SkipAheadButton, 'TOPRIGHT', 0, 8)
+		popup:SetFrameLevel(w:GetFrameLevel() + 70)
+		popup.bg = popup:CreateTexture(nil, 'BACKGROUND')
+		popup.bg:SetTexture('Interface\\Buttons\\WHITE8X8')
+		popup.bg:SetAllPoints()
+		popup.bg:SetVertexColor(skin.colors.panel[1], skin.colors.panel[2], skin.colors.panel[3], 0.98)
+		popup.edges = {}
+		local function Edge(pointA, pointB, width, height)
+			local tex = popup:CreateTexture(nil, 'BORDER')
+			tex:SetTexture('Interface\\Buttons\\WHITE8X8')
+			tex:SetPoint(pointA)
+			tex:SetPoint(pointB)
+			if width then
+				tex:SetWidth(width)
+			else
+				tex:SetHeight(height)
+			end
+			tex:SetVertexColor(skin.colors.rim[1], skin.colors.rim[2], skin.colors.rim[3], 0.72)
+		end
+		Edge('TOPLEFT', 'BOTTOMLEFT', 1)
+		Edge('TOPRIGHT', 'BOTTOMRIGHT', 1)
+		Edge('TOPLEFT', 'TOPRIGHT', nil, 1)
+		Edge('BOTTOMLEFT', 'BOTTOMRIGHT', nil, 1)
+		popup.skip = skin:CreateTextButton(popup)
+		popup.skip:SetPoint('TOPLEFT', popup, 'TOPLEFT', 12, -12)
+		popup.skip:SetLabel('Skip this addon - keeps current settings')
+		popup.skip:SetScript('OnClick', function()
+			popup:Hide()
+			Hub:OnSkipClicked()
+		end)
+		popup.recommended = skin:CreateTextButton(popup)
+		popup.recommended:SetPoint('TOPLEFT', popup.skip, 'BOTTOMLEFT', 0, -12)
+		popup.recommended:SetLabel('Use recommended - keeps choices already made')
+		popup.recommended:SetScript('OnClick', function()
+			popup:Hide()
+			Hub:OnRecommendedClicked()
+		end)
+		popup:Hide()
+		w.SkipMenu = popup
+
+		w.RightPanel.Progress:SetParent(bar)
+		w.RightPanel.Progress:ClearAllPoints()
+		w.RightPanel.Progress:SetPoint('CENTER', bar, 'CENTER', 0, 0)
+		w.RightPanel.Progress:SetWidth(210)
+		return
+	end
 
 	w.BackButton = LibAT.UI.CreateButton(bar, 90, 22, 'Back')
 	w.BackButton:SetPoint('LEFT', bar, 'LEFT', LEFT_WIDTH + 30, -2)
@@ -334,6 +531,14 @@ function Hub:CreateFooter(w)
 	w.SkipButton:SetScript('OnClick', function()
 		Hub:OnSkipClicked()
 	end)
+end
+
+function Hub:ToggleSkipMenu()
+	local menu = self.window and self.window.SkipMenu
+	if not menu then
+		return
+	end
+	menu:SetShown(not menu:IsShown())
 end
 
 ---@return boolean
@@ -728,7 +933,17 @@ function Hub:GetGrid(key)
 	end
 	local content = self.window.RightPanel.Content
 	local opts
-	if key == 'look' then
+	if self.skin.owned then
+		if key == 'look' then
+			opts = { artHeight = 148, minWidth = 210, maxColumns = 3, cardHeight = 238, spacing = 12 }
+		elseif key == 'whatsnew' then
+			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 72 }
+		elseif key == 'start' then
+			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 58 }
+		else
+			opts = { artHeight = 0, minWidth = 240, maxColumns = 2, cardHeight = 54 }
+		end
+	elseif key == 'look' then
 		opts = { artHeight = 92, minWidth = 165, maxColumns = 4 }
 	elseif key == 'whatsnew' then
 		opts = { artHeight = 0, minWidth = 220, maxColumns = 2, cardHeight = 104 }
@@ -737,7 +952,7 @@ function Hub:GetGrid(key)
 	else
 		opts = { artHeight = 0, minWidth = 200, maxColumns = 4, cardHeight = 96 }
 	end
-	grid = LibAT.UI.CreateCardGrid(content, opts)
+	grid = self.skin.owned and self.skin:CreateCardGrid(content, opts) or LibAT.UI.CreateCardGrid(content, opts)
 	self.grids[key] = grid
 	return grid
 end
@@ -783,7 +998,11 @@ function Hub:SetHeader(title, text, addonLabel, recommended)
 	right.AddonLabel:SetText(addonLabel or '')
 	right.Title:SetText(title or '')
 	right.Text:SetText(text or '')
-	right.Badge:SetShown(recommended and true or false)
+	right.Badge:SetShown(not self.skin.owned and recommended and true or false)
+	if self.skin.owned then
+		local plain = (addonLabel or ''):gsub('|T.-|t%s*', '')
+		self.window:SetTitle(plain ~= '' and (plain .. ' Setup') or 'Setup')
+	end
 end
 
 ---Draw the current page
@@ -958,16 +1177,24 @@ function Hub:GetToggleGroup(index)
 	local content = self.window.RightPanel.Content
 	group = CreateFrame('Frame', nil, content)
 	group:SetHeight(1)
-	group.Title = group:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
+	group.Title = CreateSkinFontString(group, 'OVERLAY', self.skin, 'GameFontNormal')
+	if self.skin.owned then
+		self.skin:SetFont(group.Title, 12)
+		group.Title:SetTextColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3])
+	end
 	group.Title:SetPoint('TOPLEFT', group, 'TOPLEFT', 0, 0)
-	group.AllOff = CreateTextButton(group)
+	group.AllOff = CreateTextButton(group, nil, self.skin)
 	group.AllOff:SetPoint('TOPRIGHT', group, 'TOPRIGHT', 0, 0)
-	group.AllOn = CreateTextButton(group)
+	group.AllOn = CreateTextButton(group, nil, self.skin)
 	group.AllOn:SetPoint('RIGHT', group.AllOff, 'LEFT', -12, 0)
 	group.AllOn:SetLabel('Turn all on')
 	group.AllOff:SetLabel('Turn all off')
-	group.grid = LibAT.UI.CreateCardGrid(group, { artHeight = 0, minWidth = 180, maxColumns = 3, cardHeight = 78 })
-	group.grid:SetPoint('TOPLEFT', group, 'TOPLEFT', 0, -22)
+	if self.skin.owned then
+		group.rows = {}
+	else
+		group.grid = LibAT.UI.CreateCardGrid(group, { artHeight = 0, minWidth = 180, maxColumns = 3, cardHeight = 78 })
+		group.grid:SetPoint('TOPLEFT', group, 'TOPLEFT', 0, -22)
+	end
 	self.toggleGroups[index] = group
 	return group
 end
@@ -1032,13 +1259,6 @@ function Hub:RenderToggles(reg, step, ctx)
 				disabled = item.core,
 			}
 		end
-		group.grid.opts.onCheck = function(card, key, checked)
-			local item = byKey[key]
-			if item then
-				SetItem(item, checked)
-				card:SetChecked(Current(item))
-			end
-		end
 		group.AllOn:SetScript('OnClick', function()
 			for _, item in ipairs(items) do
 				SetItem(item, true)
@@ -1051,19 +1271,67 @@ function Hub:RenderToggles(reg, step, ctx)
 			end
 			Hub:RenderCurrent()
 		end)
-		group.grid:SetCards(list)
-		for _, card in ipairs(group.grid.cards) do
-			local item = byKey[card.data.value]
-			card:SetState(false, not item.core, item.core and 'Always on' or nil)
-		end
 		group.Title:SetText(groupDef.title or '')
 		group.AllOn:ApplyColor()
 		group.AllOff:ApplyColor()
 		group:ClearAllPoints()
 		group:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -y)
 		group:SetWidth(width)
-		local gridHeight = group.grid:Layout(width)
-		local height = 22 + gridHeight
+		local height
+		if self.skin.owned then
+			local columns = width >= 560 and 2 or 1
+			local spacing = 14
+			local rowWidth = math.floor((width - (columns - 1) * spacing) / columns)
+			for rowIndex, item in ipairs(items) do
+				local row = group.rows[rowIndex]
+				if not row then
+					row = self.skin:CreateSwitchRow(group, item.title, item.caption)
+					group.rows[rowIndex] = row
+				end
+				local currentItem = item
+				local currentRow = row
+				row:SetText(item.title)
+				row:SetDescription(item.caption)
+				row:SetChecked(Current(item))
+				row:SetEnabled(not item.core)
+				if item.core then
+					row:SetBadge('Always on', 'skipped')
+				elseif item.recommended == true then
+					row:SetBadge('Recommended', 'recommended')
+				else
+					row:SetBadge(nil)
+				end
+				row.onToggle = function(checked)
+					SetItem(currentItem, checked)
+					currentRow:SetChecked(Current(currentItem))
+				end
+				local column = (rowIndex - 1) % columns
+				local rowNumber = math.floor((rowIndex - 1) / columns)
+				row:ClearAllPoints()
+				row:SetPoint('TOPLEFT', group, 'TOPLEFT', column * (rowWidth + spacing), -26 - rowNumber * 42)
+				row:SetWidth(rowWidth)
+				row:Show()
+			end
+			for rowIndex = #items + 1, #group.rows do
+				group.rows[rowIndex]:Hide()
+			end
+			height = 26 + math.ceil(#items / columns) * 42
+		else
+			group.grid.opts.onCheck = function(card, key, checked)
+				local item = byKey[key]
+				if item then
+					SetItem(item, checked)
+					card:SetChecked(Current(item))
+				end
+			end
+			group.grid:SetCards(list)
+			for _, card in ipairs(group.grid.cards) do
+				local item = byKey[card.data.value]
+				card:SetState(false, not item.core, item.core and 'Always on' or nil)
+			end
+			local gridHeight = group.grid:Layout(width)
+			height = 22 + gridHeight
+		end
 		group:SetHeight(height)
 		group:Show()
 		y = y + height + 16
@@ -1239,9 +1507,11 @@ end
 function Hub:RenderSummary(regs, final)
 	local content = self.window.RightPanel.Content
 	if final then
+		local reloadCount = Setup:GetStagedCount()
 		self:SetHeader(
 			'All done',
-			Setup:GetStagedCount() > 0 and 'Here is what you picked. Press Finish and reload to use the changes that need a reload.' or 'Here is what you picked. You can change any of it later.',
+			reloadCount > 0 and (reloadCount .. ' ' .. Plural(reloadCount, 'change is', 'changes are') .. ' ready. Your screen reloads once to apply your choices.')
+				or 'Your choices are ready. You can change any of them later.',
 			'',
 			false
 		)
@@ -1261,20 +1531,33 @@ function Hub:RenderSummary(regs, final)
 		if not row then
 			row = CreateFrame('Frame', nil, frame)
 			row:SetHeight(18)
-			row.label = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+			row.label = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlight')
 			row.label:SetJustifyH('LEFT')
-			row.value = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+			row.value = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlight')
 			row.value:SetJustifyH('LEFT')
-			row.link = CreateTextButton(row)
+			row.link = CreateTextButton(row, nil, self.skin)
 			frame.rows[used] = row
 		end
-		row.label:SetFontObject(fontObject or 'GameFontHighlight')
+		if self.skin.owned then
+			self.skin:SetFont(row.label, fontObject == 'GameFontNormal' and 14 or 12)
+			self.skin:SetFont(row.value, 12)
+		else
+			row.label:SetFontObject(fontObject or 'GameFontHighlight')
+		end
 		row.label:ClearAllPoints()
 		row.label:SetPoint('LEFT', row, 'LEFT', indent or 0, 0)
-		row.label:SetTextColor(1, 1, 1)
+		if self.skin.owned then
+			row.label:SetTextColor(self.skin.colors.text[1], self.skin.colors.text[2], self.skin.colors.text[3])
+		else
+			row.label:SetTextColor(1, 1, 1)
+		end
 		row.value:ClearAllPoints()
 		row.value:SetPoint('LEFT', row, 'LEFT', 220, 0)
-		row.value:SetTextColor(0.8, 0.8, 0.8)
+		if self.skin.owned then
+			row.value:SetTextColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3])
+		else
+			row.value:SetTextColor(0.8, 0.8, 0.8)
+		end
 		row.value:SetText('')
 		row.link:Hide()
 		row.link:ClearAllPoints()
@@ -1290,7 +1573,11 @@ function Hub:RenderSummary(regs, final)
 	for _, reg in ipairs(regs) do
 		local row = Row(0, 'GameFontNormal')
 		row.label:SetText(IconMarkup(reg) .. reg.name)
-		row.label:SetTextColor(1, 0.82, 0)
+		if self.skin.owned then
+			row.label:SetTextColor(self.skin.colors.text[1], self.skin.colors.text[2], self.skin.colors.text[3])
+		else
+			row.label:SetTextColor(1, 0.82, 0)
+		end
 		local rec = Setup:GetRecord(reg)
 		if rec and rec.status == 'skipped' then
 			row.value:SetText('Skipped')
@@ -1325,14 +1612,23 @@ function Hub:RenderSummary(regs, final)
 		local count = Setup:GetStagedCount()
 		if count > 0 then
 			header.label:SetText(count .. ' ' .. Plural(count, 'change needs', 'changes need') .. ' a reload')
-			header.label:SetTextColor(1, 0.82, 0)
+			if self.skin.owned then
+				local r, g, b = LibAT.UI.GetAccentColor()
+				header.label:SetTextColor(r, g, b)
+			else
+				header.label:SetTextColor(1, 0.82, 0)
+			end
 			for _, staged in ipairs(Setup.staged) do
 				local row = Row(14)
 				row.label:SetText('- ' .. staged.label)
 			end
 		else
 			header.label:SetText('Nothing needs a reload.')
-			header.label:SetTextColor(0.7, 0.7, 0.7)
+			if self.skin.owned then
+				header.label:SetTextColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3])
+			else
+				header.label:SetTextColor(0.7, 0.7, 0.7)
+			end
 		end
 	end
 
@@ -1479,15 +1775,49 @@ function Hub:GetListRow(index)
 	row.highlight:SetAllPoints()
 	row.highlight:SetColorTexture(1, 1, 1, 0.06)
 	row.current = row:CreateTexture(nil, 'ARTWORK')
-	row.current:SetPoint('TOPLEFT')
-	row.current:SetPoint('BOTTOMLEFT')
-	row.current:SetWidth(2)
+	if self.skin.owned then
+		row.current:SetSize(18, 18)
+		row.current:SetTexture(self.skin:Texture(self.skin.route and 'waypoint' or 'chapter-marker'))
+	else
+		row.current:SetPoint('TOPLEFT')
+		row.current:SetPoint('BOTTOMLEFT')
+		row.current:SetWidth(2)
+	end
 	row.fill = row:CreateTexture(nil, 'BACKGROUND')
 	row.fill:SetAllPoints()
-	row.text = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	row.text = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlightSmall')
+	if self.skin.owned then
+		self.skin:SetFont(row.text, 12)
+	end
 	row.text:SetJustifyH('LEFT')
 	row.text:SetWordWrap(false)
-	row.status = row:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	row.status = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlightSmall')
+	if self.skin.owned then
+		self.skin:SetFont(row.status, 11)
+		row.check = row:CreateTexture(nil, 'OVERLAY')
+		row.check:SetSize(18, 18)
+		row.check:SetTexture(self.skin:Texture('chapter-check'))
+		row.chevron = row:CreateTexture(nil, 'OVERLAY')
+		row.chevron:SetSize(12, 12)
+		row.chevron:SetTexture(self.skin:Texture('chevron'))
+		row.chevron:SetPoint('LEFT', row, 'LEFT', 3, 0)
+		row.routeLine = row:CreateTexture(nil, 'ARTWORK')
+		row.routeLine:SetTexture('Interface\\Buttons\\WHITE8X8')
+		row.routeLine:SetWidth(2)
+		row.routeDots = {}
+		for dotIndex = 1, 3 do
+			local dot = row:CreateTexture(nil, 'ARTWORK')
+			dot:SetTexture('Interface\\Buttons\\WHITE8X8')
+			dot:SetSize(2, 2)
+			row.routeDots[dotIndex] = dot
+		end
+		row.banner = row:CreateTexture(nil, 'BACKGROUND', nil, 1)
+		if self.skin.route then
+			row.banner:SetTexture(self.skin:Texture('banner'))
+		end
+		row.banner:SetSize(86, 38)
+		row.banner:Hide()
+	end
 	row.status:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
 	row.status:SetJustifyH('RIGHT')
 	row:SetScript('OnClick', function(self)
@@ -1504,26 +1834,36 @@ function Hub:RefreshList()
 		return
 	end
 	local left = self.window.LeftPanel
-	local width = LEFT_WIDTH - 20
+	local owned = self.skin.owned
+	local width = self:GetLeftWidth() - (owned and 36 or 20)
 	local r, g, b = LibAT.UI.GetAccentColor()
 	local used = 0
 	local y = 0
 	local currentEntry = self.page == 'step' and self.run.entries[self.index]
-	local check = LibAT.UI.AtlasMarkup('common-icon-checkmark', 12)
+	local check = owned and '' or LibAT.UI.AtlasMarkup('common-icon-checkmark', 12)
 
 	for _, reg in ipairs(Setup:GetSortedRegistrations()) do
 		used = used + 1
 		local row = self:GetListRow(used)
 		row:ClearAllPoints()
 		row:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
-		row:SetSize(width, ADDON_ROW_HEIGHT)
+		row:SetSize(width, owned and 30 or ADDON_ROW_HEIGHT)
 		row.text:ClearAllPoints()
-		row.text:SetPoint('LEFT', row, 'LEFT', 6, 0)
+		row.text:SetPoint('LEFT', row, 'LEFT', owned and 20 or 6, 0)
 		row.text:SetPoint('RIGHT', row.status, 'LEFT', -4, 0)
-		row.text:SetFontObject('GameFontNormal')
+		if owned then
+			self.skin:SetFont(row.text, 14)
+		else
+			row.text:SetFontObject('GameFontNormal')
+		end
 		row.text:SetText(IconMarkup(reg) .. reg.name)
 		local inRun = self:IsInRun(reg)
-		row.text:SetTextColor(1, inRun and 0.82 or 0.7, inRun and 0 or 0.4)
+		if owned then
+			local color = inRun and self.skin.colors.text or self.skin.colors.dim
+			row.text:SetTextColor(color[1], color[2], color[3])
+		else
+			row.text:SetTextColor(1, inRun and 0.82 or 0.7, inRun and 0 or 0.4)
+		end
 		local status = Setup:GetStatus(reg.id)
 		if status == 'done' then
 			row.status:SetText(check ~= '' and check or '|cff55cc55Done|r')
@@ -1533,12 +1873,23 @@ function Hub:RefreshList()
 			row.status:SetText('')
 		end
 		row.current:Hide()
+		if owned then
+			row.check:Hide()
+			row.chevron:SetRotation(inRun and math.rad(90) or 0)
+			row.chevron:SetVertexColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3], 0.8)
+			row.chevron:Show()
+			row.routeLine:Hide()
+			row.banner:Hide()
+			for _, dot in ipairs(row.routeDots) do
+				dot:Hide()
+			end
+		end
 		row.fill:SetColorTexture(0, 0, 0, 0)
 		row.onClick = function()
 			Hub:GoToAddon(reg)
 		end
 		row:Show()
-		y = y + ADDON_ROW_HEIGHT
+		y = y + (owned and 30 or ADDON_ROW_HEIGHT)
 
 		if inRun then
 			for i, entry in ipairs(self.run.entries) do
@@ -1547,33 +1898,75 @@ function Hub:RefreshList()
 					local stepRow = self:GetListRow(used)
 					stepRow:ClearAllPoints()
 					stepRow:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
-					stepRow:SetSize(width, STEP_ROW_HEIGHT)
-					local indent = entry.step._parentId and 30 or 18
+					stepRow:SetSize(width, owned and 26 or STEP_ROW_HEIGHT)
+					local indent = owned and (entry.step._parentId and 42 or 32) or (entry.step._parentId and 30 or 18)
 					stepRow.text:ClearAllPoints()
 					stepRow.text:SetPoint('LEFT', stepRow, 'LEFT', indent, 0)
 					stepRow.text:SetPoint('RIGHT', stepRow, 'RIGHT', -4, 0)
-					stepRow.text:SetFontObject('GameFontHighlightSmall')
+					if owned then
+						self.skin:SetFont(stepRow.text, 12)
+					else
+						stepRow.text:SetFontObject('GameFontHighlightSmall')
+					end
 					stepRow.status:SetText('')
 					local isCurrent = entry == currentEntry
+					local seen = self.page == 'summary' or (self.page == 'step' and i < self.index)
 					if isCurrent then
-						stepRow.text:SetText('> ' .. (entry.step.name or entry.step.title))
-						stepRow.text:SetTextColor(1, 1, 1)
-						stepRow.current:SetColorTexture(r, g, b, 1)
+						stepRow.text:SetText(entry.step.name or entry.step.title)
+						stepRow.text:SetTextColor(owned and r or 1, owned and g or 1, owned and b or 1)
+						if owned then
+							stepRow.current:ClearAllPoints()
+							stepRow.current:SetPoint('LEFT', stepRow, 'LEFT', 12, 0)
+							stepRow.current:SetVertexColor(r, g, b, 1)
+						else
+							stepRow.current:SetColorTexture(r, g, b, 1)
+						end
 						stepRow.current:Show()
-						stepRow.fill:SetColorTexture(r, g, b, 0.12)
+						stepRow.fill:SetColorTexture(r, g, b, owned and 0.08 or 0.12)
+						if owned and self.skin.route then
+							stepRow.banner:SetPoint('LEFT', stepRow, 'LEFT', 2, 0)
+							stepRow.banner:SetVertexColor(r, g, b, 0.72)
+							stepRow.banner:Show()
+						end
 					else
 						stepRow.text:SetText(entry.step.name or entry.step.title)
-						local seen = self.page == 'summary' or (self.page == 'step' and i < self.index)
-						local shade = seen and 0.85 or 0.6
-						stepRow.text:SetTextColor(shade, shade, shade)
+						if owned then
+							local color = seen and self.skin.colors.secondary or self.skin.colors.dim
+							stepRow.text:SetTextColor(color[1], color[2], color[3])
+						else
+							local shade = seen and 0.85 or 0.6
+							stepRow.text:SetTextColor(shade, shade, shade)
+						end
 						stepRow.current:Hide()
 						stepRow.fill:SetColorTexture(0, 0, 0, 0)
+					end
+					if owned then
+						stepRow.chevron:Hide()
+						stepRow.check:ClearAllPoints()
+						stepRow.check:SetPoint('LEFT', stepRow, 'LEFT', 12, 0)
+						stepRow.check:SetShown(seen and not isCurrent)
+						stepRow.routeLine:ClearAllPoints()
+						stepRow.routeLine:SetPoint('TOP', stepRow, 'TOPLEFT', 21, 0)
+						stepRow.routeLine:SetPoint('BOTTOM', stepRow, 'BOTTOMLEFT', 21, 0)
+						stepRow.routeLine:SetVertexColor(
+							seen and self.skin.colors.done[1] or self.skin.colors.rim[1],
+							seen and self.skin.colors.done[2] or self.skin.colors.rim[2],
+							seen and self.skin.colors.done[3] or self.skin.colors.rim[3],
+							0.55
+						)
+						stepRow.routeLine:SetShown(self.skin.route and (seen or isCurrent))
+						for dotIndex, dot in ipairs(stepRow.routeDots) do
+							dot:ClearAllPoints()
+							dot:SetPoint('LEFT', stepRow, 'LEFT', 20, 8 - dotIndex * 5)
+							dot:SetVertexColor(self.skin.colors.rim[1], self.skin.colors.rim[2], self.skin.colors.rim[3], 0.45)
+							dot:SetShown(self.skin.route and not seen and not isCurrent)
+						end
 					end
 					stepRow.onClick = function()
 						Hub:ShowEntry(i)
 					end
 					stepRow:Show()
-					y = y + STEP_ROW_HEIGHT
+					y = y + (owned and 26 or STEP_ROW_HEIGHT)
 				end
 			end
 			y = y + 4
@@ -1615,6 +2008,10 @@ end
 function Hub:UpdateFooter()
 	local w = self.window
 	if not w then
+		return
+	end
+	if self.skin.owned then
+		self:UpdateOwnedFooter()
 		return
 	end
 	local right = w.RightPanel
@@ -1690,13 +2087,102 @@ function Hub:UpdateFooter()
 	end
 end
 
+function Hub:UpdateOwnedFooter()
+	local w = self.window
+	local right = w.RightPanel
+	local staged = Setup:GetStagedCount()
+	local total = #self.run.entries
+	local page = self.page
+	local any = false
+	if w.SkipMenu then
+		w.SkipMenu:Hide()
+	end
+	w.BackButton:Show()
+	w.SkipAheadButton:Show()
+	w.NextButton:Show()
+	w.RightPanel.Progress:Show()
+	w.BackButton:SetEnabled(true)
+	w.SkipAheadButton:SetEnabled(true)
+	w.NextButton:SetEnabled(true)
+	w.SkipAheadButton:SetText('Skip ahead')
+	w.SkipAheadButton:SetScript('OnClick', function()
+		Hub:ToggleSkipMenu()
+	end)
+	right.ReloadText:SetText('')
+
+	if page == 'start' then
+		w.BackButton:Hide()
+		for _, reg in ipairs(self.startRegs) do
+			if self.startChecks[reg.id] then
+				any = true
+			end
+		end
+		w.NextButton:SetText(any and 'Set up checked addons' or 'Check an addon above')
+		w.NextButton:SetEnabled(any)
+		w.SkipAheadButton:SetShown(any and not self.startAllDone)
+		w.RightPanel.Progress:Hide()
+		if w.SkipMenu then
+			w.SkipMenu.skip:Hide()
+			w.SkipMenu.recommended:SetLabel('Use recommended for all - keeps current addon choices')
+		end
+	elseif page == 'step' then
+		w.NextButton:SetText(self.index >= total and 'Finish' or 'Next')
+		w.BackButton:SetEnabled(self.index > 1 or self.startShown)
+		w.RightPanel.Progress:SetMinMaxValues(0, math.max(total, 1))
+		w.RightPanel.Progress:SetValue(self.index)
+		w.RightPanel.Progress:SetText('Step ' .. self.index .. ' of ' .. total)
+		if w.SkipMenu then
+			w.SkipMenu.skip:Show()
+			w.SkipMenu.skip:SetLabel('Skip this addon - keeps current settings')
+			w.SkipMenu.recommended:SetLabel('Use recommended - keeps choices already made')
+		end
+	elseif page == 'summary' then
+		w.BackButton:SetEnabled(total > 0 or self.startShown)
+		w.NextButton:SetText(staged > 0 and 'Finish and reload' or 'Finish')
+		if staged > 0 then
+			w.SkipAheadButton:SetText('Finish without reload')
+			w.SkipAheadButton:SetScript('OnClick', function()
+				Hub:Finish(false)
+			end)
+		else
+			w.SkipAheadButton:Hide()
+		end
+		w.RightPanel.Progress:SetMinMaxValues(0, 1)
+		w.RightPanel.Progress:SetValue(1)
+		w.RightPanel.Progress:SetText('All steps done')
+		if Setup.inCombat then
+			w.NextButton:SetEnabled(false)
+			w.SkipAheadButton:SetEnabled(false)
+		end
+	elseif page == 'whatsnew' then
+		w.SkipAheadButton:Hide()
+		w.BackButton:SetShown(self.returnPage ~= nil)
+		w.NextButton:SetText(self.returnPage and 'Back to setup' or 'Close')
+		w.RightPanel.Progress:Hide()
+	else
+		w.SkipAheadButton:Hide()
+		w.BackButton:Hide()
+		w.NextButton:SetText('Close')
+		w.RightPanel.Progress:Hide()
+	end
+
+	for _, button in ipairs(w.ownedButtons or {}) do
+		button:ApplyAccent()
+	end
+end
+
 ---Fade the window and block Finish while the player is in combat
 ---@param inCombat boolean
 function Hub:OnCombatChanged(inCombat)
 	if not self.window then
 		return
 	end
-	self.window:SetAlpha(inCombat and 0.4 or 1)
+	if self.skin.owned then
+		self.window:SetAlpha(1)
+		self.window.VisualRoot:SetAlpha(inCombat and 0.4 or 1)
+	else
+		self.window:SetAlpha(inCombat and 0.4 or 1)
+	end
 	self.window.RightPanel.Combat:SetShown(inCombat and true or false)
 	if self.lastCombat ~= inCombat then
 		self.lastCombat = inCombat
@@ -1711,18 +2197,31 @@ function Hub:ApplyAccent()
 		return
 	end
 	local r, g, b = LibAT.UI.GetAccentColor()
-	w.AccentLine.tex:SetColorTexture(r, g, b, 1)
+	if w.AccentLine then
+		w.AccentLine.tex:SetColorTexture(r, g, b, 1)
+	end
 	w.RightPanel.Progress:SetStatusBarColor(r, g, b)
+	if self.skin.owned then
+		self.skin:ApplyAccent(w)
+	end
 	for _, grid in pairs(self.grids) do
 		grid:ApplyAccent()
 	end
 	for _, group in ipairs(self.toggleGroups or {}) do
-		group.grid:ApplyAccent()
+		if group.grid then
+			group.grid:ApplyAccent()
+		end
+		for _, row in ipairs(group.rows or {}) do
+			row:ApplyAccent()
+		end
 		group.AllOn:ApplyColor()
 		group.AllOff:ApplyColor()
 	end
 	if self.toast then
 		self.toast.band:SetColorTexture(r, g, b, 1)
+		if self.toast.action.ApplyAccent then
+			self.toast.action:ApplyAccent()
+		end
 	end
 	if self:IsShown() then
 		self:RefreshList()
@@ -1756,6 +2255,7 @@ end
 ----------------------------------------------------------------------------------------------------
 
 function Hub:CreateToast()
+	local skin = self.skin or Setup.Skins:GetActive()
 	local toast = CreateFrame('Frame', nil, UIParent)
 	toast:SetSize(400, 58)
 	toast:SetPoint('TOP', UIParent, 'TOP', 0, -140)
@@ -1763,25 +2263,46 @@ function Hub:CreateToast()
 	toast:EnableMouse(true)
 	toast.bg = toast:CreateTexture(nil, 'BACKGROUND')
 	toast.bg:SetAllPoints()
-	toast.bg:SetColorTexture(0.05, 0.05, 0.06, 0.94)
+	if skin.owned then
+		toast.bg:SetColorTexture(skin.colors.panel[1], skin.colors.panel[2], skin.colors.panel[3], 0.98)
+	else
+		toast.bg:SetColorTexture(0.05, 0.05, 0.06, 0.94)
+	end
 	toast.band = toast:CreateTexture(nil, 'ARTWORK')
 	toast.band:SetPoint('TOPLEFT')
 	toast.band:SetPoint('BOTTOMLEFT')
 	toast.band:SetWidth(3)
-	toast.title = toast:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	toast.title = CreateSkinFontString(toast, 'OVERLAY', skin, 'GameFontNormalSmall')
+	if skin.owned then
+		skin:SetFont(toast.title, 12)
+		toast.title:SetTextColor(skin.colors.text[1], skin.colors.text[2], skin.colors.text[3])
+	end
 	toast.title:SetPoint('TOPLEFT', toast, 'TOPLEFT', 12, -8)
 	toast.title:SetText('Setup')
-	toast.text = toast:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	toast.text = CreateSkinFontString(toast, 'OVERLAY', skin, 'GameFontHighlight')
+	if skin.owned then
+		skin:SetFont(toast.text, 12)
+		toast.text:SetTextColor(skin.colors.secondary[1], skin.colors.secondary[2], skin.colors.secondary[3])
+	end
 	toast.text:SetPoint('TOPLEFT', toast.title, 'BOTTOMLEFT', 0, -3)
 	toast.text:SetPoint('RIGHT', toast, 'RIGHT', -120, 0)
 	toast.text:SetJustifyH('LEFT')
 	toast.text:SetWordWrap(true)
-	toast.action = LibAT.UI.CreateButton(toast, 100, 22, 'Open')
+	if skin.owned then
+		toast.action = skin:CreateButton(toast, 'Open', true)
+		toast.action:SetHeight(24)
+	else
+		toast.action = LibAT.UI.CreateButton(toast, 100, 22, 'Open')
+	end
 	toast.action:SetPoint('RIGHT', toast, 'RIGHT', -12, -4)
 	toast.close = CreateFrame('Button', nil, toast)
 	toast.close:SetSize(16, 16)
 	toast.close:SetPoint('TOPRIGHT', toast, 'TOPRIGHT', -4, -4)
-	toast.close.text = toast.close:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	toast.close.text = CreateSkinFontString(toast.close, 'OVERLAY', skin, 'GameFontHighlightSmall')
+	if skin.owned then
+		skin:SetFont(toast.close.text, 12)
+		toast.close.text:SetTextColor(skin.colors.secondary[1], skin.colors.secondary[2], skin.colors.secondary[3])
+	end
 	toast.close.text:SetPoint('CENTER')
 	toast.close.text:SetText('x')
 	toast.close:SetScript('OnClick', function()

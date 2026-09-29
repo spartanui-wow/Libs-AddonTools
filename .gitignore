@@ -1,2 +1,6 @@
 
 docs/
+
+# Design mockups stay local; keep the rest of .impeccable (brief, critique, config)
+.impeccable/mocks/
+.impeccable/review/

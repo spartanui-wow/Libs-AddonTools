@@ -7,6 +7,8 @@ manual-changelog:
 ignore:
   - "*.md"
   - "*.Definition.lua"
+  - ".impeccable"
+  - "tools"
 
 move-folders:
   Plugins/LibsAddonTools-ProfileHub: LibsAddonTools-ProfileHub

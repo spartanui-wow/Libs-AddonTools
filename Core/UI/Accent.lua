@@ -10,6 +10,7 @@ LibAT.UI.ACCENT_CHANGED = 'LIBAT_SETUP_ACCENT_CHANGED'
 local DEFAULT_R, DEFAULT_G, DEFAULT_B = 226 / 255, 31 / 255, 31 / 255 -- e21f1f
 
 local provider = nil ---@type fun(): any
+local backdropProvider = nil ---@type fun(): string|nil
 local lastR, lastG, lastB = DEFAULT_R, DEFAULT_G, DEFAULT_B
 
 ---Turn a provider result into r, g, b (0-1). Accepts r, g, b numbers, {r, g, b}, {r=, g=, b=} or 'rrggbb'.
@@ -92,6 +93,35 @@ function LibAT.UI.SetAccentProvider(fn)
 		return
 	end
 	provider = fn
+	LibAT.UI.NotifyAccentChanged(true)
+end
+
+---Get the backdrop supplied by the host addon. A nil return uses the setup skin's neutral art.
+---@return string|nil texturePath
+function LibAT.UI.GetBackdrop()
+	if not backdropProvider then
+		return nil
+	end
+	local ok, path = pcall(backdropProvider)
+	if ok and type(path) == 'string' and path ~= '' then
+		return path
+	end
+	if not ok and LibAT.InternalLog then
+		LibAT.InternalLog.warning('Backdrop provider failed: ' .. tostring(path))
+	end
+	return nil
+end
+
+---Set the setup window backdrop provider. Pass nil to use the shipped neutral backdrop.
+---@param fn? fun(): string|nil
+function LibAT.UI.SetBackdropProvider(fn)
+	if fn ~= nil and type(fn) ~= 'function' then
+		if LibAT.InternalLog then
+			LibAT.InternalLog.warning('SetBackdropProvider expects a function, got ' .. type(fn))
+		end
+		return
+	end
+	backdropProvider = fn
 	LibAT.UI.NotifyAccentChanged(true)
 end
 
