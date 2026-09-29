@@ -354,14 +354,17 @@ end
 ---Build the list of steps for these addons. Due steps when there are any, otherwise all of them.
 ---@param regs LibAT.SetupRegistration[]
 function Hub:BuildRun(regs)
-	local run = { regs = {}, entries = {} }
+	local run = { regs = {}, entries = {}, candidates = {} }
 	for _, reg in ipairs(regs) do
 		local steps = Setup:GetDueSteps(reg)
+		local candidates = Setup:GetDueSteps(reg, true)
 		if #steps == 0 then
 			steps = Setup:GetVisibleSteps(reg)
+			candidates = Setup:GetVisibleSteps(reg, true)
 		end
 		if #steps > 0 then
 			run.regs[#run.regs + 1] = reg
+			run.candidates[reg] = candidates
 			for _, step in ipairs(steps) do
 				run.entries[#run.entries + 1] = { reg = reg, step = step }
 			end
@@ -369,6 +372,33 @@ function Hub:BuildRun(regs)
 	end
 	self.run = run
 	self.index = 0
+end
+
+---Steps can appear or disappear as the player picks things (a later step's hidden() changes),
+---so the list is rebuilt before moving, keeping the player on the step they are on.
+function Hub:RefreshRun()
+	local run = self.run
+	if not run or not run.candidates then
+		return
+	end
+	local current = self.run.entries[self.index]
+	local entries = {}
+	for _, reg in ipairs(run.regs) do
+		for _, step in ipairs(run.candidates[reg] or {}) do
+			if step == (current and current.step) or Setup:IsStepVisible(reg, step) then
+				entries[#entries + 1] = { reg = reg, step = step }
+			end
+		end
+	end
+	run.entries = entries
+	if current then
+		for i, entry in ipairs(entries) do
+			if entry.step == current.step then
+				self.index = i
+				return
+			end
+		end
+	end
 end
 
 ---Add an addon that is not in the run yet, just before the summary
@@ -385,6 +415,10 @@ function Hub:AddToRun(reg)
 		return
 	end
 	self.run.regs[#self.run.regs + 1] = reg
+	if self.run.candidates then
+		local candidates = Setup:GetDueSteps(reg, true)
+		self.run.candidates[reg] = #candidates > 0 and candidates or Setup:GetVisibleSteps(reg, true)
+	end
 	for _, step in ipairs(steps) do
 		self.run.entries[#self.run.entries + 1] = { reg = reg, step = step }
 	end
@@ -509,6 +543,7 @@ end
 
 ---Next button
 function Hub:GoNext()
+	self:RefreshRun()
 	if self.page == 'step' then
 		local entry = self.run.entries[self.index]
 		local last
@@ -535,6 +570,7 @@ end
 
 ---Back button
 function Hub:GoBack()
+	self:RefreshRun()
 	if self.page == 'step' then
 		if self.index > 1 then
 			self:ShowEntry(self.index - 1)

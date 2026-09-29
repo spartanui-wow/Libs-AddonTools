@@ -403,10 +403,11 @@ end
 ---Steps of an addon in display order, leaving out hidden ones
 ---@param reg LibAT.SetupRegistration
 ---@return LibAT.SetupStep[]
-function Setup:GetVisibleSteps(reg)
+---@param includeHidden? boolean also list steps hidden right now (they may appear later in the run)
+function Setup:GetVisibleSteps(reg, includeHidden)
 	local list = {}
 	for _, step in ipairs(reg.steps) do
-		if self:IsStepVisible(reg, step) then
+		if includeHidden or self:IsStepVisible(reg, step) then
 			list[#list + 1] = step
 		end
 	end
@@ -443,17 +444,18 @@ end
 ---steps when a finished addon meets a new profile.
 ---@param reg LibAT.SetupRegistration
 ---@return LibAT.SetupStep[]
-function Setup:GetDueSteps(reg)
+---@param includeHidden? boolean also list steps hidden right now
+function Setup:GetDueSteps(reg, includeHidden)
 	local rec = self:GetRecord(reg)
 	if not rec then
 		return {}
 	end
 	local list = {}
 	if rec.status == 'pending' then
-		return self:GetVisibleSteps(reg)
+		return self:GetVisibleSteps(reg, includeHidden)
 	end
 	if rec.status == 'done' and ProfileStepsDue(reg, rec) then
-		for _, step in ipairs(self:GetVisibleSteps(reg)) do
+		for _, step in ipairs(self:GetVisibleSteps(reg, includeHidden)) do
 			if StepScope(reg, step) == 'profile' then
 				list[#list + 1] = step
 			end
