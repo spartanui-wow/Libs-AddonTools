@@ -47,11 +47,11 @@ A mini code editor inside WoW. Type Lua code, hit execute, and see the output. Y
 
 Open it with **`/lua`**.
 
-### Setup Wizard
+### Setup
 
-Some addons that use this library can register setup pages. If any are available, you'll get a one-time prompt on login to walk through first-time configuration.
+Addons that use this library share one setup window. When you install one, the window opens once after login (never in combat) and walks you through a few quick choices. Each choice has a Recommended pick, and you can skip any addon. Updates with something new show a small note instead of the whole window.
 
-Open it anytime with **`/setup`**.
+Open it anytime with **`/setup`**, or **`/setup databar`** for one addon.
 
 ### Quick Commands
 
@@ -63,7 +63,7 @@ Open it anytime with **`/setup`**.
 | `/macros`        | Opens the macro editor                                          |
 | `/cli` or `/lua` | Opens the Lua console                                           |
 | `/log`           | Opens the log viewer                                            |
-| `/setup`         | Opens the setup wizard                                          |
+| `/setup`         | Opens the setup window                                          |
 | `/rl`            | Reloads your UI (safe, won't reload during combat in instances) |
 
 ---
@@ -153,48 +153,37 @@ LibAT.ProfileManager.RegisterDiscoveryAdapter("MyAddon", {
 })
 ```
 
-### Setup Wizard API (WIP)
+### Setup API
 
-Register setup pages so your addon can guide users through first-time configuration.
+Give your addon a first-run setup in the shared window. You describe the steps (`look`, `choice`, `toggles`, `import`, `form`, `custom`, `summary`); LibAT draws them, remembers who finished, stages changes that need a reload and shows What's new toasts. Full reference: [Systems/Setup/Setup-TechDoc.md](Systems/Setup/Setup-TechDoc.md).
 
 ```lua
-LibAT.SetupWizard:RegisterAddon("myaddon", {
+local reg = LibAT.Setup:Register("myaddon", {
     name = "My Addon",
-    icon = 12345,  -- Optional
-    pages = {
-        {
-            id = "welcome",
-            name = "Welcome",
-            builder = function(contentFrame)
-                local _, totalHeight = LibAT.UI.BuildWidgets(contentFrame, {
-                    -- widget definitions, see Widget Builder below
-                }, contentFrame:GetWidth())
-                -- Report the height so long pages scroll (contentFrame:SetHeight works too)
-                contentFrame.totalHeight = totalHeight
-            end,
-            isComplete = function()
-                return MyAddonDB.setupDone == true
-            end,
-        },
-    },
-    onComplete = function()
-        -- Called once, the first time every page of this addon is complete. It runs when the
-        -- player moves on from this addon's pages or closes the wizard, and is remembered
-        -- across reloads.
+    summary = "One line about the addon.",
+    isExistingUser = function()
+        return MyAddonDB ~= nil -- call Register before you create your database
     end,
 })
+
+reg:AddStep({
+    id = "position",
+    kind = "choice",
+    title = "Where should the bar go?",
+    choices = {
+        { value = "top", title = "Top" },
+        { value = "bottom", title = "Bottom", recommended = true },
+    },
+    get = function() return MyAddon.db.profile.position end,
+    set = function(value, ctx) MyAddon:SetPosition(value) end, -- Setup steps: set(value, ctx)
+})
+
+reg:AddWhatsNew("2.0.0", { title = "New: travel time", action = { options = "/myaddon" } })
 ```
 
-#### Setup Wizard Methods
+Setup steps call `set(value, ctx)`. `form` steps use `LibAT.UI.BuildWidgets` definitions, which keep `set(info, value)`. Steps never reload: call `ctx:NeedsReload(key, label, applyFn)` and the player's "Finish and reload" does it once.
 
-| Method                                              | Description                                |
-| --------------------------------------------------- | ------------------------------------------ |
-| `RegisterAddon(addonId, config)`                    | Register setup pages.                      |
-| `UnregisterAddon(addonId)`                          | Remove setup pages.                        |
-| `IsPageComplete(addonId, pageId)`                   | Check if a page is complete.               |
-| `IsAddonComplete(addonId)`                          | Check if all pages are complete.           |
-| `HasUncompletedAddons()`                            | Check if any addons have incomplete setup. |
-| `OpenWindow()` / `CloseWindow()` / `ToggleWindow()` | Control the wizard window.                 |
+The old `LibAT.SetupWizard:RegisterAddon` / `AddPage` API still works; each page becomes a `custom` step.
 
 ### UI Component Library (WIP)
 
