@@ -452,6 +452,11 @@ end
 
 ---Show first-run prompt if there are uncompleted addons
 function SetupWizard:CheckFirstRun()
+	-- An addon may already have opened the wizard itself on first launch
+	if self.window and self.window:IsShown() then
+		return
+	end
+
 	-- Only prompt if there are registered addons with uncompleted pages
 	if not self:HasUncompletedAddons() then
 		return
