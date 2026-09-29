@@ -20,7 +20,7 @@ local LibAT = LibAT
 ---@field name string Display name for the addon
 ---@field icon? string Optional icon texture path
 ---@field pages SetupWizardPage[] Array of wizard pages
----@field onComplete? function Optional callback when all pages are completed
+---@field onComplete? function Optional callback, run once the first time every page of this addon is complete
 
 ---@class SetupWizardAddonEntry
 ---@field id string Addon identifier
@@ -35,6 +35,7 @@ local SetupWizard = LibAT.SetupWizard
 SetupWizard.registeredAddons = {} ---@type table<string, SetupWizardAddonEntry>
 SetupWizard.registrationOrder = 0
 SetupWizard.viewedPages = {} ---@type table<string, boolean> In-memory viewed tracking (resets on /rl)
+SetupWizard.completeCallbacksRan = {} ---@type table<string, boolean> onComplete already called this session
 
 ----------------------------------------------------------------------------------------------------
 -- Registration API
@@ -318,6 +319,36 @@ function SetupWizard:IsAddonComplete(addonId)
 	end
 
 	return true
+end
+
+---Run an addon's onComplete callback the first time all of its pages are complete.
+---Called when the player leaves an addon's pages or closes the wizard, so the callback runs after
+---they are done with the last page rather than the moment it opens. Remembered across reloads.
+---@param addonId string Addon identifier
+function SetupWizard:CheckAddonComplete(addonId)
+	local entry = addonId and self.registeredAddons[addonId]
+	if not entry or type(entry.config.onComplete) ~= 'function' then
+		return
+	end
+
+	local key = addonId .. '#onComplete'
+	local completed = GetPersistentCompletionTable()
+	if self.completeCallbacksRan[key] or (completed and completed[key]) then
+		return
+	end
+	if not self:IsAddonComplete(addonId) then
+		return
+	end
+
+	self.completeCallbacksRan[key] = true
+	if completed then
+		completed[key] = true
+	end
+
+	local ok, err = pcall(entry.config.onComplete)
+	if not ok and LibAT.InternalLog then
+		LibAT.InternalLog.error('SetupWizard: onComplete failed for ' .. tostring(addonId) .. ': ' .. tostring(err))
+	end
 end
 
 ---Check if there are any addons with uncompleted setup pages

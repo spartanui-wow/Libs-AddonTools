@@ -32,7 +32,8 @@ local SPACING = 5
 ---@field hidden? fun(): boolean Returns true if widget should be hidden
 ---@field width? number Custom width
 
----Build widgets from Ace3-style definitions
+---Build widgets from Ace3-style definitions.
+---Setters are called as set(info, value), like AceConfig: write `set = function(_, value)`.
 ---@param container Frame Parent container frame
 ---@param definitions table Widget definitions (key = id, value = widget def)
 ---@param width? number Container width (default 200)

@@ -166,7 +166,11 @@ LibAT.SetupWizard:RegisterAddon("myaddon", {
             id = "welcome",
             name = "Welcome",
             builder = function(contentFrame)
-                -- Build your setup UI into contentFrame
+                local _, totalHeight = LibAT.UI.BuildWidgets(contentFrame, {
+                    -- widget definitions, see Widget Builder below
+                }, contentFrame:GetWidth())
+                -- Report the height so long pages scroll (contentFrame:SetHeight works too)
+                contentFrame.totalHeight = totalHeight
             end,
             isComplete = function()
                 return MyAddonDB.setupDone == true
@@ -174,7 +178,9 @@ LibAT.SetupWizard:RegisterAddon("myaddon", {
         },
     },
     onComplete = function()
-        -- Called when user clicks Finish on the last page
+        -- Called once, the first time every page of this addon is complete. It runs when the
+        -- player moves on from this addon's pages or closes the wizard, and is remembered
+        -- across reloads.
     end,
 })
 ```
@@ -223,7 +229,7 @@ LibAT.UI.BuildWidgets(container, {
         name = "Enable Feature",
         order = 1,
         get = function() return db.enabled end,
-        set = function(val) db.enabled = val end,
+        set = function(_, val) db.enabled = val end,
     },
     scale = {
         type = "slider",
@@ -231,7 +237,7 @@ LibAT.UI.BuildWidgets(container, {
         order = 2,
         min = 0.5, max = 2.0, step = 0.1,
         get = function() return db.scale end,
-        set = function(val) db.scale = val end,
+        set = function(_, val) db.scale = val end,
     },
     apply = {
         type = "button",
@@ -243,6 +249,8 @@ LibAT.UI.BuildWidgets(container, {
 ```
 
 Supported widget types: `button`, `slider`, `checkbox`, `dropdown`, `header`, `description`, `divider`.
+
+Setters are called AceConfig-style as `set(info, value)`, so write `set = function(_, value)`. A setter written as `set = function(value)` receives the info table instead of the value. Checkbox getters must return `true` for a checked box. `BuildWidgets` returns `widgets, totalHeight`.
 
 #### Available UI Components
 

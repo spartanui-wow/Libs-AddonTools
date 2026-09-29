@@ -166,11 +166,15 @@ function SetupWizard:ShowPage(addonId, pageId)
 	end
 
 	-- Call onLeave on current page before switching
+	local leavingAddonId = self.currentAddonId
 	if self.currentAddonId and self.currentPageId then
 		local currentPage = self:GetPage(self.currentAddonId, self.currentPageId)
 		if currentPage and currentPage.onLeave then
 			currentPage.onLeave()
 		end
+	end
+	if leavingAddonId and leavingAddonId ~= addonId then
+		self:CheckAddonComplete(leavingAddonId)
 	end
 
 	-- Update current state
@@ -193,7 +197,14 @@ function SetupWizard:ShowPage(addonId, pageId)
 		elseif page.onShow then
 			page.onShow(container)
 		end
-		scrollChild:SetHeight(math.max(container:GetHeight(), 1))
+		-- Builders may either size the container or report their height in container.totalHeight
+		local height = container:GetHeight() or 1
+		if type(container.totalHeight) == 'number' and container.totalHeight > height then
+			height = container.totalHeight
+		end
+		height = math.max(height, 1)
+		container:SetHeight(height)
+		scrollChild:SetHeight(height)
 	end
 
 	-- Update navigation tree highlights
@@ -255,6 +266,9 @@ function SetupWizard:CreateWindow()
 		height = 538,
 		portrait = 'Interface\\AddOns\\libsaddontools\\Logo-Icon',
 	})
+	self.window:HookScript('OnHide', function()
+		SetupWizard:OnWindowHidden()
+	end)
 
 	-- Create control frame (top bar)
 	self.window.ControlFrame = LibAT.UI.CreateControlFrame(self.window)
@@ -413,6 +427,13 @@ end
 function SetupWizard:CloseWindow()
 	if self.window then
 		self.window:Hide()
+	end
+end
+
+---The window was hidden (Finish, Close, Escape or the X): the addon being viewed may now be complete
+function SetupWizard:OnWindowHidden()
+	if self.currentAddonId then
+		self:CheckAddonComplete(self.currentAddonId)
 	end
 end
 
