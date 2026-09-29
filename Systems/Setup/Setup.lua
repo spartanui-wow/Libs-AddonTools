@@ -312,11 +312,17 @@ end
 -- Steps
 ----------------------------------------------------------------------------------------------------
 
----The options list of a look or choice step
+---The options list of a look or choice step. `choices` or `cards` may also be a function that
+---returns the list; it is called on every draw, for lists an earlier step can change.
 ---@param step LibAT.SetupStep
 ---@return LibAT.SetupOption[]
 function Setup:GetOptions(step)
-	return step.choices or step.cards or {}
+	local list = step.choices or step.cards
+	if type(list) == 'function' then
+		local ok, result = pcall(list, step)
+		return (ok and type(result) == 'table') and result or {}
+	end
+	return list or {}
 end
 
 ---Every toggle item of a toggles step, in order

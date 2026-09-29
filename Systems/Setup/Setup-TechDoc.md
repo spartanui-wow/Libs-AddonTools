@@ -143,6 +143,9 @@ Large picture cards, for themes and presets.
 }
 ```
 
+`cards` (and `choices`) may be a function returning the list instead. It is called on every draw,
+so a list that an earlier step changes stays current.
+
 `art` takes `texture` (path or file ID), `atlas` (used only when the client has it; otherwise
 `texture` or `color` is used), `texCoord = { left, right, top, bottom }`, `color = { r, g, b, a }`,
 `desaturate`. The window repaints its accent after every pick, so an accent provider that reads the
