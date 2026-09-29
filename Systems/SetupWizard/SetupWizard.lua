@@ -2,548 +2,339 @@
 local LibAT = LibAT
 
 ----------------------------------------------------------------------------------------------------
--- Setup Wizard Core - Registration API & Completion Tracking
+-- Setup Wizard (old API) - kept so existing addons keep working. Everything now runs through
+-- LibAT.Setup: each old page becomes a 'custom' step whose builder(frame) is called as before, and
+-- the window scrolls using the frame's height or frame.totalHeight. New code should use LibAT.Setup.
 ----------------------------------------------------------------------------------------------------
+
+local Setup = LibAT.Setup
+local Log = Setup.Log
 
 ---@class SetupWizardPage
 ---@field id string Unique page identifier
----@field name string Display name for nav tree
----@field order? number Sort order (lower = earlier). Pages without order sort by registration order.
----@field builder function(contentFrame: Frame) Populates the right panel content
----@field isComplete? function(): boolean Dynamic completion check (returns true if page setup is done)
+---@field name string Display name for the step list
+---@field order? number Sort order (lower = earlier)
+---@field builder function(contentFrame: Frame) Populates the page
+---@field isComplete? function(): boolean Used once to tell an existing user from a new one
 ---@field onLeave? function() Called when navigating away from this page
----@field cache? boolean Build the page once and reuse it on later visits (only for pages that do not show state other pages change)
+---@field cache? boolean Build the page once and reuse it on later visits
 ---@field onShow? function(contentFrame: Frame) Called when a cached page is shown again
----@field children? SetupWizardPage[] Optional child pages (shown as sub-subcategories in nav tree)
+---@field children? SetupWizardPage[] Child pages, shown right after this one
 
 ---@class SetupWizardAddonConfig
 ---@field name string Display name for the addon
 ---@field icon? string Optional icon texture path
 ---@field pages SetupWizardPage[] Array of wizard pages
----@field onComplete? function Optional callback, run once the first time every page of this addon is complete
-
----@class SetupWizardAddonEntry
----@field id string Addon identifier
----@field config SetupWizardAddonConfig Registration config
----@field order number Registration order for sorting
+---@field onComplete? function Runs once, the first time the player finishes this addon's setup
+---@field summary? string One line for the Start page
+---@field priority? number Lower opens first
+---@field isExistingUser? fun(): boolean
 
 ---@class LibAT.SetupWizard
 LibAT.SetupWizard = {}
 local SetupWizard = LibAT.SetupWizard
 
--- Internal storage
-SetupWizard.registeredAddons = {} ---@type table<string, SetupWizardAddonEntry>
+SetupWizard.registeredAddons = {} ---@type table<string, {id: string, config: SetupWizardAddonConfig, order: number}>
 SetupWizard.registrationOrder = 0
-SetupWizard.viewedPages = {} ---@type table<string, boolean> In-memory viewed tracking (resets on /rl)
-SetupWizard.completeCallbacksRan = {} ---@type table<string, boolean> onComplete already called this session
+SetupWizard.viewedPages = {} ---@type table<string, boolean>
+SetupWizard.window = nil ---@type Frame|nil Set when the setup window is created
 
-----------------------------------------------------------------------------------------------------
--- Registration API
-----------------------------------------------------------------------------------------------------
-
----Validate a page table has required fields
 ---@param page SetupWizardPage
 ---@param index number
 ---@param addonId string
 ---@return boolean valid
 local function ValidatePage(page, index, addonId)
-	if not page.id then
-		if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: page ' .. index .. ' missing id for addon ' .. tostring(addonId))
-		end
+	if type(page) ~= 'table' or not page.id then
+		Log('warning', 'SetupWizard: page ' .. index .. ' missing id for addon ' .. tostring(addonId))
 		return false
 	end
 	if not page.name then
-		if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: page ' .. index .. ' missing name for addon ' .. tostring(addonId))
-		end
+		Log('warning', 'SetupWizard: page ' .. index .. ' missing name for addon ' .. tostring(addonId))
 		return false
 	end
-	if not page.builder then
-		if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: page ' .. index .. ' missing builder for addon ' .. tostring(addonId))
-		end
+	if type(page.builder) ~= 'function' then
+		Log('warning', 'SetupWizard: page ' .. index .. ' missing builder for addon ' .. tostring(addonId))
 		return false
 	end
-	-- Validate children recursively
-	if page.children then
-		for ci, child in ipairs(page.children) do
-			if not ValidatePage(child, ci, addonId) then
-				return false
-			end
+	for ci, child in ipairs(page.children or {}) do
+		if not ValidatePage(child, ci, addonId) then
+			return false
 		end
 	end
 	return true
 end
 
----Register an addon with the Setup Wizard
----@param addonId string Unique identifier for the addon (e.g., 'libs-timeplayed')
----@param config SetupWizardAddonConfig Addon configuration with pages
+---Turn an old page into a custom step
+---@param reg LibAT.SetupRegistration
+---@param page SetupWizardPage
+---@param parentId? string
+local function AddLegacyPage(reg, page, parentId)
+	if reg:GetStep(page.id) then
+		Log('warning', 'SetupWizard: page "' .. tostring(page.id) .. '" already exists in ' .. reg.id)
+		return
+	end
+	local step = {
+		id = page.id,
+		kind = 'custom',
+		title = page.name,
+		name = page.name,
+		order = page.order,
+		cache = page.cache and true or false,
+		_legacyPage = page,
+		_parentId = parentId,
+		build = function(frame)
+			page.builder(frame)
+		end,
+	}
+	if page.onShow then
+		step.onShow = function(frame)
+			page.onShow(frame)
+		end
+	end
+	if page.onLeave then
+		step.onLeave = function()
+			page.onLeave()
+		end
+	end
+	reg:AddStep(step)
+	for _, child in ipairs(page.children or {}) do
+		AddLegacyPage(reg, child, page.id)
+	end
+end
+
+---Register an addon (old API). Its pages become custom steps in the setup window.
+---@param addonId string
+---@param config SetupWizardAddonConfig
 function SetupWizard:RegisterAddon(addonId, config)
-	if not addonId or not config then
-		if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: RegisterAddon requires addonId and config')
-		end
+	if not addonId or type(config) ~= 'table' then
+		Log('warning', 'SetupWizard: RegisterAddon requires addonId and config')
 		return
 	end
-
 	if not config.name then
-		if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: config.name is required for addon ' .. tostring(addonId))
-		end
+		Log('warning', 'SetupWizard: config.name is required for addon ' .. tostring(addonId))
 		return
 	end
-
-	if not config.pages then
-		config.pages = {}
-	end
-
-	-- Validate each page
+	config.pages = config.pages or {}
 	for i, page in ipairs(config.pages) do
 		if not ValidatePage(page, i, addonId) then
 			return
 		end
 	end
 
-	self.registrationOrder = self.registrationOrder + 1
-
-	self.registeredAddons[addonId] = {
-		id = addonId,
-		config = config,
-		order = self.registrationOrder,
-	}
-
-	if LibAT.InternalLog then
-		LibAT.InternalLog.debug('SetupWizard: Registered addon ' .. config.name .. ' with ' .. #config.pages .. ' pages')
+	local reg = Setup:Register(addonId, {
+		name = config.name,
+		icon = config.icon,
+		summary = config.summary,
+		priority = config.priority,
+		isExistingUser = config.isExistingUser,
+		onComplete = config.onComplete,
+		_legacy = config.isExistingUser == nil,
+	})
+	if not reg then
+		return
 	end
 
-	-- If the wizard window is already open, refresh the nav tree
-	if self.RefreshNavTree then
-		self:RefreshNavTree()
+	self.registrationOrder = self.registrationOrder + 1
+	self.registeredAddons[addonId] = { id = addonId, config = config, order = self.registrationOrder }
+	for _, page in ipairs(config.pages) do
+		AddLegacyPage(reg, page, nil)
 	end
 end
 
----Add a page to an already-registered addon
----@param addonId string Registered addon key (e.g., 'spartanui')
----@param page SetupWizardPage Page table to add
----@param parentPageId? string If provided, adds as child of that page
+---Add a page to an already-registered addon (old API)
+---@param addonId string
+---@param page SetupWizardPage
+---@param parentPageId? string Adds the page right after this one
 function SetupWizard:AddPage(addonId, page, parentPageId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		if LibAT.InternalLog then
-			LibAT.InternalLog.warning('SetupWizard: AddPage - addon "' .. tostring(addonId) .. '" not registered')
-		end
+	local reg = Setup:GetRegistration(addonId)
+	if not reg then
+		Log('warning', 'SetupWizard: AddPage - addon "' .. tostring(addonId) .. '" not registered')
 		return
 	end
-
-	if not ValidatePage(page, #entry.config.pages + 1, addonId) then
+	if not ValidatePage(page, #reg.steps + 1, addonId) then
 		return
 	end
-
 	if parentPageId then
-		-- Find parent page and add as child
 		local parent = self:GetPage(addonId, parentPageId)
 		if not parent then
-			if LibAT.InternalLog then
-				LibAT.InternalLog.warning('SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
-			end
+			Log('warning', 'SetupWizard: AddPage - parent page "' .. tostring(parentPageId) .. '" not found in addon "' .. tostring(addonId) .. '"')
 			return
 		end
-		if not parent.children then
-			parent.children = {}
-		end
+		parent.children = parent.children or {}
 		table.insert(parent.children, page)
-	else
-		table.insert(entry.config.pages, page)
 	end
-
-	-- Re-sort pages by order field
-	self:SortPages(addonId)
-
-	if LibAT.InternalLog then
-		LibAT.InternalLog.debug('SetupWizard: Added page "' .. page.name .. '" to addon "' .. addonId .. '"')
-	end
-
-	if self.window and self.RefreshNavTree then
-		self:RefreshNavTree()
-	end
+	AddLegacyPage(reg, page, parentPageId)
 end
 
 ---Sort an addon's pages by their order field
 ---@param addonId string
 function SetupWizard:SortPages(addonId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return
-	end
-
-	table.sort(entry.config.pages, function(a, b)
-		local orderA = a.order or 999
-		local orderB = b.order or 999
-		if orderA == orderB then
-			return false
-		end
-		return orderA < orderB
-	end)
-
-	-- Sort children within each page
-	for _, page in ipairs(entry.config.pages) do
-		if page.children and #page.children > 1 then
-			table.sort(page.children, function(a, b)
-				local orderA = a.order or 999
-				local orderB = b.order or 999
-				if orderA == orderB then
-					return false
-				end
-				return orderA < orderB
-			end)
-		end
+	local reg = Setup:GetRegistration(addonId)
+	if reg then
+		reg:SortSteps()
 	end
 end
 
----Unregister an addon from the Setup Wizard
----@param addonId string Addon identifier to remove
+---Remove an addon from Setup
+---@param addonId string
 function SetupWizard:UnregisterAddon(addonId)
-	if self.registeredAddons[addonId] then
-		self.registeredAddons[addonId] = nil
-		if LibAT.InternalLog then
-			LibAT.InternalLog.debug('SetupWizard: Unregistered addon ' .. tostring(addonId))
-		end
-
-		-- Refresh nav tree if window is open
-		if self.RefreshNavTree then
-			self:RefreshNavTree()
-		end
-	end
+	self.registeredAddons[addonId] = nil
+	Setup:Unregister(addonId)
 end
 
-----------------------------------------------------------------------------------------------------
--- Completion Tracking (persistent via SavedVariables + in-memory session tracking)
-----------------------------------------------------------------------------------------------------
-
----Get the persistent completion table from LibAT's database
----@return table<string, boolean>|nil
-local function GetPersistentCompletionTable()
-	if LibAT.Database and LibAT.Database.global then
-		if not LibAT.Database.global.setupWizardCompleted then
-			LibAT.Database.global.setupWizardCompleted = {}
-		end
-		return LibAT.Database.global.setupWizardCompleted
+---Get a page (old page table, or the step for addons using LibAT.Setup)
+---@param addonId string
+---@param pageId string
+---@return SetupWizardPage|LibAT.SetupStep|nil
+function SetupWizard:GetPage(addonId, pageId)
+	local reg = Setup:GetRegistration(addonId)
+	local step = reg and reg:GetStep(pageId)
+	if not step then
+		return nil
 	end
-	return nil
+	return step._legacyPage or step
 end
 
----Mark a page as viewed (persists across /rl via SavedVariables)
 ---@param addonId string
 ---@param pageId string
 function SetupWizard:MarkPageViewed(addonId, pageId)
-	local key = addonId .. '.' .. pageId
-	self.viewedPages[key] = true
-
-	-- Persist to SavedVariables
-	local completed = GetPersistentCompletionTable()
-	if completed then
-		completed[key] = true
-	end
+	self.viewedPages[addonId .. '.' .. pageId] = true
 end
 
----Check if a page has been viewed (this session or previously)
 ---@param addonId string
 ---@param pageId string
 ---@return boolean
 function SetupWizard:IsPageViewed(addonId, pageId)
-	local key = addonId .. '.' .. pageId
-
-	-- Check in-memory first
-	if self.viewedPages[key] then
-		return true
-	end
-
-	-- Check persistent storage
-	local completed = GetPersistentCompletionTable()
-	if completed and completed[key] then
-		return true
-	end
-
-	return false
+	return self.viewedPages[addonId .. '.' .. pageId] == true
 end
 
----Check if a specific page is complete (isComplete callback, viewed this session, or previously completed)
----@param addonId string Addon identifier
----@param pageId string Page identifier
----@return boolean isComplete
+---@param addonId string
+---@param pageId string
+---@return boolean
 function SetupWizard:IsPageComplete(addonId, pageId)
-	-- Check persistent/session viewed state
-	if self:IsPageViewed(addonId, pageId) then
+	if self:IsAddonComplete(addonId) or self:IsPageViewed(addonId, pageId) then
 		return true
 	end
-
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return false
-	end
-
-	-- Check page's own isComplete callback
 	local page = self:GetPage(addonId, pageId)
-	if page then
-		if page.isComplete then
-			return page.isComplete()
-		end
-		return false
+	if page and type(page.isComplete) == 'function' then
+		local ok, done = pcall(page.isComplete)
+		return ok and done and true or false
 	end
-
 	return false
 end
 
----Check if all pages for an addon are complete
----@param addonId string Addon identifier
----@return boolean allComplete
+---True once the player finished or skipped this addon's setup
+---@param addonId string
+---@return boolean
 function SetupWizard:IsAddonComplete(addonId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return false
-	end
-
-	for _, page in ipairs(entry.config.pages) do
-		if not self:IsPageComplete(addonId, page.id) then
-			return false
-		end
-		-- Check children too
-		if page.children then
-			for _, child in ipairs(page.children) do
-				if not self:IsPageComplete(addonId, child.id) then
-					return false
-				end
-			end
-		end
-	end
-
-	return true
+	local status = Setup:GetStatus(addonId)
+	return status == 'done' or status == 'skipped'
 end
 
----Run an addon's onComplete callback the first time all of its pages are complete.
----Called when the player leaves an addon's pages or closes the wizard, so the callback runs after
----they are done with the last page rather than the moment it opens. Remembered across reloads.
----@param addonId string Addon identifier
-function SetupWizard:CheckAddonComplete(addonId)
-	local entry = addonId and self.registeredAddons[addonId]
-	if not entry or type(entry.config.onComplete) ~= 'function' then
-		return
-	end
+---Kept for old callers; Setup runs onComplete itself
+function SetupWizard:CheckAddonComplete() end
 
-	local key = addonId .. '#onComplete'
-	local completed = GetPersistentCompletionTable()
-	if self.completeCallbacksRan[key] or (completed and completed[key]) then
-		return
-	end
-	if not self:IsAddonComplete(addonId) then
-		return
-	end
-
-	self.completeCallbacksRan[key] = true
-	if completed then
-		completed[key] = true
-	end
-
-	local ok, err = pcall(entry.config.onComplete)
-	if not ok and LibAT.InternalLog then
-		LibAT.InternalLog.error('SetupWizard: onComplete failed for ' .. tostring(addonId) .. ': ' .. tostring(err))
-	end
-end
-
----Check if there are any addons with uncompleted setup pages
----@return boolean hasUncompleted
+---@return boolean
 function SetupWizard:HasUncompletedAddons()
-	for addonId, _ in pairs(self.registeredAddons) do
-		if not self:IsAddonComplete(addonId) then
-			return true
-		end
-	end
-	return false
+	return #Setup:GetDueAddons() > 0
 end
 
----Get a list of addon names that have uncompleted setup pages
----@return string[] addonNames
+---@return string[]
 function SetupWizard:GetUncompletedAddonNames()
 	local names = {}
-	local sortedIds = self:GetSortedAddonIds()
-	for _, addonId in ipairs(sortedIds) do
-		if not self:IsAddonComplete(addonId) then
-			local entry = self.registeredAddons[addonId]
-			if entry then
-				table.insert(names, entry.config.name)
-			end
-		end
+	for _, reg in ipairs(Setup:GetDueAddons()) do
+		names[#names + 1] = reg.name
 	end
 	return names
 end
 
----Get a sorted list of registered addon IDs (by registration order)
----@return string[] addonIds
+---@return string[]
 function SetupWizard:GetSortedAddonIds()
 	local ids = {}
-	for addonId, _ in pairs(self.registeredAddons) do
-		table.insert(ids, addonId)
+	for _, reg in ipairs(Setup:GetSortedRegistrations()) do
+		ids[#ids + 1] = reg.id
 	end
-
-	table.sort(ids, function(a, b)
-		return self.registeredAddons[a].order < self.registeredAddons[b].order
-	end)
-
 	return ids
 end
 
----Get the count of registered addons
----@return number count
+---@return number
 function SetupWizard:GetAddonCount()
-	local count = 0
-	for _ in pairs(self.registeredAddons) do
-		count = count + 1
-	end
-	return count
+	return #Setup.order
 end
 
----Get a specific page from an addon (searches top-level and children)
----@param addonId string Addon identifier
----@param pageId string Page identifier
----@return SetupWizardPage|nil page
-function SetupWizard:GetPage(addonId, pageId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return nil
-	end
-
-	for _, page in ipairs(entry.config.pages) do
-		if page.id == pageId then
-			return page
-		end
-		if page.children then
-			for _, child in ipairs(page.children) do
-				if child.id == pageId then
-					return child
-				end
-			end
-		end
-	end
-
-	return nil
-end
-
----Build a flat list of all pages (including children) for navigation
 ---@param addonId string
----@return table[] flatPages Array of {id=pageId} in display order
+---@return {id: string}[]
 function SetupWizard:GetFlatPageList(addonId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return {}
-	end
-
+	local reg = Setup:GetRegistration(addonId)
 	local flat = {}
-	for _, page in ipairs(entry.config.pages) do
-		table.insert(flat, { id = page.id })
-		if page.children then
-			for _, child in ipairs(page.children) do
-				table.insert(flat, { id = child.id })
-			end
-		end
+	for _, step in ipairs(reg and reg.steps or {}) do
+		flat[#flat + 1] = { id = step.id }
 	end
 	return flat
 end
 
----Get the next page after the current one (across addons if needed), walking into children
----@param addonId string Current addon identifier
----@param pageId string Current page identifier
----@return string|nil nextAddonId Next addon ID (nil if at end)
----@return string|nil nextPageId Next page ID (nil if at end)
+---Step after the given one, across addons
+---@param addonId string
+---@param pageId string
+---@return string|nil nextAddonId
+---@return string|nil nextPageId
 function SetupWizard:GetNextPage(addonId, pageId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return nil, nil
-	end
-
-	-- Build flat list and find current position
-	local flat = self:GetFlatPageList(addonId)
-	local currentIndex = nil
-	for i, item in ipairs(flat) do
-		if item.id == pageId then
-			currentIndex = i
-			break
-		end
-	end
-
-	if not currentIndex then
-		return nil, nil
-	end
-
-	-- Try next page in same addon (flat list includes children)
-	if currentIndex < #flat then
-		return addonId, flat[currentIndex + 1].id
-	end
-
-	-- Try first page of next addon
-	local sortedIds = self:GetSortedAddonIds()
-	local foundCurrent = false
-	for _, id in ipairs(sortedIds) do
-		if foundCurrent then
-			local nextFlat = self:GetFlatPageList(id)
-			if #nextFlat > 0 then
-				return id, nextFlat[1].id
+	local found = false
+	for _, id in ipairs(self:GetSortedAddonIds()) do
+		for _, item in ipairs(self:GetFlatPageList(id)) do
+			if found then
+				return id, item.id
+			end
+			if id == addonId and item.id == pageId then
+				found = true
 			end
 		end
-		if id == addonId then
-			foundCurrent = true
-		end
 	end
-
 	return nil, nil
 end
 
----Get the previous page before the current one (across addons if needed), walking into children
----@param addonId string Current addon identifier
----@param pageId string Current page identifier
----@return string|nil prevAddonId Previous addon ID (nil if at start)
----@return string|nil prevPageId Previous page ID (nil if at start)
+---Step before the given one, across addons
+---@param addonId string
+---@param pageId string
+---@return string|nil prevAddonId
+---@return string|nil prevPageId
 function SetupWizard:GetPreviousPage(addonId, pageId)
-	local entry = self.registeredAddons[addonId]
-	if not entry then
-		return nil, nil
-	end
-
-	-- Build flat list and find current position
-	local flat = self:GetFlatPageList(addonId)
-	local currentIndex = nil
-	for i, item in ipairs(flat) do
-		if item.id == pageId then
-			currentIndex = i
-			break
+	local prevAddon, prevPage
+	for _, id in ipairs(self:GetSortedAddonIds()) do
+		for _, item in ipairs(self:GetFlatPageList(id)) do
+			if id == addonId and item.id == pageId then
+				return prevAddon, prevPage
+			end
+			prevAddon, prevPage = id, item.id
 		end
 	end
-
-	if not currentIndex then
-		return nil, nil
-	end
-
-	-- Try previous page in same addon (flat list includes children)
-	if currentIndex > 1 then
-		return addonId, flat[currentIndex - 1].id
-	end
-
-	-- Try last page of previous addon
-	local sortedIds = self:GetSortedAddonIds()
-	local previousAddonId = nil
-	for _, id in ipairs(sortedIds) do
-		if id == addonId then
-			break
-		end
-		previousAddonId = id
-	end
-
-	if previousAddonId then
-		local prevFlat = self:GetFlatPageList(previousAddonId)
-		if #prevFlat > 0 then
-			return previousAddonId, prevFlat[#prevFlat].id
-		end
-	end
-
 	return nil, nil
 end
+
+function SetupWizard:RefreshNavTree()
+	if Setup.Hub and Setup.Hub:IsShown() then
+		Setup.Hub:RefreshList()
+	end
+end
+
+---Open the setup window at a page
+---@param addonId string
+---@param pageId string
+function SetupWizard:ShowPage(addonId, pageId)
+	Setup:Open(addonId, pageId)
+end
+
+function SetupWizard:OpenWindow()
+	Setup:Open()
+end
+
+function SetupWizard:CloseWindow()
+	Setup:Close()
+end
+
+function SetupWizard:ToggleWindow()
+	Setup:HandleSlash('')
+end
+
+---Kept for old callers; the setup window now opens by itself after login
+function SetupWizard:CheckFirstRun() end

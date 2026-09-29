@@ -262,13 +262,10 @@ function LibAT:OnEnable()
 	LibAT.Options:Register()
 	LibAT.Options:RegisterChildren()
 
-	-- Check for first-run setup wizard prompt after a short delay
-	-- Delay allows other addons to register their setup pages first
-	C_Timer.After(3, function()
-		if LibAT.SetupWizard and LibAT.SetupWizard.CheckFirstRun then
-			LibAT.SetupWizard:CheckFirstRun()
-		end
-	end)
+	-- Setup opens once after login for addons that are due (other addons register from their own OnEnable)
+	if LibAT.Setup and LibAT.Setup.Enable then
+		LibAT.Setup:Enable()
+	end
 end
 
 ---Handle slash commands
@@ -308,11 +305,11 @@ SlashCmdList['LIBAT'] = function(msg)
 			LibAT:Print('Available: show')
 		end
 	elseif command == 'setup' or command == 'wizard' then
-		-- Open the Setup Wizard
-		if LibAT.SetupWizard then
-			LibAT.SetupWizard:ToggleWindow()
+		-- /libat setup [addon]
+		if LibAT.Setup then
+			LibAT.Setup:HandleSlash(msg:match('^%s*%S+%s*(.-)%s*$') or '')
 		else
-			LibAT:Print('Setup Wizard system not available')
+			LibAT:Print('Setup system not available')
 		end
 	elseif command == 'logs' or command == 'log' then
 		-- Default action: toggle logs (or handle subcommands if added later)
@@ -332,13 +329,13 @@ SlashCmdList['LIBAT'] = function(msg)
 		LibAT:Print('  /libat errors [show] - Open error display window')
 		LibAT:Print('  /libat profiles [show] - Open profile manager')
 		LibAT:Print('  /libat logs [show|toggle] - Toggle logger window')
-		LibAT:Print('  /libat setup - Open setup wizard')
+		LibAT:Print('  /libat setup [addon] - Open setup')
 		LibAT:Print(' ')
 		LibAT:Print('Shortcuts:')
 		LibAT:Print('  /errors - Open error display')
 		LibAT:Print('  /logs - Toggle logger')
 		LibAT:Print('  /profiles - Open profile manager')
-		LibAT:Print('  /setup - Open setup wizard')
+		LibAT:Print('  /setup [addon] - Open setup')
 		LibAT:Print(' ')
 		LibAT:Print('Developer Tools:')
 		LibAT:Print('  /frame <name> [true] - Inspect frame and set _G.FRAME')

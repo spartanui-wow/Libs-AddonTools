@@ -55,6 +55,8 @@ Core\UI\Slider.lua
 Core\UI\NumericBox.lua
 Core\UI\InfoButton.lua
 Core\UI\WidgetBuilder.lua
+Core\UI\Accent.lua
+Core\UI\Card.lua
 
 # Systems
 # Logger System (split into 3 files for maintainability)
@@ -71,9 +73,10 @@ Systems\ProfileManager\Composite.lua
 Systems\ProfileManager\AddonDiscovery.lua
 Systems\ProfileManager\DesktopImport.lua
 
-# Setup Wizard System
+# Setup System (the old Setup Wizard API is a thin layer over it)
+Systems\Setup\Setup.lua
+Systems\Setup\SetupHub.lua
 Systems\SetupWizard\SetupWizard.lua
-Systems\SetupWizard\SetupWizardUI.lua
 
 # Developer Tools System
 Systems\DeveloperTools\DevTools.lua
