@@ -81,6 +81,16 @@ function LibAT.UI.CreateFilterButton(parent, name)
 	button.Text:SetWordWrap(false)
 	button:SetFontString(button.Text)
 
+	-- A row placed against its list's top left also reaches the list's right edge, so rows never
+	-- run under the list's scroll bar
+	local NativeSetPoint = button.SetPoint
+	function button:SetPoint(point, relativeTo, relativePoint, x, y)
+		NativeSetPoint(self, point, relativeTo, relativePoint, x, y)
+		if point == 'TOPLEFT' and relativeTo == self:GetParent() and relativePoint == 'TOPLEFT' then
+			NativeSetPoint(self, 'TOPRIGHT', relativeTo, 'TOPRIGHT', -2, y or 0)
+		end
+	end
+
 	return LibAT.UI.Kit:Track(button, PaintNavButton)
 end
 
@@ -283,7 +293,7 @@ local function SkinInput(frame, state)
 			ColorEdges(owner.kitEdges, c.trim, mode == 'disabled' and 0.35 or 0.75)
 		end
 		if owner.kitPaintText then
-			owner:kitPaintText(c, mode)
+			owner:kitPaintText(c, mode, config)
 		end
 	end)
 end
@@ -455,7 +465,7 @@ local function PaintCheckbox(container, config)
 		local edge = (mixed and accent) or (container.hovered and not container.disabled and c.trimHi) or c.trim
 		ColorEdges(container.boxEdges, edge, (mixed and 1 or 0.85) * alpha)
 	end
-	LibAT.UI.Kit:SetAsset(container.check, config, 'check')
+	LibAT.UI.Kit:SetAsset(container.check, config, 'checkMark')
 	local glyph = OnAccent()
 	container.check:SetVertexColor(glyph[1], glyph[2], glyph[3], alpha)
 	container.check:SetShown(on)
@@ -692,6 +702,56 @@ function LibAT.UI.CreateCheckbox(parent, label, width, height)
 	return container
 end
 
+---Menus opened from a LibAT dropdown: a kit surface with a trim edge. Blizzard's menu reads its
+---look from the dropdown's own menuMixin, so no other menu in the game changes. Menus stay mostly
+---solid even under a see-through kit, so their items stay readable.
+local KitMenuMixin
+if MenuStyleMixin and CreateFromMixins then
+	KitMenuMixin = CreateFromMixins(MenuStyleMixin)
+
+	function KitMenuMixin:Generate()
+		local c = LibAT.UI.Kit:GetKitFor(self.kitOwner).colors
+		local surface = c.surface[3]
+		local fill = self:AttachTexture()
+		fill:SetAllPoints()
+		fill:SetColorTexture(surface[1], surface[2], surface[3], math.max(surface[4] or 1, 0.94))
+		local edges = {
+			{ 'TOPLEFT', 'TOPRIGHT', nil, 1 },
+			{ 'BOTTOMLEFT', 'BOTTOMRIGHT', nil, 1 },
+			{ 'TOPLEFT', 'BOTTOMLEFT', 1, nil },
+			{ 'TOPRIGHT', 'BOTTOMRIGHT', 1, nil },
+		}
+		for _, anchor in ipairs(edges) do
+			local edge = self:AttachTexture()
+			edge:SetPoint(anchor[1])
+			edge:SetPoint(anchor[2])
+			if anchor[3] then
+				edge:SetWidth(anchor[3])
+			else
+				edge:SetHeight(anchor[4])
+			end
+			edge:SetColorTexture(c.trim[1], c.trim[2], c.trim[3], 0.9)
+		end
+		local r, g, b = LibAT.UI.GetAccentColor()
+		local accent = self:AttachTexture()
+		accent:SetPoint('TOPLEFT', 1, -1)
+		accent:SetPoint('TOPRIGHT', -1, -1)
+		accent:SetHeight(1)
+		accent:SetColorTexture(r, g, b, 0.85)
+	end
+
+	local inset = { left = 6, top = 6, right = 6, bottom = 6 }
+	function KitMenuMixin:GetInset()
+		return inset
+	end
+
+	local padding = { width = 20, height = 0 }
+	function KitMenuMixin:GetChildExtentPadding()
+		return padding
+	end
+end
+LibAT.UI.KitMenuMixin = KitMenuMixin
+
 local function DropdownState(dropdown)
 	if not dropdown:IsEnabled() then
 		return 'disabled'
@@ -717,6 +777,10 @@ function LibAT.UI.SkinDropdown(dropdown)
 		dropdown.Text:SetFontObject(font)
 	end
 	dropdown.resizeToText = false
+	if KitMenuMixin then
+		-- The menu is not inside the window, so it carries its dropdown to find the right kit
+		dropdown.menuMixin = CreateFromMixins(KitMenuMixin, { kitOwner = dropdown })
+	end
 	dropdown.Text:ClearAllPoints()
 	dropdown.Text:SetPoint('LEFT', 8, 0)
 	dropdown.Text:SetPoint('RIGHT', -22, 0)
@@ -724,10 +788,10 @@ function LibAT.UI.SkinDropdown(dropdown)
 	dropdown.kitArrow = dropdown:CreateTexture(nil, 'OVERLAY')
 	dropdown.kitArrow:SetSize(10, 10)
 	dropdown.kitArrow:SetPoint('RIGHT', -8, 0)
-	dropdown.kitPaintText = function(self, c, mode)
+	dropdown.kitPaintText = function(self, c, mode, config)
 		local color = mode == 'disabled' and c.muted or c.text
 		self.Text:SetTextColor(color[1], color[2], color[3])
-		Kit:SetAsset(self.kitArrow, Kit:GetActive(), 'chevron')
+		Kit:SetAsset(self.kitArrow, config, 'chevron')
 		if self.kitArrow.SetRotation then
 			self.kitArrow:SetRotation(mode == 'focus' and math.pi / 2 or -math.pi / 2)
 		end
@@ -901,8 +965,8 @@ function LibAT.UI.CreateScrollFrame(parent)
 	local scrollFrame = CreateFrame('ScrollFrame', nil, parent)
 
 	scrollFrame.ScrollBar = CreateFrame('EventFrame', nil, scrollFrame, 'MinimalScrollBar')
-	scrollFrame.ScrollBar:SetPoint('TOPLEFT', scrollFrame, 'TOPRIGHT', 4, 0)
-	scrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', scrollFrame, 'BOTTOMRIGHT', 4, 0)
+	scrollFrame.ScrollBar:SetPoint('TOPLEFT', scrollFrame, 'TOPRIGHT', 4, -4)
+	scrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', scrollFrame, 'BOTTOMRIGHT', 4, 4)
 	ScrollUtil.InitScrollFrameWithScrollBar(scrollFrame, scrollFrame.ScrollBar)
 	LibAT.UI.SkinScrollBar(scrollFrame.ScrollBar)
 
@@ -919,11 +983,36 @@ function LibAT.UI.CreateScrollableTextDisplay(parent)
 	-- Create the text display area
 	local editBox = CreateFrame('EditBox', nil, scrollFrame)
 	editBox:SetMultiLine(true)
-	editBox:SetFontObject('GameFontHighlight')
+	editBox:SetFontObject(LibAT.UI.Kit.plainFonts[12] or 'GameFontHighlight')
 	editBox:SetAutoFocus(false)
 	editBox:EnableMouse(true)
-	editBox:SetTextColor(1, 1, 1)
-	editBox:SetTextInsets(5, 5, 5, 5)
+	editBox:SetTextInsets(6, 6, 6, 6)
+
+	-- The scroll bar sits inside the view, in the room callers leave beside the text, so the well
+	-- and everything in it stay inside the frame the caller anchored
+	scrollFrame.ScrollBar:ClearAllPoints()
+	scrollFrame.ScrollBar:SetPoint('TOPRIGHT', scrollFrame, 'TOPRIGHT', -5, -5)
+	scrollFrame.ScrollBar:SetPoint('BOTTOMRIGHT', scrollFrame, 'BOTTOMRIGHT', -5, 5)
+	scrollFrame.kitFill = scrollFrame:CreateTexture(nil, 'BACKGROUND')
+	scrollFrame.kitFill:SetTexture(WHITE)
+	scrollFrame.kitFill:SetAllPoints()
+	scrollFrame.kitEdges = AddEdges(scrollFrame, 'BORDER')
+
+	-- Read-only views pick their own text color; follow the kit until they do
+	local NativeSetTextColor = editBox.SetTextColor
+	function editBox:SetTextColor(...)
+		self.kitCustomColor = true
+		NativeSetTextColor(self, ...)
+	end
+	LibAT.UI.Kit:Track(scrollFrame, function(owner, config)
+		local c = config.colors
+		local well0 = c.surface[0]
+		owner.kitFill:SetVertexColor(well0[1], well0[2], well0[3], math.min((well0[4] or 1) * 0.75, 0.75))
+		ColorEdges(owner.kitEdges, c.trim, 0.55)
+		if not editBox.kitCustomColor then
+			NativeSetTextColor(editBox, c.text[1], c.text[2], c.text[3])
+		end
+	end)
 	editBox:SetWidth(1) -- Initial width; updated by OnSizeChanged below
 
 	-- Initialize cursor tracking fields required by ScrollingEdit functions
@@ -986,8 +1075,9 @@ function LibAT.UI.CreateMultiLineBox(parent, width, height, text)
 	---@param readonly boolean True to make read-only
 	function scrollFrame:SetReadOnly(readonly)
 		scrollFrame._isReadOnly = readonly
+		local c = LibAT.UI.Kit:GetKitFor(scrollFrame).colors
 		if readonly then
-			editBox:SetTextColor(0.7, 0.7, 0.7)
+			editBox:SetTextColor(c.secondary[1], c.secondary[2], c.secondary[3])
 			-- Block typing but keep the EditBox enabled so text is selectable/copyable
 			editBox:SetScript('OnChar', function() end)
 			-- Guard against paste or other modifications
@@ -998,7 +1088,7 @@ function LibAT.UI.CreateMultiLineBox(parent, width, height, text)
 				ScrollingEdit_OnTextChanged(self, self:GetParent())
 			end)
 		else
-			editBox:SetTextColor(1, 1, 1)
+			editBox:SetTextColor(c.text[1], c.text[2], c.text[3])
 			editBox:SetScript('OnChar', nil)
 			editBox:SetScript('OnKeyDown', nil)
 			editBox:SetScript('OnTextChanged', function(self)

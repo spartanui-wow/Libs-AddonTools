@@ -443,11 +443,12 @@ local function BuildNav(parent)
 
 	local scroll = CreateFrame('ScrollFrame', nil, nav)
 	scroll:SetPoint('TOPLEFT', nav, 'TOPLEFT', 2, -6)
-	scroll:SetPoint('BOTTOMRIGHT', nav, 'BOTTOMRIGHT', -2, 4)
+	scroll:SetPoint('BOTTOMRIGHT', nav, 'BOTTOMRIGHT', -14, 4)
 	scroll.ScrollBar = CreateFrame('EventFrame', nil, scroll, 'MinimalScrollBar')
-	scroll.ScrollBar:SetPoint('TOPLEFT', scroll, 'TOPRIGHT', 2, 0)
-	scroll.ScrollBar:SetPoint('BOTTOMLEFT', scroll, 'BOTTOMRIGHT', 2, 0)
+	scroll.ScrollBar:SetPoint('TOPLEFT', scroll, 'TOPRIGHT', 3, 0)
+	scroll.ScrollBar:SetPoint('BOTTOMLEFT', scroll, 'BOTTOMRIGHT', 3, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(scroll, scroll.ScrollBar)
+	LibAT.UI.SkinScrollBar(scroll.ScrollBar)
 
 	local child = CreateFrame('Frame', nil, scroll)
 	child:SetSize(NAV_W - 4, 1)
@@ -939,6 +940,7 @@ local function BuildList(parent)
 
 	local scrollBox = CreateFrame('Frame', nil, pane, 'WowScrollBoxList')
 	local scrollBar = CreateFrame('EventFrame', nil, pane, 'MinimalScrollBar')
+	LibAT.UI.SkinScrollBar(scrollBar)
 	scrollBar:SetPoint('TOPRIGHT', header, 'BOTTOMRIGHT', -4, -6)
 	scrollBar:SetPoint('BOTTOMRIGHT', pane, 'BOTTOMRIGHT', -4, 6)
 
@@ -1110,6 +1112,7 @@ local function BuildDetails(parent)
 	scroll.ScrollBar:SetPoint('TOPLEFT', scroll, 'TOPRIGHT', 2, -6)
 	scroll.ScrollBar:SetPoint('BOTTOMLEFT', scroll, 'BOTTOMRIGHT', 2, 6)
 	ScrollUtil.InitScrollFrameWithScrollBar(scroll, scroll.ScrollBar)
+	LibAT.UI.SkinScrollBar(scroll.ScrollBar)
 	ui.detailScroll = scroll
 
 	local child = CreateFrame('Frame', nil, scroll)
@@ -1463,6 +1466,10 @@ local function BuildFooter(parent)
 	footer:SetPoint('BOTTOMRIGHT', parent, 'BOTTOMRIGHT', -6, 4)
 	footer:SetHeight(28)
 	ui.footer = footer
+	-- In a kit window the status line and reload buttons live in the window's footer
+	if LibAT.UI.PlaceInFooter(footer, parent) then
+		ui.nav:SetPoint('BOTTOMLEFT', parent, 'BOTTOMLEFT', 4, 6)
+	end
 
 	ui.reload = T.TextButton(footer, 'Reload UI', function()
 		LibAT:SafeReloadUI()

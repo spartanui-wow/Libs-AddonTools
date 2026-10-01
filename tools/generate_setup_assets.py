@@ -647,6 +647,15 @@ def switch_assets(folder, warm=False):
     ImageDraw.Draw(ring).ellipse((3 * scale, 3 * scale, 61 * scale, 61 * scale), outline=(255, 255, 255, 255), width=7 * scale)
     save(downsample(ring, (64, 64)), folder / "radio-ring.png")
 
+    mark = Image.new("RGBA", (64 * scale, 64 * scale), (0, 0, 0, 0))
+    ImageDraw.Draw(mark).line(
+        [(14 * scale, 33 * scale), (27 * scale, 46 * scale), (51 * scale, 19 * scale)],
+        fill=(255, 255, 255, 255),
+        width=9 * scale,
+        joint="curve",
+    )
+    save(downsample(mark, (64, 64)), folder / "check-mark.png")
+
 
 def marker_assets(folder, warm=False):
     scale = 4

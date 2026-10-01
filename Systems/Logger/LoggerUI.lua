@@ -477,17 +477,22 @@ local function CreateLogWindow()
 	-- Create scroll frame for module tree (will be populated by CreateLogSourceCategories)
 	LoggerState.LogWindow.ModuleScrollFrame = CreateFrame('ScrollFrame', 'LibAT_ModuleScrollFrame', LoggerState.LogWindow.LeftPanel)
 	LoggerState.LogWindow.ModuleScrollFrame:SetPoint('TOPLEFT', LoggerState.LogWindow.LeftPanel, 'TOPLEFT', 2, -7)
-	LoggerState.LogWindow.ModuleScrollFrame:SetPoint('BOTTOMRIGHT', LoggerState.LogWindow.LeftPanel, 'BOTTOMRIGHT', 0, 2)
+	LoggerState.LogWindow.ModuleScrollFrame:SetPoint('BOTTOMRIGHT', LoggerState.LogWindow.LeftPanel, 'BOTTOMRIGHT', -14, 2)
 
 	-- Create minimal scrollbar for left panel
 	LoggerState.LogWindow.ModuleScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, LoggerState.LogWindow.ModuleScrollFrame, 'MinimalScrollBar')
-	LoggerState.LogWindow.ModuleScrollFrame.ScrollBar:SetPoint('TOPLEFT', LoggerState.LogWindow.ModuleScrollFrame, 'TOPRIGHT', 2, 0)
-	LoggerState.LogWindow.ModuleScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', LoggerState.LogWindow.ModuleScrollFrame, 'BOTTOMRIGHT', 2, 0)
+	LoggerState.LogWindow.ModuleScrollFrame.ScrollBar:SetPoint('TOPLEFT', LoggerState.LogWindow.ModuleScrollFrame, 'TOPRIGHT', 3, 0)
+	LoggerState.LogWindow.ModuleScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', LoggerState.LogWindow.ModuleScrollFrame, 'BOTTOMRIGHT', 3, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(LoggerState.LogWindow.ModuleScrollFrame, LoggerState.LogWindow.ModuleScrollFrame.ScrollBar)
+	LibAT.UI.SkinScrollBar(LoggerState.LogWindow.ModuleScrollFrame.ScrollBar)
 
 	LoggerState.LogWindow.ModuleTree = CreateFrame('Frame', 'LibAT_ModuleTree', LoggerState.LogWindow.ModuleScrollFrame)
 	LoggerState.LogWindow.ModuleScrollFrame:SetScrollChild(LoggerState.LogWindow.ModuleTree)
 	LoggerState.LogWindow.ModuleTree:SetSize(160, 1)
+	-- The list is as wide as its scroll area, so its rows stop at the scroll bar
+	LoggerState.LogWindow.ModuleScrollFrame:HookScript('OnSizeChanged', function(_, width)
+		LoggerState.LogWindow.ModuleTree:SetWidth(math.max(width, 1))
+	end)
 
 	-- Create right panel for log display
 	LoggerState.LogWindow.RightPanel = LibAT.UI.CreateRightPanel(LoggerState.LogWindow.MainContent, LoggerState.LogWindow.LeftPanel)

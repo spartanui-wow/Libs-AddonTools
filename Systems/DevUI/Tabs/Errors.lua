@@ -329,13 +329,18 @@ BuildContent = function(contentFrame)
 	TabState.ErrorScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
 
 	TabState.ErrorScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.ErrorScrollFrame, 'MinimalScrollBar')
-	TabState.ErrorScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ErrorScrollFrame, 'TOPRIGHT', 6, 0)
-	TabState.ErrorScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ErrorScrollFrame, 'BOTTOMRIGHT', 6, 0)
+	TabState.ErrorScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ErrorScrollFrame, 'TOPRIGHT', 3, 0)
+	TabState.ErrorScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ErrorScrollFrame, 'BOTTOMRIGHT', 3, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.ErrorScrollFrame, TabState.ErrorScrollFrame.ScrollBar)
+	LibAT.UI.SkinScrollBar(TabState.ErrorScrollFrame.ScrollBar)
 
 	TabState.ErrorTree = CreateFrame('Frame', nil, TabState.ErrorScrollFrame)
 	TabState.ErrorScrollFrame:SetScrollChild(TabState.ErrorTree)
 	TabState.ErrorTree:SetSize(160, 1)
+	-- The list is as wide as its scroll area, so its rows stop at the scroll bar
+	TabState.ErrorScrollFrame:HookScript('OnSizeChanged', function(_, width)
+		TabState.ErrorTree:SetWidth(math.max(width, 1))
+	end)
 
 	-- Right panel: Error display
 	TabState.RightPanel = LibAT.UI.CreateRightPanel(mainContent, TabState.LeftPanel)
@@ -445,7 +450,7 @@ BuildContent = function(contentFrame)
 
 	-- Reload UI button
 	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
+	LibAT.UI.PlaceAtFooterLeft(reloadButton, contentFrame)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

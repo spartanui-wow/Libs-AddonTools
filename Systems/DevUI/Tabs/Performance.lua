@@ -282,6 +282,7 @@ local function BuildContent(contentFrame)
 
 	local scrollBox = CreateFrame('Frame', nil, pane, 'WowScrollBoxList')
 	local scrollBar = CreateFrame('EventFrame', nil, pane, 'MinimalScrollBar')
+	LibAT.UI.SkinScrollBar(scrollBar)
 	scrollBar:SetPoint('TOPRIGHT', header, 'BOTTOMRIGHT', -4, -6)
 	scrollBar:SetPoint('BOTTOMRIGHT', pane, 'BOTTOMRIGHT', -4, 6)
 	scrollBox:SetPoint('TOPLEFT', header, 'BOTTOMLEFT', 0, 0)
@@ -349,6 +350,11 @@ local function BuildContent(contentFrame)
 	footer:SetPoint('BOTTOMLEFT', root, 'BOTTOMLEFT', 6, 4)
 	footer:SetPoint('BOTTOMRIGHT', root, 'BOTTOMRIGHT', -6, 4)
 	footer:SetHeight(28)
+
+	-- In a kit window the status line and Reload UI live in the window's footer
+	if LibAT.UI.PlaceInFooter(footer, root) then
+		pane:SetPoint('BOTTOMRIGHT', root, 'BOTTOMRIGHT', -6, 6)
+	end
 
 	local reload = T.TextButton(footer, 'Reload UI', function()
 		LibAT:SafeReloadUI()

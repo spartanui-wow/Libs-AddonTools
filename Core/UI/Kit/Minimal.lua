@@ -70,6 +70,7 @@ Kit:Register('minimal', {
 		switchTrack = ROOT .. 'switch-track.png',
 		switchKnob = ROOT .. 'switch-knob.png',
 		radioRing = ROOT .. 'radio-ring.png',
+		checkMark = ROOT .. 'check-mark.png',
 		triangle = ROOT .. 'triangle.png',
 		chevron = ROOT .. 'triangle.png',
 	},

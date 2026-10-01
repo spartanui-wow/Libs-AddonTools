@@ -347,65 +347,48 @@ BuildContent = function(contentFrame)
 	TabState.LeftPanel = LibAT.UI.CreateLeftPanel(TabState.MainContent)
 
 	-- "Saved Scripts" header
-	local header = TabState.LeftPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormal')
-	header:SetPoint('TOP', TabState.LeftPanel, 'TOP', 0, -4)
-	header:SetText('Saved Scripts')
-	header:SetTextColor(1, 0.82, 0)
+	local header = LibAT.UI.CreateHeader(TabState.LeftPanel, 'Saved Scripts')
+	header:SetPoint('TOPLEFT', TabState.LeftPanel, 'TOPLEFT', 10, -8)
 
-	-- Script scroll frame
+	-- Script scroll frame, below the header
 	TabState.ScriptScrollFrame = CreateFrame('ScrollFrame', nil, TabState.LeftPanel)
-	TabState.ScriptScrollFrame:SetPoint('TOPLEFT', TabState.LeftPanel, 'TOPLEFT', 2, -7)
-	TabState.ScriptScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
+	TabState.ScriptScrollFrame:SetPoint('TOPLEFT', TabState.LeftPanel, 'TOPLEFT', 2, -28)
+	TabState.ScriptScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', -14, 2)
 
 	TabState.ScriptScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.ScriptScrollFrame, 'MinimalScrollBar')
-	TabState.ScriptScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ScriptScrollFrame, 'TOPRIGHT', 6, 0)
-	TabState.ScriptScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ScriptScrollFrame, 'BOTTOMRIGHT', 6, 0)
+	TabState.ScriptScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ScriptScrollFrame, 'TOPRIGHT', 3, 0)
+	TabState.ScriptScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ScriptScrollFrame, 'BOTTOMRIGHT', 3, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.ScriptScrollFrame, TabState.ScriptScrollFrame.ScrollBar)
+	LibAT.UI.SkinScrollBar(TabState.ScriptScrollFrame.ScrollBar)
 
 	TabState.ScriptTree = CreateFrame('Frame', nil, TabState.ScriptScrollFrame)
 	TabState.ScriptScrollFrame:SetScrollChild(TabState.ScriptTree)
 	TabState.ScriptTree:SetSize(160, 1)
+	-- The list is as wide as its scroll area, so its rows stop at the scroll bar
+	TabState.ScriptScrollFrame:HookScript('OnSizeChanged', function(_, width)
+		TabState.ScriptTree:SetWidth(math.max(width, 1))
+	end)
 
 	-- Right panel
 	TabState.RightPanel = LibAT.UI.CreateRightPanel(TabState.MainContent, TabState.LeftPanel)
 	local rightPanel = TabState.RightPanel
 
 	-- Title bar at top of right panel
-	local titleLabel = rightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	titleLabel:SetPoint('TOPLEFT', rightPanel, 'TOPLEFT', 8, -8)
-	titleLabel:SetText('Script Name:')
-	titleLabel:SetTextColor(1, 0.82, 0)
+	local titleLabel = LibAT.UI.CreateLabel(rightPanel, 'Script Name:')
+	titleLabel:SetPoint('TOPLEFT', rightPanel, 'TOPLEFT', 8, -12)
 
-	TabState.TitleBox = CreateFrame('EditBox', nil, rightPanel, 'InputBoxTemplate')
-	TabState.TitleBox:SetSize(rightPanel:GetWidth() - 110 > 0 and rightPanel:GetWidth() - 110 or 400, 22)
-	TabState.TitleBox:SetPoint('LEFT', titleLabel, 'RIGHT', 6, 0)
+	TabState.TitleBox = LibAT.UI.CreateEditBox(rightPanel, 400, 22)
+	TabState.TitleBox:SetPoint('LEFT', titleLabel, 'RIGHT', 8, 0)
 	TabState.TitleBox:SetPoint('RIGHT', rightPanel, 'RIGHT', -8, 0)
-	TabState.TitleBox:SetAutoFocus(false)
-	TabState.TitleBox:SetFontObject('GameFontHighlight')
 
 	-- Code editor area (top ~55% of remaining space)
-	local editorLabel = rightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	editorLabel:SetPoint('TOPLEFT', titleLabel, 'BOTTOMLEFT', 0, -8)
-	editorLabel:SetText('Code:')
-	editorLabel:SetTextColor(1, 0.82, 0)
+	local editorLabel = LibAT.UI.CreateLabel(rightPanel, 'Code:')
+	editorLabel:SetPoint('TOPLEFT', titleLabel, 'BOTTOMLEFT', 0, -12)
 
 	-- Create editor with monospace font
 	TabState.EditorBox = LibAT.UI.CreateMultiLineBox(rightPanel, 100, 100) -- Size set by anchors
 	TabState.EditorBox:SetPoint('TOPLEFT', editorLabel, 'BOTTOMLEFT', 0, -4)
 	TabState.EditorBox:SetPoint('RIGHT', rightPanel, 'RIGHT', -8, 0)
-
-	-- Add background to editor
-	Mixin(TabState.EditorBox, BackdropTemplateMixin)
-	TabState.EditorBox:SetBackdrop({
-		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
-		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
-		tile = true,
-		tileSize = 16,
-		edgeSize = 12,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 },
-	})
-	TabState.EditorBox:SetBackdropColor(0, 0, 0, 0.5)
-	TabState.EditorBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
 
 	-- Set monospace font on the editor's EditBox
 	if DevUIState.MonoFont and TabState.EditorBox.editBox then
@@ -447,27 +430,12 @@ BuildContent = function(contentFrame)
 	end)
 
 	-- Results area (bottom ~35% of remaining space)
-	local resultsLabel = rightPanel:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
-	resultsLabel:SetText('Output:')
-	resultsLabel:SetTextColor(1, 0.82, 0)
+	local resultsLabel = LibAT.UI.CreateLabel(rightPanel, 'Output:')
 
 	TabState.ResultsBox = LibAT.UI.CreateMultiLineBox(rightPanel, 100, 100) -- Size set by anchors
 	TabState.ResultsBox:SetPoint('BOTTOMLEFT', rightPanel, 'BOTTOMLEFT', 8, 8)
 	TabState.ResultsBox:SetPoint('RIGHT', rightPanel, 'RIGHT', -8, 0)
 	TabState.ResultsBox:SetReadOnly(true)
-
-	-- Add background to results
-	Mixin(TabState.ResultsBox, BackdropTemplateMixin)
-	TabState.ResultsBox:SetBackdrop({
-		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
-		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
-		tile = true,
-		tileSize = 16,
-		edgeSize = 12,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 },
-	})
-	TabState.ResultsBox:SetBackdropColor(0, 0, 0, 0.5)
-	TabState.ResultsBox:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
 
 	-- Set monospace font on the results box
 	if DevUIState.MonoFont and TabState.ResultsBox.editBox then
@@ -489,7 +457,7 @@ BuildContent = function(contentFrame)
 
 	-- Reload UI button
 	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
+	LibAT.UI.PlaceAtFooterLeft(reloadButton, contentFrame)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

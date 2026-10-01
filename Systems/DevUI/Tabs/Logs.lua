@@ -645,16 +645,21 @@ BuildContent = function(contentFrame)
 	-- Module scroll frame
 	TabState.ModuleScrollFrame = CreateFrame('ScrollFrame', nil, TabState.LeftPanel)
 	TabState.ModuleScrollFrame:SetPoint('TOPLEFT', TabState.LeftPanel, 'TOPLEFT', 2, -7)
-	TabState.ModuleScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', 0, 2)
+	TabState.ModuleScrollFrame:SetPoint('BOTTOMRIGHT', TabState.LeftPanel, 'BOTTOMRIGHT', -14, 2)
 
 	TabState.ModuleScrollFrame.ScrollBar = CreateFrame('EventFrame', nil, TabState.ModuleScrollFrame, 'MinimalScrollBar')
-	TabState.ModuleScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ModuleScrollFrame, 'TOPRIGHT', 6, 0)
-	TabState.ModuleScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ModuleScrollFrame, 'BOTTOMRIGHT', 6, 0)
+	TabState.ModuleScrollFrame.ScrollBar:SetPoint('TOPLEFT', TabState.ModuleScrollFrame, 'TOPRIGHT', 3, 0)
+	TabState.ModuleScrollFrame.ScrollBar:SetPoint('BOTTOMLEFT', TabState.ModuleScrollFrame, 'BOTTOMRIGHT', 3, 0)
 	ScrollUtil.InitScrollFrameWithScrollBar(TabState.ModuleScrollFrame, TabState.ModuleScrollFrame.ScrollBar)
+	LibAT.UI.SkinScrollBar(TabState.ModuleScrollFrame.ScrollBar)
 
 	TabState.ModuleTree = CreateFrame('Frame', nil, TabState.ModuleScrollFrame)
 	TabState.ModuleScrollFrame:SetScrollChild(TabState.ModuleTree)
 	TabState.ModuleTree:SetSize(160, 1)
+	-- The list is as wide as its scroll area, so its rows stop at the scroll bar
+	TabState.ModuleScrollFrame:HookScript('OnSizeChanged', function(_, width)
+		TabState.ModuleTree:SetWidth(math.max(width, 1))
+	end)
 
 	-- Right panel: log display
 	TabState.RightPanel = LibAT.UI.CreateRightPanel(TabState.MainContent, TabState.LeftPanel)
@@ -702,7 +707,7 @@ BuildContent = function(contentFrame)
 
 	-- Reload UI button
 	local reloadButton = LibAT.UI.CreateButton(contentFrame, 80, 20, 'Reload UI', true)
-	reloadButton:SetPoint('BOTTOMLEFT', contentFrame, 'BOTTOMLEFT', 4, 1)
+	LibAT.UI.PlaceAtFooterLeft(reloadButton, contentFrame)
 	reloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)
