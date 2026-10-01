@@ -1,0 +1,7 @@
+Use case: stylized-concept
+Asset type: seamless production texture for a World of Warcraft addon title bar and footer
+Primary request: paint a seamless square dark stained oak texture matching the attached approved War Table mockup: deep walnut-brown oak, restrained horizontal grain, hand-painted fantasy realism, gently worn finish, subtle low-frequency variation.
+Input images: Image 1 is the approved War Table style reference; use it only for material, color, value, grain scale, and finish.
+Composition/framing: flat orthographic material texture, horizontal grain running left to right, evenly lit, no focal point, designed to tile in both axes.
+Lighting/mood: dark but readable under pale title text; no bright hotspot.
+Constraints: genuinely seamless on all four edges; no brass, nails, carvings, borders, symbols, text, objects, perspective, cast shadows, or watermark.

@@ -6,6 +6,7 @@ local LibAT = LibAT
 ----------------------------------------------------------------------------------------------------
 
 LibAT.UI.ACCENT_CHANGED = 'LIBAT_SETUP_ACCENT_CHANGED'
+LibAT.UI.BACKDROP_CHANGED = 'LIBAT_SETUP_BACKDROP_CHANGED'
 
 local DEFAULT_R, DEFAULT_G, DEFAULT_B = 226 / 255, 31 / 255, 31 / 255 -- e21f1f
 
@@ -96,7 +97,7 @@ function LibAT.UI.SetAccentProvider(fn)
 	LibAT.UI.NotifyAccentChanged(true)
 end
 
----Get the backdrop supplied by the host addon. A nil return uses the setup skin's neutral art.
+---Get the backdrop supplied by the host addon. A nil return uses the active kit's neutral art.
 ---@return string|nil texturePath
 function LibAT.UI.GetBackdrop()
 	if not backdropProvider then
@@ -122,7 +123,14 @@ function LibAT.UI.SetBackdropProvider(fn)
 		return
 	end
 	backdropProvider = fn
-	LibAT.UI.NotifyAccentChanged(true)
+	LibAT.UI.NotifyBackdropChanged()
+end
+
+---Tell every LibAT setup window to ask its host for the current backdrop again.
+function LibAT.UI.NotifyBackdropChanged()
+	if LibAT.SendMessage then
+		LibAT:SendMessage(LibAT.UI.BACKDROP_CHANGED)
+	end
 end
 
 return LibAT.UI

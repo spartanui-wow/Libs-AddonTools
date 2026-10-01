@@ -1,6 +1,9 @@
 ---@class LibAT
 local LibAT = LibAT
 
+-- The classic window helpers, drawn by the active UI kit. Every window built with them shares one
+-- look (the kit SpartanUI or another host picks), and these signatures stay as they always were.
+
 ----------------------------------------------------------------------------------------------------
 -- Window Configuration
 ----------------------------------------------------------------------------------------------------
@@ -10,260 +13,183 @@ local LibAT = LibAT
 ---@field title string Window title text
 ---@field width number Window width (default 800)
 ---@field height number Window height (default 538)
----@field portrait? string Optional portrait texture path
----@field hidePortrait? boolean Hide the portrait (default true)
+---@field portrait? string Unused; kept so older callers still work
+---@field hidePortrait? boolean Unused; kept so older callers still work
 ---@field resizable? boolean Allow the window to be resized (default false)
 ---@field minWidth? number Minimum resize width (default 200)
 ---@field minHeight? number Minimum resize height (default 150)
+---@field footer? boolean Show the footer bar from the start (action buttons turn it on)
+
+-- Where content started in the old template window; offsets given relative to it still line up
+local TEMPLATE_TOP = -33
+local TEMPLATE_BOTTOM = 12
 
 ----------------------------------------------------------------------------------------------------
 -- Base Window Creation
 ----------------------------------------------------------------------------------------------------
 
----Create a standardized base window with ButtonFrameTemplate
+---Create a window dressed by the active UI kit
 ---@param config WindowConfig Window configuration
----@return Frame window The created window frame
+---@return Frame window The created window frame; place content in window.Body
 function LibAT.UI.CreateWindow(config)
-	-- Validate configuration
 	if not config.name or config.name == '' then
 		error('CreateWindow: config.name is required')
 	end
 	if not config.title or config.title == '' then
 		error('CreateWindow: config.title is required')
 	end
-
-	-- Apply defaults
 	config.width = config.width or 800
 	config.height = config.height or 538
-	config.hidePortrait = config.hidePortrait ~= false -- Default true
 
-	-- Create main frame using ButtonFrameTemplate (AH window size: 800x538)
-	local window = CreateFrame('Frame', config.name, UIParent, 'ButtonFrameTemplate')
-
-	-- Hide portrait if requested
-	if config.hidePortrait then
-		ButtonFrameTemplate_HidePortrait(window)
-	end
-
-	window:SetSize(config.width, config.height)
-	window:SetPoint('CENTER', UIParent, 'CENTER', 0, 0)
-	window:SetFrameStrata('HIGH')
-	window:Hide()
-
-	-- Make the window movable
-	window:SetMovable(true)
-	window:EnableMouse(true)
-	window:RegisterForDrag('LeftButton')
-	window:SetScript('OnDragStart', window.StartMoving)
-	window:SetScript('OnDragStop', function(self)
-		self:StopMovingOrSizing()
-	end)
-
-	-- Set the portrait if provided (with safety checks)
-	if config.portrait and window.portrait then
-		if window.portrait.SetTexture then
-			window.portrait:SetTexture(config.portrait)
-		end
-	end
-
-	-- Set title
-	window:SetTitle(config.title)
-
-	-- Add closeBtn reference for compatibility (ButtonFrameTemplate provides CloseButton)
-	if window.CloseButton then
-		window.closeBtn = window.CloseButton
-		-- Override the close button to work in combat
-		-- ButtonFrameTemplate's CloseButton uses secure templates that block during combat
-		-- We replace OnClick to directly hide the window instead
-		window.CloseButton:SetScript('OnClick', function()
-			window:Hide()
-		end)
-	end
-
-	-- Allow Escape key to close the window
-	tinsert(UISpecialFrames, config.name)
-
-	-- Store configuration
+	local window = LibAT.UI.Kit:CreateShell({
+		name = config.name,
+		title = config.title,
+		width = config.width,
+		height = config.height,
+		footer = config.footer,
+		resizable = config.resizable,
+		minWidth = config.minWidth,
+		minHeight = config.minHeight,
+	})
 	window.config = config
-
-	---Enable or disable window resizing with a drag handle in the bottom-right corner
-	---@param enable boolean Whether to enable resizing
-	---@param minW? number Minimum width (default config.minWidth or 200)
-	---@param minH? number Minimum height (default config.minHeight or 150)
-	function window:EnableResize(enable, minW, minH)
-		if enable then
-			self:SetResizable(true)
-			self:SetResizeBounds(minW or config.minWidth or 200, minH or config.minHeight or 150)
-
-			if not self.resizeHandle then
-				-- Create resize grip in bottom-right corner
-				local handle = CreateFrame('Button', nil, self)
-				handle:SetSize(16, 16)
-				handle:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -2, 2)
-				handle:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up')
-				handle:SetHighlightTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight')
-				handle:SetPushedTexture('Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down')
-
-				handle:SetScript('OnMouseDown', function()
-					self:StartSizing('BOTTOMRIGHT')
-				end)
-				handle:SetScript('OnMouseUp', function()
-					self:StopMovingOrSizing()
-				end)
-
-				self.resizeHandle = handle
-			end
-
-			self.resizeHandle:Show()
-		else
-			self:SetResizable(false)
-			if self.resizeHandle then
-				self.resizeHandle:Hide()
-			end
-		end
-	end
-
-	-- Apply resizable from config
-	if config.resizable then
-		window:EnableResize(true)
-	end
-
 	return window
+end
+
+---The kit window a frame lives in, if any (a tab's content frame inside a window, for example).
+---@param frame Frame
+---@return Frame|nil
+local function FindShell(frame)
+	local current = frame
+	for _ = 1, 6 do
+		if not current then
+			return nil
+		end
+		if current.kitShell then
+			return current
+		end
+		current = current:GetParent()
+	end
+	return nil
+end
+
+---The footer bar of the kit window a frame lives in, turned on. Nil outside a kit window.
+---@param frame Frame The window or a frame inside it
+---@return Frame|nil footer
+---@return number padding Space to keep from the footer's ends
+function LibAT.UI.GetFooter(frame)
+	local shell = FindShell(frame)
+	if not shell then
+		return nil, 0
+	end
+	if not shell.Footer:IsShown() then
+		shell:SetFooterShown(true)
+	end
+	return shell.Footer, LibAT.UI.Kit:GetActive().layout.barPadding
 end
 
 ----------------------------------------------------------------------------------------------------
 -- Window Layout Helpers
 ----------------------------------------------------------------------------------------------------
 
----Create a control frame positioned like AuctionHouse SearchBar
----@param window Frame The parent window
----@param yOffset? number Optional Y offset from top (default -33)
----@param height? number Optional height (default 28)
----@return Frame controlFrame The control frame
+---Create a control frame (search and filters) across the top of the content
+---@param window Frame The window, or any frame to place it in
+---@param yOffset? number Y offset from the top (default -33, the old title height)
+---@param height? number Height (default 28)
+---@return Frame controlFrame
 function LibAT.UI.CreateControlFrame(window, yOffset, height)
-	yOffset = yOffset or -33
 	height = height or 28
-
 	local controlFrame = CreateFrame('Frame', nil, window)
-	controlFrame:SetPoint('TOPLEFT', window, 'TOPLEFT', 2, yOffset)
-	controlFrame:SetPoint('TOPRIGHT', window, 'TOPRIGHT', -2, yOffset)
+	if window.kitShell then
+		local y = (yOffset or TEMPLATE_TOP) - TEMPLATE_TOP
+		controlFrame:SetPoint('TOPLEFT', window.Body, 'TOPLEFT', 0, y)
+		controlFrame:SetPoint('TOPRIGHT', window.Body, 'TOPRIGHT', 0, y)
+	else
+		yOffset = yOffset or TEMPLATE_TOP
+		controlFrame:SetPoint('TOPLEFT', window, 'TOPLEFT', 2, yOffset)
+		controlFrame:SetPoint('TOPRIGHT', window, 'TOPRIGHT', -2, yOffset)
+	end
 	controlFrame:SetHeight(height)
-
 	return controlFrame
 end
 
----Create a main content area positioned below control frame
----@param window Frame The parent window
+---Create the main content area below a control frame
+---@param window Frame The window, or any frame to place it in
 ---@param controlFrame Frame The control frame to anchor below
----@param yOffset? number Optional Y offset from control frame (default -4)
----@param bottomOffset? number Optional bottom offset (default 12)
----@return Frame contentFrame The main content frame
+---@param yOffset? number Gap below the control frame (default -4)
+---@param bottomOffset? number Distance from the bottom (default 12)
+---@return Frame contentFrame
 function LibAT.UI.CreateContentFrame(window, controlFrame, yOffset, bottomOffset)
 	yOffset = yOffset or -4
-	bottomOffset = bottomOffset or 12
-
+	bottomOffset = bottomOffset or TEMPLATE_BOTTOM
 	local contentFrame = CreateFrame('Frame', nil, window)
 	contentFrame:SetPoint('TOPLEFT', controlFrame, 'BOTTOMLEFT', 0, yOffset)
-	contentFrame:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', -20, bottomOffset)
-
+	if window.kitShell then
+		contentFrame:SetPoint('BOTTOMRIGHT', window.Body, 'BOTTOMRIGHT', 0, bottomOffset - TEMPLATE_BOTTOM)
+	else
+		contentFrame:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', -20, bottomOffset)
+	end
 	return contentFrame
 end
 
----Create a left panel for navigation (styled like AuctionFrame's category list)
+---Create a left panel for navigation
 ---@param parent Frame The parent frame
----@param width? number Optional width (default 155)
----@param xOffset? number Optional X offset from left (default 5)
----@param yOffset? number Optional Y offset from top (default 5)
----@param bottomOffset? number Optional bottom offset (default 13)
----@return Frame leftPanel The left navigation panel
+---@param width? number Width (default 155)
+---@param xOffset? number X offset from the left (default 5)
+---@param yOffset? number Y offset from the top (default 5)
+---@param bottomOffset? number Distance from the bottom (default 13)
+---@return Frame leftPanel
 function LibAT.UI.CreateLeftPanel(parent, width, xOffset, yOffset, bottomOffset)
-	width = width or 155
-	xOffset = xOffset or 5
-	yOffset = yOffset or 5
-	bottomOffset = bottomOffset or 13
-
 	local leftPanel = CreateFrame('Frame', nil, parent)
-	leftPanel:SetPoint('TOPLEFT', parent, 'TOPLEFT', xOffset, yOffset)
-	leftPanel:SetPoint('BOTTOMLEFT', parent, 'BOTTOMLEFT', xOffset, bottomOffset)
-	leftPanel:SetWidth(width)
-	leftPanel.layoutType = 'InsetFrameTemplate'
-
-	-- Add AuctionHouse categories background
-	leftPanel.Background = leftPanel:CreateTexture(nil, 'BACKGROUND')
-	leftPanel.Background:SetAtlas('auctionhouse-background-summarylist', true)
-	leftPanel.Background:SetAllPoints(leftPanel)
-
-	-- Add nine slice border
-	leftPanel.NineSlice = CreateFrame('Frame', nil, leftPanel, 'NineSlicePanelTemplate')
-	leftPanel.NineSlice:SetAllPoints()
-
-	return leftPanel
+	leftPanel:SetPoint('TOPLEFT', parent, 'TOPLEFT', xOffset or 0, yOffset or 0)
+	leftPanel:SetPoint('BOTTOMLEFT', parent, 'BOTTOMLEFT', xOffset or 0, bottomOffset or 0)
+	leftPanel:SetWidth(width or 155)
+	return LibAT.UI.Kit:SkinPanel(leftPanel, { elevation = 1, shadow = false })
 end
 
----Create a right panel for content (styled like AuctionFrame's item list)
+---Create a right panel for content beside a left panel
 ---@param parent Frame The parent frame
 ---@param leftPanel Frame The left panel to anchor beside
----@param spacing? number Optional spacing between panels (default 20)
----@param rightOffset? number Optional right offset (default -5)
----@param yOffset? number Optional Y offset from top (default 0)
----@param bottomOffset? number Optional bottom offset (default 15)
----@return Frame rightPanel The right content panel
+---@param spacing? number Gap between the panels (default 10)
+---@param rightOffset? number Offset from the right (default 0)
+---@param yOffset? number Y offset from the top (default 0)
+---@param bottomOffset? number Distance from the bottom (default 0)
+---@return Frame rightPanel
 function LibAT.UI.CreateRightPanel(parent, leftPanel, spacing, rightOffset, yOffset, bottomOffset)
-	spacing = spacing or 20
-	rightOffset = rightOffset or -5
-	yOffset = yOffset or 0
-	bottomOffset = bottomOffset or 15
-
 	local rightPanel = CreateFrame('Frame', nil, parent)
-	rightPanel:SetPoint('TOPLEFT', leftPanel, 'TOPRIGHT', spacing, yOffset)
-	rightPanel:SetPoint('BOTTOMRIGHT', parent, 'BOTTOMRIGHT', rightOffset, bottomOffset)
-	rightPanel.layoutType = 'InsetFrameTemplate'
-
-	-- Add AuctionHouse index background
-	rightPanel.Background = rightPanel:CreateTexture(nil, 'BACKGROUND')
-	rightPanel.Background:SetAtlas('auctionhouse-background-index', true)
-	rightPanel.Background:SetAllPoints(rightPanel)
-
-	-- Add nine slice border
-	rightPanel.NineSlice = CreateFrame('Frame', nil, rightPanel, 'NineSlicePanelTemplate')
-	rightPanel.NineSlice:SetAllPoints()
-
-	return rightPanel
+	rightPanel:SetPoint('TOPLEFT', leftPanel, 'TOPRIGHT', spacing or 10, yOffset or 0)
+	rightPanel:SetPoint('BOTTOMRIGHT', parent, 'BOTTOMRIGHT', rightOffset or 0, bottomOffset or 0)
+	return LibAT.UI.Kit:SkinPanel(rightPanel, { elevation = 1, shadow = false })
 end
 
----Create action buttons positioned in bottom right (like AH Cancel Auction button)
----@param window Frame The parent window
+---Create action buttons along the right of the window's footer
+---@param window Frame The window, or a frame inside it (the buttons show and hide with it)
 ---@param buttons table Array of button configs: {text = "Button", width = 70, height = 22, onClick = function}
----@param spacing? number Optional spacing between buttons (default 5)
----@param bottomOffset? number Optional bottom offset (default 4)
----@param rightOffset? number Optional right offset (default -3)
----@return table buttons Array of created button frames
+---@param spacing? number Gap between buttons (default 6)
+---@param bottomOffset? number Distance from the bottom when the frame is not in a kit window (default 4)
+---@param rightOffset? number Offset from the right when the frame is not in a kit window (default -3)
+---@return table buttons
 function LibAT.UI.CreateActionButtons(window, buttons, spacing, bottomOffset, rightOffset)
-	spacing = spacing or 5
-	bottomOffset = bottomOffset or 4
-	rightOffset = rightOffset or -3
+	spacing = spacing or 6
+	local footer, padding = LibAT.UI.GetFooter(window)
 
 	local createdButtons = {}
 	local previousButton = nil
-
-	for i = #buttons, 1, -1 do -- Reverse order so rightmost button is first
+	for i = #buttons, 1, -1 do -- Reverse order so the rightmost button is placed first
 		local buttonConfig = buttons[i]
-		local button = LibAT.UI.CreateButton(window, buttonConfig.width or 70, buttonConfig.height or 22, buttonConfig.text or 'Button', buttonConfig.black)
-
+		local button = LibAT.UI.CreateButton(window, buttonConfig.width or 70, buttonConfig.height or 24, buttonConfig.text or 'Button', buttonConfig.black)
 		if previousButton then
 			button:SetPoint('RIGHT', previousButton, 'LEFT', -spacing, 0)
+		elseif footer then
+			button:SetPoint('RIGHT', footer, 'RIGHT', -padding, 0)
 		else
-			button:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', rightOffset, bottomOffset)
+			button:SetPoint('BOTTOMRIGHT', window, 'BOTTOMRIGHT', rightOffset or -3, bottomOffset or 4)
 		end
-
 		if buttonConfig.onClick then
 			button:SetScript('OnClick', buttonConfig.onClick)
 		end
-
-		table.insert(createdButtons, 1, button) -- Insert at beginning to maintain order
+		table.insert(createdButtons, 1, button)
 		previousButton = button
 	end
-
 	return createdButtons
 end
 

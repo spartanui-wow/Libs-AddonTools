@@ -1,206 +1,185 @@
 ---
-name: "Lib's AddonTools Setup"
-description: "A faction-neutral guided setup world with one clear path and two owned material skins."
+name: "Lib's AddonTools UI Kit"
+description: "Reusable theme-aware Warcraft UI components with art at the edges and flat reading surfaces."
 colors:
-  accent-default: "#e21f1f"
-  stage-ground: "rgba(20, 20, 26, 0.42)"
-  stage-panel: "rgba(43, 46, 51, 0.88)"
-  stage-card: "rgba(31, 33, 38, 0.94)"
-  stage-rim: "#9ca1ab"
-  stage-text: "#e8ebf0"
-  stage-secondary: "#abb0b8"
-  stage-dim: "#a3a8b0"
-  stage-complete: "#52b36b"
-  wartable-ground: "rgba(23, 17, 11, 0.25)"
-  wartable-panel: "rgba(31, 38, 41, 0.90)"
-  wartable-card: "rgba(27, 31, 31, 0.96)"
-  wartable-rim: "#ad874f"
-  wartable-text: "#ede8d9"
-  wartable-secondary: "#b8ad96"
-  wartable-dim: "#a69e8f"
-  wartable-complete: "#59ab63"
-  combat-scrim: "rgba(0, 0, 0, 0.55)"
-typography:
-  display:
-    fontFamily: "Roboto Condensed, Arial Narrow, sans-serif"
-    fontSize: "26px"
-    fontWeight: 700
-  headline:
-    fontFamily: "Roboto Condensed, Arial Narrow, sans-serif"
-    fontSize: "18px"
-    fontWeight: 700
-  title:
-    fontFamily: "Roboto Condensed, Arial Narrow, sans-serif"
-    fontSize: "14px"
-    fontWeight: 700
-  body:
-    fontFamily: "Roboto Condensed, Arial Narrow, sans-serif"
-    fontSize: "12px"
-    fontWeight: 700
-  label:
-    fontFamily: "Roboto Condensed, Arial Narrow, sans-serif"
-    fontSize: "11px"
-    fontWeight: 700
-rounded:
-  control: "8px"
-  surface: "18px"
-  pill: "999px"
-spacing:
-  xxs: "4px"
-  xs: "8px"
-  sm: "10px"
-  md: "12px"
-  lg: "16px"
-  xl: "18px"
-  section: "24px"
-components:
-  button-primary:
-    backgroundColor: "{colors.accent-default}"
-    typography: "{typography.title}"
-    rounded: "{rounded.control}"
-    padding: "0 15px"
-    height: "28px"
-  button-secondary:
-    typography: "{typography.title}"
-    rounded: "{rounded.control}"
-    padding: "0 15px"
-    height: "28px"
-  switch-track:
-    rounded: "{rounded.pill}"
-    size: "36px 18px"
-  choice-card:
-    typography: "{typography.title}"
-    rounded: "{rounded.surface}"
-    padding: "8px 11px"
-  chapter-row:
-    typography: "{typography.body}"
-    height: "26px"
-  combat-blocker:
-    backgroundColor: "{colors.combat-scrim}"
-    textColor: "{colors.stage-text}"
-    typography: "{typography.headline}"
-    width: "100%"
-    height: "100%"
+  accent: "LibAT.UI.GetAccentColor()"
+  text: "#edf0f4"
+  text-secondary: "#b8bec7"
+  text-muted: "#9198a3"
+  text-disabled: "#676d75"
+  done: "#52b36b"
+  warning: "#efad38"
+  skipped: "#8f949c"
+spacing: [4, 8, 12, 16, 24]
+type: [11, 12, 14, 16, 18, 26]
+surface-elevation: [0, 1, 2, 3]
 ---
 
-# Design System: Lib's AddonTools Setup
+# Design System: Lib's AddonTools UI Kit
 
-## Overview
+## Creative direction
 
-**Creative North Star: "The Guided Campaign"**
+**Art at the edges, flat where you read.** A window can carry the player's theme without making its controls noisy. Painted art belongs on the outer frame, title plate, divider ornament, active marker, or one corner. Text and controls always sit on a calm, flat surface.
 
-Setup is a short route through a familiar Warcraft world, not a stack of generic dialogs. The interface keeps the next decision obvious, ranks information through depth, and lets the host addon supply identity through a restrained accent.
+**Windows wear the player's theme.** A host supplies a trim kit and live accent. LibAT supplies the structure, interaction, sizing, and neutral fallback. Changing either input repaints existing kit components in place.
 
-Classic preserves the established compatibility presentation. The two owned skins share one interaction system: **The Selection Stage** places smoked glass over the active theme or a neutral fantasy fallback; **The War Table** translates the same hierarchy into dark oak, antique brass, map slate, and an inked route. Neither skin uses faction marks, named places, copied game art, or client-version-dependent chrome.
+The setup flow keeps its established Guided Campaign model: one visible route, one current decision, compact controls, explicit state labels, and one filled primary action. The War kit expresses that model with dark oak, antique brass, map slate, and a chapter flag rail. The Minimal kit preserves the same hierarchy with clean one-pixel lines and no ornament.
 
-**Key Characteristics:**
+## Tokens
 
-- Mid-tone layered surfaces over owned, dimmed backdrops.
-- One host accent reserved for selected, current, checked, progress, and primary states.
-- Compact decisions, explicit status text, and one filled footer action.
-- Owned assets and controls that render consistently across supported WoW clients.
+### Spacing
 
-## Colors
+Use only the shared 4, 8, 12, 16, and 24 pixel spacing scale. A component may use a 1 or 2 pixel optical correction for borders and type baselines, but those values are not layout gaps.
 
-The palettes remain neutral enough to accept any host accent: cool graphite for The Selection Stage and warm slate, oak, and brass for The War Table.
+### Type
 
-### Primary
+All kit text uses the shipped Roboto Condensed Bold font objects at 11, 12, 14, 16, 18, or 26 pixels, with outline and a one-pixel shadow.
 
-- **Host Accent:** Supplied at runtime; the default token is only the LibAT fallback. Use it for the current chapter, selected-card rim and glow, checked switch, progress fill, and the single filled primary action.
+- 26: page display title.
+- 18: window title, addon header, or blocking message.
+- 16: section and chapter titles.
+- 14: buttons, cards, and prominent body text.
+- 12: ordinary labels and navigation.
+- 11: captions, badges, progress, and quiet actions.
 
-### Neutral
+### Surfaces
 
-- **Stage Ground / Panel / Card:** A dim veil, smoked glass, and a darker decision surface establish three readable layers without becoming near-black.
-- **Stage Rim / Text / Secondary / Dim:** Cool metal and near-white type provide structure; muted roles remain readable rather than disappearing.
-- **War Table Ground / Panel / Card:** A warm veil, map-slate panel, and deep ink card sit beneath oak title and footer material.
-- **War Table Rim / Text / Secondary / Dim:** Antique brass and parchment neutrals communicate the skin without allegiance to either faction.
-- **Complete:** Green is reserved for completed route states; it never competes with the host accent for current state.
-- **Combat Scrim:** The blocker darkens the inactive setup while its message remains fully legible.
+Every kit provides four surface elevation colors.
 
-**The One Signal Rule.** The host accent means selected, current, checked, progress, or primary; recommendation and decoration stay neutral.
+- 0 Ground: window veil and lowest backdrop tint.
+- 1 Rail: navigation, footer wells, and low-priority regions.
+- 2 Panel: primary reading panel and ordinary cards.
+- 3 Raised: popovers, focused groups, and title material.
 
-**The Contrast Chooses the Ink Rule.** Filled primary labels automatically use whichever of near-black or white gives the stronger contrast against the live host accent.
+Use elevation to communicate hierarchy. Do not add arbitrary shadows to every child.
 
-## Typography
+### Text and state color
 
-**Display Font:** Roboto Condensed Bold  
-**Body Font:** Roboto Condensed Bold  
-**Label Font:** Roboto Condensed Bold
+Text uses no more than four greys: text, secondary, muted, and disabled. The live accent comes only from `LibAT.UI.GetAccentColor()` and means current, selected, checked, progress, focus, or primary. Done, warning, and skipped use their dedicated status colors. State is also written in words or represented by a distinct shape.
 
-**Character:** Condensed, sturdy, and quick to scan at game-UI scale. All owned-skin text uses the shipped font with an outline and a one-pixel dark shadow; Classic retains its existing client font objects.
+## Six-layer panel model
 
-### Hierarchy
+Every kit-built panel has the same ordered layers:
 
-- **Display** (700, 26px): Current step heading.
-- **Headline** (700, 18px): Window title and blocking combat message.
-- **Title** (700, 14px): Buttons, cards, addon labels, and prominent content.
-- **Body** (700, 12px): Chapter rows, setting labels, and summaries.
-- **Label** (700, 11px): Captions, badges, descriptions, progress, and quiet actions.
+1. Backdrop: optional scene or host artwork, cropped and dimmed.
+2. Surface: flat elevation color that guarantees readable content.
+3. Material: optional low-alpha repeating tile that carries theme texture.
+4. Trim: one-pixel fallback edges or the kit's sliced border.
+5. Ornament: at most one corner, header plate, divider center, or active marker.
+6. Shadow: a restrained drop shadow behind the panel.
 
-**The Plain Words Rule.** Labels are short, literal, and readable at a 6th-grade level; status never depends on an icon or color alone.
+Content is placed above all six layers. Missing art never removes the surface, trim, text, or interaction state.
 
-## Layout
+## Components and states
 
-Owned skins use a centered 1024x650 window with a 36px title bar, 52px footer, 10px outer content inset, 218px chapter rail, and 12px gap before the main panel. The rail is one depth layer behind the decision panel. The footer keeps Back at left, progress centered, optional quiet skip behavior beside the primary, and exactly one filled action at right.
+All components respond live to accent and kit changes. Hover strengthens the neutral trim. Pressed reduces or darkens the surface. Focus uses the accent rim without relying on glow alone. Selected uses the accent plus a written state where space allows. Disabled remains legible, cannot activate, and uses the disabled text token at about 60 percent overall strength.
 
-Choice content uses compact adaptive grids: look cards allow up to three columns at a 210px minimum with 12px gaps; ordinary choice cards allow up to two columns at a 240px minimum. Toggle groups use two columns when at least 560px is available and one otherwise, with 14px between columns and a 42px row pitch. Scrollbars are owned 5px tracks with a thumb of at least 24px.
+### Window
 
-Classic remains an 800x538 resizable compatibility view. Do not force owned-skin dimensions, imagery, or font assumptions into Classic.
+The default window is 1024 by 650 with a 36 pixel title bar, 52 pixel footer, 218 pixel rail, 12 pixel column gap, and content inset supplied by the active trim. It owns movement, close behavior, backdrop crop, footer, and the six visual layers. War uses its painted 9-slice and scene. Minimal uses a one-pixel frame.
 
-**The One Route Rule.** Chapters stay in the left rail, the current decision stays in the main panel, and progress plus completion actions stay in the footer.
+### Panel and Section
 
-## Elevation & Depth
+A Panel is the basic six-layer surface at elevation 0 through 3. A Section is a content-sized panel with a 16 pixel header and divider. A divider may include one centered ornament, but the text remains on a flat surface.
 
-Depth is structural. A cropped, dimmed backdrop forms the ground; the chapter rail is quieter; the main panel is brighter; cards rise within it; selected cards add a soft accent glow. Owned windows use the shipped soft-shadow and rim rasters, low-alpha one-pixel edges, and a subtle inner highlight. The War Table swaps panel and bar fills for owned oak and map-slate textures while preserving the same rank.
+### Card
 
-**The Rank Is Depth Rule.** Brightness, opacity, rim strength, and shadow identify hierarchy; do not flatten every surface or add arbitrary shadows.
+Cards contain title, caption, optional art, badges, and optional check control. States are normal, hover, pressed, focus, selected, and disabled. Selected cards keep the explicit `Selected` or `In use` label. Recommendation remains a neutral badge rather than borrowing the accent.
 
-## Shapes
+### Button
 
-Owned surfaces have gently rounded silhouettes and fine one-pixel rims. Buttons read as compact soft rectangles, switches as pills with circular knobs, and chapter markers as circular route points. Geometry comes from shipped PNG assets and shared Lua dimensions, not Blizzard templates or atlases. Cards never use a colored stripe on one edge.
+Buttons are primary, secondary, or ghost. Exactly one primary action should be visible in a footer. Primary uses the accent or confirmed host atlas and automatically chooses readable label ink. Secondary uses neutral material. Ghost is text-forward with no competing fill. Each supports normal, hover, pressed, focus, and disabled states.
 
-## Components
+### Switch row
 
-### Buttons
+A switch row is 28 pixels high, or 38 with a caption. A 36 by 18 track precedes the label. Checked uses the accent. Core settings are disabled and say `Always on`. Reload-dependent settings say `Needs reload`.
 
-- **Primary:** One 28px-high filled action, tinted by the live host accent. Its label switches between light and dark for contrast.
-- **Secondary:** The same geometry with a neutral owned texture and light label. Hover reduces texture alpha to 82%; disabled buttons remain visible at 62% overall alpha.
-- **Quiet actions:** 11px text controls for reversible or secondary paths. Skip choices live in a small surfaced menu rather than becoming competing filled buttons.
+### Badge
 
-### Choice Cards
+Badges are 18 pixels high and size from content. Supported semantic styles are recommended, selected, done, warning, skipped, and new. Color reinforces the written label.
 
-Cards use the active skin's card surface, 1px material rim, 14px title, 11px caption, and explicit Recommended, Selected/In use, Done, Skipped, or New badges. Hover strengthens the neutral rim; selection replaces it with the accent and adds a soft accent glow. Disabled cards remain present at 48% alpha with their status visible.
+### Nav rail
 
-### Switch Rows
+The setup rail groups steps under addon and chapter rows. War uses 44 pixel chapter rows, 16 pixel chapter text, an 18 pixel addon header, a triangle, thin dividers, gold pole behind completed or current territory, the flag on the current chapter, and silver ahead. Minimal uses the same labels and spacing with flat markers and lines.
 
-Settings are 28px rows, or 38px when a description is present. A 36x18 switch leads the row; a 16px knob moves left/right. Checked tracks take the host accent. Core settings are disabled at 60% alpha and say **Always on**. Group-level Turn all on/off actions remain quiet text.
+### Tabs
 
-### Chapter Rail
+Tabs are a horizontal row of ghost buttons. The selected tab takes the accent and focus treatment. Keyboard or programmatic focus must remain visible independently of hover.
 
-Addon rows are 30px high and step rows 26px high. Current steps use accent-colored text, marker, and a faint fill; completed steps use the owned check asset. The War Table may add its banner, waypoint, and inked route; The Selection Stage uses the simpler lit marker. Both preserve the same labels and navigation behavior.
+### Popover and menu
 
-### Progress, Badges, and Scrollbars
+Popovers use elevation 3, a clear rim, and an outer shadow. Menus contain compact text actions and close when their owner route changes. Destructive or reload actions state their consequence in the label.
 
-Progress is a 2px accent fill beneath an 11px step label. Badges are 18px high with neutral rims; recommendations do not borrow the accent. Owned scrollbars use a 5px material track and a minimum 24px thumb.
+### Scroll area
 
-### Combat Blocker
+The owned scroll area uses a 5 pixel track, a thumb of at least 24 pixels, mouse-wheel movement, and content-driven range. It never depends on client-version-specific templates.
 
-When combat starts, the visual root dims to 40%, a full-window scrim appears, and **Waiting for combat to end** remains at full contrast. Finish and finish-without-reload are disabled until combat ends.
+## Trim kit contract
 
-## Do's and Don'ts
+All asset paths include `.png`, and every shipping texture has a power-of-two canvas. Untinted metal retains its painted color. Tintable masks receive the trim or accent token at runtime. When an asset is absent, LibAT draws a flat color or one-pixel edge so the component remains complete.
 
-### Do:
+| Piece | PNG canvas | Slice and placement | Tint rule | Missing-piece fallback |
+| --- | --- | --- | --- | --- |
+| Window border | Corners 32x32 or 64x64; horizontal and vertical beams 32x128 or 128x32 | 9-slice, with declared corner size, edge thickness, tile length, and edge crop | Tint only assets declared as masks; painted wood and metal never tint | One-pixel trim edges |
+| Title/header plate | 256x64 | Tile or crop across the 36 pixel title bar | Painted plate never tints; a mask may take trim color | Elevation 3 flat surface |
+| Divider | 256x16 | Horizontal tile or stretch at 1 to 8 pixels high | Line may take trim color; center ornament never tints | One-pixel trim line |
+| Divider ornament | 64x32 | Center once over the divider | Untinted metal | Omit ornament |
+| Button primary | Left 32x64, center 64x64, right 32x64 | 3-slice with a declared cap width | Fallback masks take accent; confirmed native red/gold art remains untinted | Flat accent fill with readable label |
+| Button secondary | Left 32x64, center 64x64, right 32x64 | 3-slice with a declared cap width | Fallback masks take neutral trim; confirmed native red art remains untinted | Elevation 2 fill with trim edge |
+| Active marker | 32x32 or 64x64 | Center without stretching | Minimal mask takes accent; painted War flag never tints | Flat accent circle or square |
+| Inset well | 64x64 | 9-slice with 12 to 16 pixel corners | Neutral masks may take trim; painted recess never tints | Elevation 0 fill with inner edge |
+| Material tile | 64x64, 128x128, or 256x256 | Repeat at low alpha | Never tint painted material | No material layer |
+| Corner ornament | 64x64 or 128x128 | Place once in one declared corner | Untinted metal | Omit ornament |
 
-- **Do** keep the host accent scarce and semantic.
-- **Do** use the shipped Roboto Condensed Bold and owned setup rasters for both owned skins.
-- **Do** show recommended, selected, disabled, completed, skipped, reload, and combat states in words.
-- **Do** preserve the same content, state model, and control ownership on every supported WoW client.
-- **Do** keep The Selection Stage cool and glassy and The War Table warm, tactile, and faction-neutral.
+Confirmed `128-RedButton`, `128-GoldRedButton`, and `RedButton-Exit` atlas families may replace kit fallbacks only when `C_Texture.GetAtlasInfo` reports them. No component assumes that an atlas exists.
 
-### Don't:
+## Layout helpers
 
-- **Don't** add a second filled primary action, decorative accent wash, or colored card-edge stripe.
-- **Don't** turn switches into cards or expand compact setup decisions into dashboard tiles.
-- **Don't** depend on Blizzard templates, atlases, arbitrary Unicode, remote assets, or browser behavior for an owned skin.
-- **Don't** hide a blocked or disabled reason behind color, opacity, hover, or an icon alone.
-- **Don't** let Classic-specific chrome redefine the owned-skin contract.
+`Kit:CreateStack(parent, gap)` lays children top to bottom. `Kit:CreateRow(parent, gap)` lays them left to right. Both accept one of the spacing tokens, re-anchor their registered children, and size themselves from the summed main axis plus the largest cross axis. This is the kit's flexbox-like primitive. Components should use it before inventing fixed intermediate containers.
+
+## Graceful fallback
+
+No provider, an invalid provider, an unknown kit, or any missing contract piece resolves to Minimal or a flat drawn substitute. The hierarchy, labels, button targets, focus, selected state, and disabled reason remain readable. A theme can therefore ship a partial kit and add painted pieces over time.
+
+## One engine for every window
+
+`LibAT.UI.Kit` is the only visual layer. Everything else is a consumer or an adapter:
+
+| Layer | What it does |
+|---|---|
+| `Kit:CreateShell(options)` | A themed window: painted frame, title bar and footer inside the frame's beam, close button, drag, Escape, optional resize grip. Content goes in `shell.Body`. |
+| `Kit:DressShell(frame, options)` | The same chrome on a frame someone else created (the SpartanUI options window is an AceGUI container). |
+| `Kit:SkinPanel(frame, options)` | Surface, material and trim on any frame. `Kit:CreatePanel` is CreateFrame plus this. |
+| `Kit:CreateButton(parent, text, style, width)` | Kit art, Blizzard atlases when the kit asks and the client has them, otherwise a gradient with an edge. Native Enable/Disable, `GetFontString` and `.Text` work like a template button. |
+| `Kit:CreateWindow` | The setup window: a shell with the chapter rail and the page. |
+| `LibAT.UI.CreateWindow` and helpers | The classic API, unchanged signatures, now drawn by the kit (see below). |
+| `SUI.UI.Style` (SpartanUI) | Takes its colors and buttons from the active kit, so SpartanUI's widgets and tools match. |
+
+### The classic `LibAT.UI` API on the kit
+
+- `CreateWindow` returns a shell; place children in `window.Body`, not at template offsets.
+- `CreateControlFrame`/`CreateContentFrame` measure from the shell body. Offsets callers pass are still relative to where the old template put content (-33 top, 12 bottom).
+- `CreateLeftPanel`/`CreateRightPanel` are kit panels.
+- `CreateActionButtons` turns the footer on and places buttons at its right end. Buttons stay parented to the frame passed in, so a tab's buttons hide with the tab.
+- `LibAT.UI.GetFooter(frame)` returns the footer of the kit window a frame lives in (turned on) and the padding to keep from its ends. Use it for status text and left-side buttons.
+- `CreateButton`, `CreateFilterButton` and `SetupFilterButton` keep their fields (`Text`, `NormalTexture`, `SelectedTexture`, `HighlightTexture`, `Lines`), painted from kit colors.
+- Checkbox, edit, numeric and search boxes, dropdown, slider, radio, progress bar, info button, scroll frame, styled panel, label and header are all drawn by the kit and keep their old fields and methods (`checkbox`/`checkbg`/`check`/`Label`/`Desc`; `Instructions`/`clearButton`/`searchIcon`; `ScrollBar`; `bg`/`Border`/`text`). The dropdown and scroll bar keep Blizzard's behavior and only change look (`LibAT.UI.SkinDropdown`, `LibAT.UI.SkinScrollBar` work on any Blizzard dropdown button or MinimalScrollBar). Dropdowns keep the width they are given.
+- Widgets that paint from their own scripts use `LibAT.UI.KeepScripts(frame, { Event = fn })`, so a caller's `SetScript` adds to the widget instead of silently removing its painting. Labels and progress bars keep a color the caller sets.
+- Text on filled shapes (buttons, badges, inputs) uses `Kit:SetFont(fontString, size, true)`: no outline or shadow, which smeared dark text on light fills.
+
+### Kits
+
+A kit is data: `colors` (surfaces 0-3, `bar`, text, secondary, muted, trim, `trimHi`, rail `path`/`pathAhead`/`tick`), `button.primary`/`button.secondary` (`top`, `bottom`, `edge`, `text`), `layout` (`barInset`, `titleHeight`, `footerHeight`, `sideInset`, `barPadding`, `dividerHeight`) and `assets` (`windowBorder` 9-slice, `backdrop`, `materialTile`, `divider`, `marker`, `node-done`, `node-upcoming`, `titlePlate`; an asset may be `{ texture, coords }` to use part of a sheet). LibAT ships `minimal`; SpartanUI registers War (Alliance and Horde), Midnight, Classic, Fel and Digital in `Core/Handlers/WindowKits.lua` and picks one per theme with `SetKitProvider`.
+
+## Adopting the kit
+
+New windows: `Kit:CreateShell`, panels with `Kit:SkinPanel`, buttons with `Kit:CreateButton`. Existing windows on the classic API already follow the kit; check that nothing is anchored at the window's bottom edge (it sits under the painted frame) and move such pieces to `GetFooter`. Windows built straight on Blizzard templates (`ButtonFrameTemplate`) still need moving to a shell. A host adapter for native game panels should wrap their content in kit panels and feature-detect every client asset.
+
+## Guardrails
+
+- Keep the accent scarce and semantic.
+- Keep one filled primary action per decision region.
+- Keep recommendation, completion, skipped, reload, disabled, and combat states explicit in words.
+- Keep text and controls on flat surfaces, even when painted art is present.
+- Do not depend on remote assets, arbitrary Unicode, or client-version-specific templates.
+- Do not add decorative edge stripes, stacked cards for ordinary switches, or a second visual language inside one window.

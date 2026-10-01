@@ -1,215 +1,34 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-29T21:56:35Z",
-  "title": "Design System: Lib's AddonTools Setup",
+  "generatedAt": "2026-09-30T00:00:00Z",
+  "title": "Design System: Lib's AddonTools UI Kit",
   "extensions": {
-    "colorMeta": {
-      "accent-default": {
-        "role": "primary",
-        "displayName": "LibAT Fallback Accent",
-        "canonical": "#e21f1f",
-        "tonalRamp": ["#310707", "#550c0c", "#7a1111", "#9e1616", "#c31b1b", "#e84545", "#ef8080", "#f8c6c6"]
-      },
-      "stage-ground": {
-        "role": "neutral",
-        "displayName": "Stage Ground",
-        "canonical": "rgba(20, 20, 26, 0.42)",
-        "tonalRamp": ["#15151b", "#282832", "#3c3c49", "#535360", "#70707d", "#92929d", "#b9b9c1", "#eeeef1"]
-      },
-      "stage-panel": {
-        "role": "neutral",
-        "displayName": "Smoked Graphite Panel",
-        "canonical": "rgba(43, 46, 51, 0.88)",
-        "tonalRamp": ["#17191c", "#292c31", "#3d4148", "#555a63", "#707680", "#9298a1", "#babec4", "#eef0f2"]
-      },
-      "stage-card": {
-        "role": "neutral",
-        "displayName": "Deep Stage Card",
-        "canonical": "rgba(31, 33, 38, 0.94)",
-        "tonalRamp": ["#15161a", "#282a30", "#3c3f47", "#535761", "#6f737e", "#9296a0", "#babdc4", "#eef0f2"]
-      },
-      "stage-rim": {
-        "role": "neutral",
-        "displayName": "Brushed Steel Rim",
-        "canonical": "#9ca1ab",
-        "tonalRamp": ["#202329", "#363b45", "#4d5461", "#656d7c", "#7f8795", "#9ca3ae", "#bcc1c8", "#edf0f3"]
-      },
-      "stage-text": {
-        "role": "neutral",
-        "displayName": "Stage Near White",
-        "canonical": "#e8ebf0",
-        "tonalRamp": ["#20242a", "#373d46", "#505762", "#69717d", "#858d98", "#a3aab3", "#c2c7cd", "#f0f2f4"]
-      },
-      "stage-secondary": {
-        "role": "neutral",
-        "displayName": "Stage Secondary",
-        "canonical": "#abb0b8",
-        "tonalRamp": ["#202329", "#383c44", "#50555f", "#6a707a", "#858b95", "#a3a8b0", "#c2c6cc", "#f0f1f3"]
-      },
-      "stage-dim": {
-        "role": "neutral",
-        "displayName": "Stage Dim",
-        "canonical": "#a3a8b0",
-        "tonalRamp": ["#202329", "#383c44", "#50555f", "#6a707a", "#858b95", "#a3a8b0", "#c2c6cc", "#f0f1f3"]
-      },
-      "stage-complete": {
-        "role": "tertiary",
-        "displayName": "Stage Complete",
-        "canonical": "#52b36b",
-        "tonalRamp": ["#102817", "#1b4728", "#28683a", "#35894c", "#48aa62", "#70c584", "#9edbad", "#d8efde"]
-      },
-      "wartable-ground": {
-        "role": "neutral",
-        "displayName": "War Table Ground",
-        "canonical": "rgba(23, 17, 11, 0.25)",
-        "tonalRamp": ["#21170e", "#3a2818", "#543a23", "#6f4e30", "#8d6541", "#ad825c", "#cdaa8b", "#f1e5d9"]
-      },
-      "wartable-panel": {
-        "role": "neutral",
-        "displayName": "Map Slate Panel",
-        "canonical": "rgba(31, 38, 41, 0.90)",
-        "tonalRamp": ["#151b1d", "#273033", "#3b484c", "#526167", "#6d7c81", "#909ca0", "#b8c0c2", "#edf0f1"]
-      },
-      "wartable-card": {
-        "role": "neutral",
-        "displayName": "Inked Route Card",
-        "canonical": "rgba(27, 31, 31, 0.96)",
-        "tonalRamp": ["#161919", "#292e2e", "#3d4444", "#555e5e", "#717a7a", "#949d9d", "#bcc2c2", "#eef1f1"]
-      },
-      "wartable-rim": {
-        "role": "secondary",
-        "displayName": "Antique Brass Rim",
-        "canonical": "#ad874f",
-        "tonalRamp": ["#2b2112", "#49381f", "#67502d", "#86693b", "#a5824b", "#bea06f", "#d6c19a", "#f2eadb"]
-      },
-      "wartable-text": {
-        "role": "neutral",
-        "displayName": "Parchment Text",
-        "canonical": "#ede8d9",
-        "tonalRamp": ["#29251c", "#464033", "#615a4b", "#7d7564", "#9a927f", "#b8b09d", "#d4cebd", "#f2eee5"]
-      },
-      "wartable-secondary": {
-        "role": "neutral",
-        "displayName": "Warm Secondary",
-        "canonical": "#b8ad96",
-        "tonalRamp": ["#29251c", "#464033", "#615a4b", "#7d7564", "#9a927f", "#b8ad96", "#d4cdbc", "#f2eee5"]
-      },
-      "wartable-dim": {
-        "role": "neutral",
-        "displayName": "Warm Dim",
-        "canonical": "#a69e8f",
-        "tonalRamp": ["#29251e", "#443f36", "#5d584d", "#777166", "#908a7e", "#aaa497", "#c8c3b9", "#f0ede8"]
-      },
-      "wartable-complete": {
-        "role": "tertiary",
-        "displayName": "War Table Complete",
-        "canonical": "#59ab63",
-        "tonalRamp": ["#122716", "#204427", "#2e6338", "#3d8249", "#50a15b", "#76be80", "#a2d6aa", "#d9eddd"]
-      },
-      "combat-scrim": {
-        "role": "neutral",
-        "displayName": "Combat Scrim",
-        "canonical": "rgba(0, 0, 0, 0.55)",
-        "tonalRamp": ["#000000", "#202020", "#404040", "#606060", "#808080", "#a0a0a0", "#c8c8c8", "#f2f2f2"]
+    "northStar": "Art at the edges, flat where you read",
+    "tokens": {
+      "spacing": [4, 8, 12, 16, 24],
+      "type": [11, 12, 14, 16, 18, 26],
+      "surfaceElevation": [0, 1, 2, 3],
+      "accent": "LibAT.UI.GetAccentColor()",
+      "status": {
+        "done": "#52b36b",
+        "warning": "#efad38",
+        "skipped": "#8f949c"
       }
     },
-    "typographyMeta": {
-      "display": { "displayName": "Step Heading", "purpose": "Names the current setup decision." },
-      "headline": { "displayName": "Window Headline", "purpose": "Titles and blocking messages." },
-      "title": { "displayName": "Control Title", "purpose": "Buttons, cards, and prominent content." },
-      "body": { "displayName": "Compact Body", "purpose": "Rows, summaries, and ordinary labels." },
-      "label": { "displayName": "Utility Label", "purpose": "Captions, badges, descriptions, and progress." }
-    },
-    "shadows": [
-      { "name": "owned-window", "value": "0 10px 28px rgba(0, 0, 0, 0.55)", "purpose": "Preview equivalent of the shipped soft-shadow raster around owned windows." },
-      { "name": "selected-glow", "value": "0 0 14px color-mix(in srgb, var(--host-accent) 58%, transparent)", "purpose": "Marks only the selected card or current decision." }
-    ],
-    "motion": [
-      { "name": "state-immediate", "value": "none", "purpose": "WoW Lua state changes are immediate; clarity does not depend on animation." }
-    ],
-    "breakpoints": [
-      { "name": "toggle-two-column", "value": "560px", "purpose": "Toggle groups use two columns at or above this content width." }
-    ]
+    "panelLayers": ["backdrop", "surface", "material", "trim", "ornament", "shadow"],
+    "kits": ["minimal", "war"]
   },
   "components": [
-    {
-      "name": "Primary Footer Action",
-      "kind": "button",
-      "refersTo": "button-primary",
-      "description": "The only filled footer action; the live Lua control chooses black or white label text for contrast.",
-      "html": "<button class=\"ds-btn-primary\">NEXT</button>",
-      "css": ".ds-btn-primary { --host-accent: #e21f1f; min-width: 54px; height: 28px; padding: 0 15px; border: 1px solid rgba(255,255,255,.58); border-radius: 8px; background: var(--host-accent); color: #fff; font: 700 14px 'Roboto Condensed','Arial Narrow',sans-serif; box-shadow: inset 0 1px rgba(255,255,255,.18); } .ds-btn-primary:hover { filter: brightness(.92); } .ds-btn-primary:focus-visible { outline: 2px solid #fff; outline-offset: 2px; } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:disabled { opacity: .62; }"
-    },
-    {
-      "name": "Quiet Footer Action",
-      "kind": "button",
-      "refersTo": "button-secondary",
-      "description": "Owned neutral action for Back and Skip ahead; it never competes with Next.",
-      "html": "<button class=\"ds-btn-secondary\">BACK</button>",
-      "css": ".ds-btn-secondary { min-width: 54px; height: 28px; padding: 0 15px; border: 1px solid rgba(156,161,171,.74); border-radius: 8px; background: rgba(48,50,56,.96); color: #f0f2f7; font: 700 14px 'Roboto Condensed','Arial Narrow',sans-serif; } .ds-btn-secondary:hover { background: rgba(63,66,73,.96); } .ds-btn-secondary:focus-visible { outline: 2px solid #e8ebf0; outline-offset: 2px; } .ds-btn-secondary:active { transform: translateY(1px); } .ds-btn-secondary:disabled { opacity: .62; }"
-    },
-    {
-      "name": "Selected Choice Card",
-      "kind": "card",
-      "refersTo": "choice-card",
-      "description": "A compact owned choice surface whose selected state uses the host accent only at its rim and glow.",
-      "html": "<button class=\"ds-choice-card\"><span class=\"ds-choice-title\">Balanced setup</span><span class=\"ds-choice-caption\">A clear starting point for most players.</span><span class=\"ds-choice-badge\">SELECTED</span></button>",
-      "css": ".ds-choice-card { --host-accent: #e21f1f; position: relative; display: grid; gap: 2px; width: 240px; min-height: 72px; padding: 8px 11px 26px; text-align: left; border: 1px solid var(--host-accent); border-radius: 18px; background: rgba(31,33,38,.94); color: #e8ebf0; box-shadow: 0 0 14px color-mix(in srgb,var(--host-accent) 58%,transparent); } .ds-choice-title { font: 700 14px 'Roboto Condensed','Arial Narrow',sans-serif; } .ds-choice-caption { color: #abb0b8; font: 700 11px 'Roboto Condensed','Arial Narrow',sans-serif; } .ds-choice-badge { position: absolute; bottom: 7px; left: 10px; color: #fff; font: 700 11px 'Roboto Condensed','Arial Narrow',sans-serif; } .ds-choice-card:hover { filter: brightness(1.06); } .ds-choice-card:focus-visible { outline: 2px solid #fff; outline-offset: 2px; } .ds-choice-card:active { transform: translateY(1px); }"
-    },
-    {
-      "name": "Compact Switch Row",
-      "kind": "input",
-      "refersTo": "switch-track",
-      "description": "A row, never a card; checked state is visible through knob position and host-accent track color.",
-      "html": "<button class=\"ds-switch-row\" role=\"switch\" aria-checked=\"true\"><span class=\"ds-switch\"><span class=\"ds-knob\"></span></span><span><strong>Show status text</strong><small>Keep the current state easy to scan.</small></span></button>",
-      "css": ".ds-switch-row { --host-accent: #e21f1f; display: flex; align-items: center; gap: 10px; width: 320px; min-height: 38px; padding: 0 8px 0 4px; border: 0; border-bottom: 1px solid rgba(156,161,171,.2); background: rgba(255,255,255,.025); color: #e8ebf0; text-align: left; font: 700 12px 'Roboto Condensed','Arial Narrow',sans-serif; } .ds-switch { position: relative; flex: 0 0 36px; height: 18px; border: 1px solid rgba(255,255,255,.45); border-radius: 999px; background: var(--host-accent); } .ds-knob { position: absolute; top: 1px; right: 1px; width: 16px; height: 16px; border-radius: 50%; background: #ececef; } .ds-switch-row small { display: block; margin-top: 1px; color: #abb0b8; font-size: 11px; } .ds-switch-row:hover { background: rgba(255,255,255,.055); } .ds-switch-row:focus-visible { outline: 2px solid #fff; outline-offset: 2px; } .ds-switch-row:active { filter: brightness(.94); } .ds-switch-row:disabled { opacity: .6; }"
-    },
-    {
-      "name": "Current Chapter",
-      "kind": "nav",
-      "refersTo": "chapter-row",
-      "description": "The current route step uses accent text, a marker, and a faint fill while preserving the chapter label.",
-      "html": "<button class=\"ds-chapter-current\"><span class=\"ds-chapter-marker\"></span><span>Choose a look</span></button>",
-      "css": ".ds-chapter-current { --host-accent: #e21f1f; display: flex; align-items: center; gap: 8px; width: 182px; height: 26px; padding: 0 8px 0 12px; border: 0; background: color-mix(in srgb,var(--host-accent) 8%,transparent); color: var(--host-accent); text-align: left; font: 700 12px 'Roboto Condensed','Arial Narrow',sans-serif; } .ds-chapter-marker { width: 14px; height: 14px; border: 2px solid var(--host-accent); border-radius: 50%; box-shadow: inset 0 0 0 3px #24262b; } .ds-chapter-current:hover { background: color-mix(in srgb,var(--host-accent) 14%,transparent); } .ds-chapter-current:focus-visible { outline: 2px solid #fff; outline-offset: 1px; } .ds-chapter-current:active { filter: brightness(.9); }"
-    },
-    {
-      "name": "Combat Blocker",
-      "kind": "custom",
-      "refersTo": "combat-blocker",
-      "description": "An explicit full-surface blocker that leaves the reason readable while finish actions are unavailable.",
-      "html": "<div class=\"ds-combat-blocker\">WAITING FOR COMBAT TO END</div>",
-      "css": ".ds-combat-blocker { display: grid; place-items: center; width: 520px; height: 220px; background: rgba(0,0,0,.55); color: #fff; font: 700 18px 'Roboto Condensed','Arial Narrow',sans-serif; text-shadow: 1px 1px rgba(0,0,0,.9); }"
-    }
-  ],
-  "narrative": {
-    "northStar": "The Guided Campaign",
-    "overview": "Setup is a short route through a familiar Warcraft world, not a stack of generic dialogs. The interface keeps the next decision obvious, ranks information through depth, and lets the host addon supply identity through a restrained accent.\n\nClassic preserves the established compatibility presentation. The two owned skins share one interaction system: The Selection Stage places smoked glass over the active theme or a neutral fantasy fallback; The War Table translates the same hierarchy into dark oak, antique brass, map slate, and an inked route. Neither skin uses faction marks, named places, copied game art, or client-version-dependent chrome.",
-    "keyCharacteristics": [
-      "Mid-tone layered surfaces over owned, dimmed backdrops.",
-      "One host accent reserved for selected, current, checked, progress, and primary states.",
-      "Compact decisions, explicit status text, and one filled footer action.",
-      "Owned assets and controls that render consistently across supported WoW clients."
-    ],
-    "rules": [
-      { "name": "The One Signal Rule", "body": "The host accent means selected, current, checked, progress, or primary; recommendation and decoration stay neutral.", "section": "colors" },
-      { "name": "The Contrast Chooses the Ink Rule", "body": "Filled primary labels automatically use whichever of near-black or white gives the stronger contrast against the live host accent.", "section": "colors" },
-      { "name": "The Plain Words Rule", "body": "Labels are short, literal, and readable at a 6th-grade level; status never depends on an icon or color alone.", "section": "typography" },
-      { "name": "The One Route Rule", "body": "Chapters stay in the left rail, the current decision stays in the main panel, and progress plus completion actions stay in the footer.", "section": "layout" },
-      { "name": "The Rank Is Depth Rule", "body": "Brightness, opacity, rim strength, and shadow identify hierarchy; do not flatten every surface or add arbitrary shadows.", "section": "elevation" }
-    ],
-    "dos": [
-      "Do keep the host accent scarce and semantic.",
-      "Do use the shipped Roboto Condensed Bold and owned setup rasters for both owned skins.",
-      "Do show recommended, selected, disabled, completed, skipped, reload, and combat states in words.",
-      "Do preserve the same content, state model, and control ownership on every supported WoW client.",
-      "Do keep The Selection Stage cool and glassy and The War Table warm, tactile, and faction-neutral."
-    ],
-    "donts": [
-      "Don't add a second filled primary action, decorative accent wash, or colored card-edge stripe.",
-      "Don't turn switches into cards or expand compact setup decisions into dashboard tiles.",
-      "Don't depend on Blizzard templates, atlases, arbitrary Unicode, remote assets, or browser behavior for an owned skin.",
-      "Don't hide a blocked or disabled reason behind color, opacity, hover, or an icon alone.",
-      "Don't let Classic-specific chrome redefine the owned-skin contract."
-    ]
-  }
+    { "name": "Window", "states": ["normal", "focus", "disabled"] },
+    { "name": "Panel", "states": ["normal", "focus"] },
+    { "name": "Section", "states": ["normal"] },
+    { "name": "Card", "states": ["normal", "hover", "pressed", "focus", "selected", "disabled"] },
+    { "name": "Button", "variants": ["primary", "secondary", "ghost"], "states": ["normal", "hover", "pressed", "focus", "disabled"] },
+    { "name": "Switch row", "states": ["normal", "hover", "pressed", "focus", "selected", "disabled"] },
+    { "name": "Badge", "states": ["recommended", "selected", "done", "warning", "skipped", "new"] },
+    { "name": "Nav rail", "states": ["upcoming", "current", "done", "skipped", "disabled"] },
+    { "name": "Tabs", "states": ["normal", "hover", "pressed", "focus", "selected", "disabled"] },
+    { "name": "Popover", "states": ["open", "closed"] },
+    { "name": "Scroll area", "states": ["idle", "hover", "scrolling", "disabled"] }
+  ]
 }

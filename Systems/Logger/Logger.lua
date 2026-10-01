@@ -519,11 +519,6 @@ function LibAT.Log(debugText, module, level)
 		table.remove(LoggerState.LogMessages[module], 1)
 	end
 
-	-- Initialize log window if needed
-	if not LoggerState.LogWindow and logger.DB then
-		LibAT.Logger.CreateLogWindow()
-	end
-
 	QueueDisplayRefresh(module)
 end
 

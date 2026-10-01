@@ -1,8 +1,0 @@
-Use case: stylized-concept
-Asset type: in-game setup window material backdrop for a faction-neutral fantasy war table
-Primary request: a top-down campaign planning table made from dark weathered oak with aged brass corner fittings and a large inset charcoal map slate; the slate carries faint hand-inked contour lines, rivers, and a winding route with small unlabeled waypoint circles
-Style/medium: premium painted fantasy game UI material art, tactile and realistic, restrained modern finish
-Composition/framing: wide 2:1 landscape, map slate dominates the center and right, oak frame visible around the edges, brass details sparse; leave broad quiet regions for translucent UI
-Lighting/mood: low warm workshop light, mid-tone and readable, not near-black
-Color palette: walnut brown, charcoal blue-gray, antique brass; no red color anywhere
-Constraints: faction-neutral, no crest, no lions, no faction symbols, no named zones, no readable text, no compass rose, no characters, no weapons, no logos, no watermark; original artwork

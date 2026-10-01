@@ -1,0 +1,24 @@
+Initial generation prompt:
+
+Use case: stylized-concept
+Asset type: raw source art for a tall fantasy game setup window navigation rail map
+Primary request: Create a faction-neutral, text-free, hand-inked fantasy campaign map surface matching the dark slate-blue cartographic left rail in Image 1.
+Input images: Image 1 is a style and layout reference only; do not reproduce its UI, labels, frames, logos, or faction imagery.
+Scene/backdrop: a single flat orthographic tall map-slate surface with subtle parchment grain, a few faint coastlines and islands, restrained mountain glyphs and contour hatching.
+Subject: place a refined compass rose surrounded by a faint circular ring in the bottom quarter; add sparse coastline and mountain marks higher up; keep the upper roughly seventy percent especially calm and low-detail so navigation labels remain readable.
+Style/medium: refined hand-drawn antique cartography in faint blue-gray ink on dark slate-blue parchment, thin organic linework, gently weathered, understated and believable.
+Composition/framing: very tall narrow source composition for a 1:4 rail; no border or frame; preserve breathing room and avoid central focal clutter.
+Lighting/mood: evenly lit matte surface, quiet, low contrast, no glow.
+Color palette: dark desaturated blue-slate and muted blue-gray ink only; no pure black, no bright whites, no saturated color.
+Text (verbatim): ""
+Constraints: no text, no lettering, no numerals, no labels, no named places, no crests, no faction symbols, no emblems, no UI, no route markers, no cards, no buttons, no decorative frame, no watermark; original generic geography rather than a recognizable real-world or Warcraft map.
+Avoid: noisy speckle, sine-wave patterns, obvious digital filters, high-contrast lines, photorealistic objects, colored accents.
+
+Targeted correction prompt:
+
+Use case: precise-object-edit
+Asset type: raw source art for a tall fantasy game setup window navigation rail map
+Primary request: Remove the single letter N above the compass rose and seamlessly replace it with matching dark slate-blue parchment and faint hand-inked cartographic texture.
+Input images: Image 1 is the edit target.
+Constraints: change only the letter removal and its immediate background repair; preserve the tall composition, compass rose and faint circular rings, coastlines, islands, mountain marks, palette, line weight, texture, lighting, and all other artwork exactly; the final image must contain no text, no letters, no numerals, no labels, no crests, no faction symbols, no watermark.
+Avoid: adding any new symbols, words, routes, UI elements, bright marks, or saturated color.

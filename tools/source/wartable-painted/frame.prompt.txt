@@ -1,0 +1,7 @@
+Use case: stylized-concept
+Asset type: production source sheet for a World of Warcraft addon setup window 9-slice frame
+Primary request: paint a complete square window frame seen straight-on, suitable for cutting into four corner pieces and four repeatable edge strips. Match the attached approved War Table mockup's dark stained oak, aged brass corner fittings, thin inlaid brass rule, subtle hand-painted fantasy realism, and modern polished finish.
+Input images: Image 1 is the approved War Table style reference; use it only for material, value, texture scale, and finish.
+Composition/framing: centered square frame occupying almost the full canvas; uniform 14 percent border thickness; four distinct fitted brass corner plates; long straight oak rails; thin continuous inset brass rule; large completely empty transparent center; no perspective and no cast shadow outside the frame.
+Materials/textures: deep brown-black oak with restrained natural grain, worn antique brass with soft highlights and small fasteners, crisp joinery.
+Constraints: faction-neutral; no crests, icons, symbols, lettering, runes, named places, characters, UI controls, or scenery. All four edge rails must have visually consistent thickness and repeatable low-frequency grain. Corners must be cleanly separable from edges. Truly transparent center and outside background. No watermark.

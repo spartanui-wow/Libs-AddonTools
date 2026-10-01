@@ -1,0 +1,7 @@
+Use case: stylized-concept
+Asset type: seamless production texture for a World of Warcraft addon panel
+Primary request: paint a seamless square dark map-slate surface matching the attached approved War Table mockup: blue-charcoal stone or heavy map paper, subtle handmade fiber and slate grain, very faint faction-neutral cartographic contour lines and coast-like abstract linework.
+Input images: Image 1 is the approved War Table style reference; use it only for color, value, texture scale, and finish.
+Composition/framing: flat orthographic texture, evenly lit, no focal point, designed to tile in both axes.
+Lighting/mood: low contrast, mid-dark navy-charcoal, quiet enough to sit behind pale UI text.
+Constraints: genuinely seamless on all four edges; contour lines extremely faint and sparse; no compass rose, land names, lettering, borders, grids, faction shapes, crests, symbols, icons, pins, roads, characters, or recognizable geography. No watermark.

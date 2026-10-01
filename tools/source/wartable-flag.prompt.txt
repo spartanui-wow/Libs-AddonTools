@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: source sheet for a World of Warcraft addon chapter-rail UI, later cut into exact PNG layers by PIL
+Primary request: Reproduce the attached flag's painted visual language closely, not a reinterpretation. Create an isolated materials-and-parts sheet containing: (1) a short neutral light-grey hanging cloth banner with a pointed bottom and convincing painted folds, but no center boss; (2) a shallow neutral light-grey horizontal pennant with a forked swallowtail and convincing painted folds, with no text; (3) an antique-gold round domed boss with a dark rim; (4) a smaller antique-gold completed node; (5) a hollow silver-grey ring with a truly open center; (6) a slim cylindrical antique-gold rod; (7) a slimmer cylindrical silver-grey rod; and (8) a small round silver dot.
+Input images: Image 1 is the mandatory composition, proportion, materials, shading, and color reference. Match its short hanging banner, tiny crossbar finials, shallow pennant, gold boss, and painted Warcraft UI finish.
+Scene/backdrop: genuinely transparent background; every part isolated with generous clear spacing and no cast shadow outside its own silhouette
+Style/medium: hand-painted fantasy game UI raster, crisp readable forms at tiny in-game scale, warm antique gold, cool silver-grey, neutral light-grey cloth ready for runtime tinting
+Composition/framing: square sprite-source sheet; hang banner upper left, pennant upper right, nodes middle row, rods and dot bottom row; nothing touches another object or the canvas edge
+Lighting/mood: soft upper-left highlight, darker underside and recessed folds, restrained contrast matching the reference
+Color palette: cloth only neutral light grey; trim and metal only warm antique gold or cool silver-grey
+Materials/textures: woven cloth with subtle folds; aged metal with dark edge, midtone body, fine highlight
+Constraints: no words, no letters, no logos, no symbols, no center boss on the hanging cloth, no gold trim fused into the cloth silhouettes, no background, no border, no watermark; preserve transparent gaps between all objects; the output is raw source art and exact geometry will be imposed later

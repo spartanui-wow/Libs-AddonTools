@@ -1,0 +1,11 @@
+Use case: stylized-concept
+Asset type: production source sheet for three reusable World of Warcraft addon trim-kit pieces
+Primary request: Paint three isolated, faction-neutral UI ornaments that precisely match the approved War Table setup mockup and the supplied oak-and-brass frame: (1) a long shallow title/header plate made from dark stained oak with a thin antique-brass inset rule and small fitted end caps; (2) a very thin horizontal antique-brass divider with a small centered diamond ornament; (3) a square recessed inset well frame in dark oak and aged brass, seen straight-on, with a completely empty transparent center for 9-slice processing.
+Input images: Image 1 is the mandatory approved composition and finish reference. Image 2 is the mandatory exact material, edge profile, brass aging, fastener, and oak grain reference.
+Scene/backdrop: genuinely transparent background; all three objects isolated with generous clear spacing; no cast shadow outside their silhouettes
+Style/medium: hand-painted fantasy game UI raster, crisp at small in-game scale, modern polished finish
+Composition/framing: square sprite-source sheet; header plate across the top, divider centered in the middle, inset well centered on the bottom; nothing touches another object or the canvas edge
+Lighting/mood: restrained upper-left highlight, dark recessed undersides, warm aged brass, deep nearly-black oak
+Color palette: only dark stained oak, warm antique brass, and transparent negative space
+Materials/textures: fine restrained oak grain, aged brass with dark edge and fine highlight, clean joinery
+Constraints: faction-neutral; no words, letters, logos, crests, symbols, runes, named places, characters, scenery, controls, watermark, or background; no red paint; exact straight-on orthographic view; preserve transparent gaps between every object; the output is raw source art and exact power-of-two geometry will be imposed later by Pillow

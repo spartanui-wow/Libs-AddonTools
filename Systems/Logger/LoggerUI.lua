@@ -519,9 +519,10 @@ local function CreateLogWindow()
 	LoggerState.LogWindow.ClearButton = actionButtons[1]
 	LoggerState.LogWindow.ExportButton = actionButtons[2]
 
-	-- Reload UI button positioned in bottom left
-	LoggerState.LogWindow.ReloadButton = LibAT.UI.CreateButton(LoggerState.LogWindow, 80, 22, 'Reload UI')
-	LoggerState.LogWindow.ReloadButton:SetPoint('BOTTOMLEFT', LoggerState.LogWindow, 'BOTTOMLEFT', 3, 4)
+	-- Reload UI button at the left end of the footer
+	LoggerState.LogWindow.ReloadButton = LibAT.UI.CreateButton(LoggerState.LogWindow, 80, 24, 'Reload UI')
+	local footer, padding = LibAT.UI.GetFooter(LoggerState.LogWindow)
+	LoggerState.LogWindow.ReloadButton:SetPoint('LEFT', footer, 'LEFT', padding, 0)
 	LoggerState.LogWindow.ReloadButton:SetScript('OnClick', function()
 		LibAT:SafeReloadUI()
 	end)

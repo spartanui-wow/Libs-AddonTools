@@ -1,0 +1,13 @@
+Use case: stylized-concept
+Asset type: raw source art for a fantasy game setup window main map panel
+Primary request: Create a faction-neutral, text-free, hand-inked fantasy campaign map surface matching the dark slate-blue cartographic panels in Image 1.
+Input images: Image 1 is a style and layout reference only; do not reproduce its UI, labels, frames, cards, logos, or faction imagery.
+Scene/backdrop: a single flat orthographic map-slate surface with subtle parchment grain, faint coastlines, scattered islands, restrained mountain glyphs, contour hatching, and sparse route-like ink details.
+Subject: coastlines and island groups sit mainly toward the left and right edges; a detailed compass rose sits near the upper right; a small old sailing ship sketch sits in the lower right; keep the center-left broad, calm, and low-detail for interface titles and cards.
+Style/medium: refined hand-drawn antique cartography in faint blue-gray ink on dark slate-blue parchment, thin organic linework, gently weathered, understated and believable.
+Composition/framing: square source composition designed for a centered wide crop; keep all important art inside the middle horizontal band; no border or frame; seamless visual field to the edges.
+Lighting/mood: evenly lit matte surface, quiet, low contrast, no glow.
+Color palette: dark desaturated blue-slate and muted blue-gray ink only; no pure black, no bright whites, no saturated color.
+Text (verbatim): ""
+Constraints: no text, no lettering, no numerals, no labels, no named places, no crests, no faction symbols, no emblems, no UI, no cards, no buttons, no decorative frame, no watermark; original generic geography rather than a recognizable real-world or Warcraft map.
+Avoid: noisy speckle, sine-wave patterns, obvious digital filters, high-contrast lines, photorealistic objects, colored accents.

@@ -8,6 +8,7 @@ local LibAT = LibAT
 local Setup = LibAT.Setup
 local Log = Setup.Log
 local SafeCall = Setup.SafeCall
+local Kit = LibAT.UI.Kit
 
 ---@class LibAT.SetupHub
 local Hub = {}
@@ -30,7 +31,6 @@ Hub.formFrames = {}
 Hub.importChoice = {}
 Hub.grids = {}
 Hub.toastQueue = {}
-Hub.views = {}
 
 ----------------------------------------------------------------------------------------------------
 -- Small helpers
@@ -54,32 +54,13 @@ local function IconMarkup(reg)
 	return '|T' .. tostring(icon) .. ':16:16:0:0|t '
 end
 
----A scroll frame owned by the active skin
+---A scroll frame owned by the active kit.
 ---@param parent Frame
 ---@param skin? table
 ---@return ScrollFrame scroll
 ---@return Frame child
 local function CreateScroll(parent, skin)
-	if skin and skin.owned then
-		return skin:CreateScroll(parent)
-	end
-	local scroll = CreateFrame('ScrollFrame', nil, parent)
-	local child = CreateFrame('Frame', nil, scroll)
-	child:SetSize(1, 1)
-	scroll:SetScrollChild(child)
-	if ScrollUtil and ScrollUtil.InitScrollFrameWithScrollBar then
-		scroll.ScrollBar = CreateFrame('EventFrame', nil, scroll, 'MinimalScrollBar')
-		scroll.ScrollBar:SetPoint('TOPLEFT', scroll, 'TOPRIGHT', 6, 0)
-		scroll.ScrollBar:SetPoint('BOTTOMLEFT', scroll, 'BOTTOMRIGHT', 6, 0)
-		ScrollUtil.InitScrollFrameWithScrollBar(scroll, scroll.ScrollBar)
-	else
-		scroll:EnableMouseWheel(true)
-		scroll:SetScript('OnMouseWheel', function(self, delta)
-			local range = math.max((child:GetHeight() or 0) - (self:GetHeight() or 0), 0)
-			self:SetVerticalScroll(math.min(math.max(self:GetVerticalScroll() - delta * 40, 0), range))
-		end)
-	end
-	return scroll, child
+	return skin:CreateScroll(parent)
 end
 
 ---A plain text button
@@ -87,42 +68,15 @@ end
 ---@param fontObject? string
 ---@return Button
 local function CreateTextButton(parent, fontObject, skin)
-	if skin and skin.owned then
-		return skin:CreateTextButton(parent)
-	end
-	local button = CreateFrame('Button', nil, parent)
-	button:SetHeight(16)
-	button.text = button:CreateFontString(nil, 'OVERLAY', fontObject or 'GameFontHighlightSmall')
-	button.text:SetPoint('LEFT', button, 'LEFT', 0, 0)
-	button.text:SetJustifyH('LEFT')
-	function button:SetLabel(text)
-		self.text:SetText(text)
-		self:SetWidth(LibAT.UI.MeasureText(self.text, 6) + 4)
-	end
-	button:SetScript('OnEnter', function(self)
-		local r, g, b = LibAT.UI.GetAccentColor()
-		self.text:SetTextColor(math.min(r + 0.3, 1), math.min(g + 0.3, 1), math.min(b + 0.3, 1))
-	end)
-	button:SetScript('OnLeave', function(self)
-		self:ApplyColor()
-	end)
-	function button:ApplyColor()
-		local r, g, b = LibAT.UI.GetAccentColor()
-		self.text:SetTextColor(math.min(r + 0.15, 1), math.min(g + 0.15, 1), math.min(b + 0.15, 1))
-	end
-	button:ApplyColor()
-	return button
+	return skin:CreateTextButton(parent)
 end
 
-local function CreateSkinFontString(parent, layer, skin, classicFont)
-	if skin and skin.owned then
-		return parent:CreateFontString(nil, layer)
-	end
-	return parent:CreateFontString(nil, layer, classicFont)
+local function CreateSkinFontString(parent, layer)
+	return parent:CreateFontString(nil, layer)
 end
 
 function Hub:GetLeftWidth()
-	return self.skin and self.skin.owned and 218 or LEFT_WIDTH
+	return 218
 end
 
 ---Get the entry list positions of one addon inside the run
@@ -156,22 +110,9 @@ end
 ----------------------------------------------------------------------------------------------------
 
 function Hub:EnsureWindow()
-	local skin = Setup.Skins:GetActive()
-	if self.window and self.window._setupSkinId == skin.id then
-		return self.window
-	end
+	local skin = Kit:GetActive()
 	self.skin = skin
-	local view = self.views[skin.id]
-	if view then
-		self.window = view.window
-		self.grids = view.grids
-		self.toggleGroups = view.toggleGroups
-		self.formFrames = view.formFrames
-		self.customFrames = view.customFrames
-		self.summaryFrame = view.summaryFrame
-		if LibAT.SetupWizard then
-			LibAT.SetupWizard.window = self.window
-		end
+	if self.window then
 		return self.window
 	end
 	self.grids = {}
@@ -180,86 +121,30 @@ function Hub:EnsureWindow()
 	self.customFrames = {}
 	self.summaryFrame = nil
 
-	local w
-	if skin.owned then
-		w = skin:CreateWindow()
-	else
-		w = LibAT.UI.CreateWindow({
-			name = 'LibAT_SetupHub',
-			title = 'Setup',
-			width = 800,
-			height = 538,
-			minWidth = 800,
-			minHeight = 538,
-			resizable = true,
-		})
-	end
-	w._setupSkinId = skin.id
+	local w = skin:CreateWindow()
+	w._setupKitId = skin.id
 	self.window = w
 	if LibAT.SetupWizard then
 		LibAT.SetupWizard.window = w
 	end
 	w:HookScript('OnHide', function()
-		if not Hub.rebuildingSkin then
-			Hub:OnHidden()
-		end
+		Hub:OnHidden()
 	end)
-
-	if not skin.owned then
-		-- 2px accent line under the title bar
-		w.AccentLine = CreateFrame('Frame', nil, w)
-		w.AccentLine:SetPoint('TOPLEFT', w, 'TOPLEFT', 3, -24)
-		w.AccentLine:SetPoint('TOPRIGHT', w, 'TOPRIGHT', -3, -24)
-		w.AccentLine:SetHeight(2)
-		w.AccentLine.tex = w.AccentLine:CreateTexture(nil, 'ARTWORK')
-		w.AccentLine.tex:SetAllPoints()
-
-		w.MainContent = LibAT.UI.CreateContentFrame(w, w.AccentLine, -8, 40)
-		w.LeftPanel = LibAT.UI.CreateLeftPanel(w.MainContent, LEFT_WIDTH)
-		w.RightPanel = LibAT.UI.CreateRightPanel(w.MainContent, w.LeftPanel, 14)
-	end
 
 	self:CreateLeftSide(w)
 	self:CreateRightSide(w)
 	self:CreateFooter(w)
 
 	self:RegisterMessage(LibAT.UI.ACCENT_CHANGED, 'ApplyAccent')
+	self:RegisterMessage(LibAT.UI.BACKDROP_CHANGED, 'ApplyBackdrop')
+	self:RegisterMessage(Kit.CHANGED, 'ApplyKit')
 	self:ApplyAccent()
-	self.views[skin.id] = {
-		window = w,
-		grids = self.grids,
-		toggleGroups = self.toggleGroups,
-		formFrames = self.formFrames,
-		customFrames = self.customFrames,
-		summaryFrame = self.summaryFrame,
-	}
 	return w
 end
 
----Discard the current skin view and recreate it without changing the setup run.
+---Repaint the current setup window without changing the setup run.
 function Hub:RebuildWindow()
-	local shown = self:IsShown()
-	if self.window and self.skin then
-		local view = self.views[self.skin.id]
-		if view then
-			view.summaryFrame = self.summaryFrame
-		end
-	end
-	self.rebuildingSkin = true
-	if self.window then
-		self.window:Hide()
-	end
-	if self.toast then
-		self.toast:Hide()
-		self.toast = nil
-	end
-	self.window = nil
-	self.rebuildingSkin = false
-	if shown then
-		local window = self:EnsureWindow()
-		window:Show()
-		self:Render(true)
-	end
+	self:ApplyKit()
 end
 
 ---@param w Frame
@@ -326,9 +211,9 @@ function Hub:CreateRightSide(w)
 
 	right.AddonLabel = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontHighlightSmall')
 	if skin.owned then
-		skin:SetFont(right.AddonLabel, 14)
+		skin:SetFont(right.AddonLabel, 13)
 	end
-	right.AddonLabel:SetPoint('TOPLEFT', right, 'TOPLEFT', 14, -10)
+	right.AddonLabel:SetPoint('TOPLEFT', right, 'TOPLEFT', 16, -12)
 	right.AddonLabel:SetTextColor(skin.owned and skin.colors.secondary[1] or 0.65, skin.owned and skin.colors.secondary[2] or 0.65, skin.owned and skin.colors.secondary[3] or 0.65)
 	right.AddonLabel:SetJustifyH('LEFT')
 
@@ -360,9 +245,29 @@ function Hub:CreateRightSide(w)
 	end)
 	right.Badge:Hide()
 
+	if skin.owned then
+		-- The kit's divider runs from the addon name to the panel edge
+		right.Divider = right:CreateTexture(nil, 'ARTWORK')
+		right.Divider:SetPoint('LEFT', right.AddonLabel, 'RIGHT', 12, 0)
+		right.Divider:SetPoint('RIGHT', right, 'RIGHT', -16, 0)
+		LibAT.UI.Kit:Track(right.Divider, function(owner, kit)
+			local height = kit.layout.dividerHeight
+			if height and LibAT.UI.Kit:SetAsset(owner, kit, 'divider') then
+				owner:SetHeight(height)
+				owner:SetVertexColor(1, 1, 1, 1)
+			else
+				owner:SetTexture('Interface\\Buttons\\WHITE8X8')
+				owner:SetTexCoord(0, 1, 0, 1)
+				owner:SetHeight(1)
+				owner:SetVertexColor(kit.colors.trim[1], kit.colors.trim[2], kit.colors.trim[3], 0.55)
+				owner:Show()
+			end
+		end)
+	end
+
 	right.Title = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontNormalLarge')
 	if skin.owned then
-		skin:SetFont(right.Title, 26)
+		skin:SetFont(right.Title, 22)
 		right.Title:SetTextColor(skin.colors.text[1], skin.colors.text[2], skin.colors.text[3])
 	end
 	right.Title:SetPoint('TOPLEFT', right.AddonLabel, 'BOTTOMLEFT', 0, -3)
@@ -371,7 +276,7 @@ function Hub:CreateRightSide(w)
 
 	right.Text = CreateSkinFontString(right, 'OVERLAY', skin, 'GameFontHighlight')
 	if skin.owned then
-		skin:SetFont(right.Text, 14)
+		skin:SetFont(right.Text, 13)
 	end
 	right.Text:SetPoint('TOPLEFT', right.Title, 'BOTTOMLEFT', 0, -4)
 	right.Text:SetPoint('RIGHT', right, 'RIGHT', -14, 0)
@@ -441,13 +346,13 @@ function Hub:CreateFooter(w)
 	if skin.owned then
 		w.ownedButtons = {}
 		w.BackButton = skin:CreateButton(bar, 'Back', false)
-		w.BackButton:SetPoint('LEFT', bar, 'LEFT', 18, 0)
+		w.BackButton:SetPoint('LEFT', bar, 'LEFT', skin.footerInset or 18, skin.footerLift or 0)
 		w.BackButton:SetScript('OnClick', function()
 			Hub:GoBack()
 		end)
 
 		w.NextButton = skin:CreateButton(bar, 'Next', true)
-		w.NextButton:SetPoint('RIGHT', bar, 'RIGHT', -18, 0)
+		w.NextButton:SetPoint('RIGHT', bar, 'RIGHT', -(skin.footerInset or 18), skin.footerLift or 0)
 		w.NextButton:SetScript('OnClick', function()
 			Hub:GoNext()
 		end)
@@ -939,7 +844,7 @@ function Hub:GetGrid(key)
 		elseif key == 'whatsnew' then
 			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 72 }
 		elseif key == 'start' then
-			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 58 }
+			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 70 }
 		else
 			opts = { artHeight = 0, minWidth = 240, maxColumns = 2, cardHeight = 54 }
 		end
@@ -998,7 +903,7 @@ function Hub:SetHeader(title, text, addonLabel, recommended)
 	right.AddonLabel:SetText(addonLabel or '')
 	right.Title:SetText(title or '')
 	right.Text:SetText(text or '')
-	right.Badge:SetShown(not self.skin.owned and recommended and true or false)
+	right.Badge:SetShown(recommended and true or false)
 	if self.skin.owned then
 		local plain = (addonLabel or ''):gsub('|T.-|t%s*', '')
 		self.window:SetTitle(plain ~= '' and (plain .. ' Setup') or 'Setup')
@@ -1282,6 +1187,8 @@ function Hub:RenderToggles(reg, step, ctx)
 			local columns = width >= 560 and 2 or 1
 			local spacing = 14
 			local rowWidth = math.floor((width - (columns - 1) * spacing) / columns)
+			-- Each line of the grid is as tall as its tallest row, so long descriptions never overlap
+			local lineTop, lineHeight = 26, 0
 			for rowIndex, item in ipairs(items) do
 				local row = group.rows[rowIndex]
 				if not row then
@@ -1296,6 +1203,8 @@ function Hub:RenderToggles(reg, step, ctx)
 				row:SetEnabled(not item.core)
 				if item.core then
 					row:SetBadge('Always on', 'skipped')
+				elseif item.needsReload then
+					row:SetBadge('Needs reload', 'warning')
 				elseif item.recommended == true then
 					row:SetBadge('Recommended', 'recommended')
 				else
@@ -1306,16 +1215,20 @@ function Hub:RenderToggles(reg, step, ctx)
 					currentRow:SetChecked(Current(currentItem))
 				end
 				local column = (rowIndex - 1) % columns
-				local rowNumber = math.floor((rowIndex - 1) / columns)
+				if column == 0 and rowIndex > 1 then
+					lineTop = lineTop + lineHeight + 4
+					lineHeight = 0
+				end
 				row:ClearAllPoints()
-				row:SetPoint('TOPLEFT', group, 'TOPLEFT', column * (rowWidth + spacing), -26 - rowNumber * 42)
+				row:SetPoint('TOPLEFT', group, 'TOPLEFT', column * (rowWidth + spacing), -lineTop)
 				row:SetWidth(rowWidth)
+				lineHeight = math.max(lineHeight, row:Fit())
 				row:Show()
 			end
 			for rowIndex = #items + 1, #group.rows do
 				group.rows[rowIndex]:Hide()
 			end
-			height = 26 + math.ceil(#items / columns) * 42
+			height = lineTop + lineHeight
 		else
 			group.grid.opts.onCheck = function(card, key, checked)
 				local item = byKey[key]
@@ -1762,6 +1675,9 @@ end
 -- Left list
 ----------------------------------------------------------------------------------------------------
 
+-- Vertical offsets of the route dots within a 26px rail row, above and below its node
+local ROUTE_DOTS = { 11, 7, 3, -3, -7, -11 }
+
 ---@param index number
 ---@return Button
 function Hub:GetListRow(index)
@@ -1775,49 +1691,23 @@ function Hub:GetListRow(index)
 	row.highlight:SetAllPoints()
 	row.highlight:SetColorTexture(1, 1, 1, 0.06)
 	row.current = row:CreateTexture(nil, 'ARTWORK')
-	if self.skin.owned then
-		row.current:SetSize(18, 18)
-		row.current:SetTexture(self.skin:Texture(self.skin.route and 'waypoint' or 'chapter-marker'))
-	else
-		row.current:SetPoint('TOPLEFT')
-		row.current:SetPoint('BOTTOMLEFT')
-		row.current:SetWidth(2)
-	end
+	row.current:SetSize(18, 18)
+	row.current:SetTexture(self.skin:Texture('chapter-marker'))
 	row.fill = row:CreateTexture(nil, 'BACKGROUND')
 	row.fill:SetAllPoints()
 	row.text = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlightSmall')
-	if self.skin.owned then
-		self.skin:SetFont(row.text, 12)
-	end
+	self.skin:SetFont(row.text, 12)
 	row.text:SetJustifyH('LEFT')
 	row.text:SetWordWrap(false)
 	row.status = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlightSmall')
-	if self.skin.owned then
-		self.skin:SetFont(row.status, 11)
-		row.check = row:CreateTexture(nil, 'OVERLAY')
-		row.check:SetSize(18, 18)
-		row.check:SetTexture(self.skin:Texture('chapter-check'))
-		row.chevron = row:CreateTexture(nil, 'OVERLAY')
-		row.chevron:SetSize(12, 12)
-		row.chevron:SetTexture(self.skin:Texture('chevron'))
-		row.chevron:SetPoint('LEFT', row, 'LEFT', 3, 0)
-		row.routeLine = row:CreateTexture(nil, 'ARTWORK')
-		row.routeLine:SetTexture('Interface\\Buttons\\WHITE8X8')
-		row.routeLine:SetWidth(2)
-		row.routeDots = {}
-		for dotIndex = 1, 3 do
-			local dot = row:CreateTexture(nil, 'ARTWORK')
-			dot:SetTexture('Interface\\Buttons\\WHITE8X8')
-			dot:SetSize(2, 2)
-			row.routeDots[dotIndex] = dot
-		end
-		row.banner = row:CreateTexture(nil, 'BACKGROUND', nil, 1)
-		if self.skin.route then
-			row.banner:SetTexture(self.skin:Texture('banner'))
-		end
-		row.banner:SetSize(86, 38)
-		row.banner:Hide()
-	end
+	self.skin:SetFont(row.status, 11)
+	row.check = row:CreateTexture(nil, 'OVERLAY')
+	row.check:SetSize(18, 18)
+	row.check:SetTexture(self.skin:Texture('chapter-check'))
+	row.chevron = row:CreateTexture(nil, 'OVERLAY')
+	row.chevron:SetSize(12, 12)
+	row.chevron:SetTexture(self.skin:Texture('chevron'))
+	row.chevron:SetPoint('LEFT', row, 'LEFT', 3, 0)
 	row.status:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
 	row.status:SetJustifyH('RIGHT')
 	row:SetScript('OnClick', function(self)
@@ -1827,6 +1717,263 @@ function Hub:GetListRow(index)
 	end)
 	left.rows[index] = row
 	return row
+end
+
+----------------------------------------------------------------------------------------------------
+-- Chapter rail: the step list as a route of chapters, dressed by the window kit
+----------------------------------------------------------------------------------------------------
+
+-- Chapters sit a level below their addon: shorter rows, smaller text
+local RAIL_HEADER_HEIGHT = 30
+local RAIL_CHAPTER_HEIGHT = 24
+local RAIL_AXIS = 18 -- x of the route line within a row
+local RAIL_TEXT = 34 -- x where chapter names start
+-- Dots on the path ahead, measured from the node's center, in each half of a row
+local RAIL_DOTS = { 8, 11 }
+local WHITE = 'Interface\\Buttons\\WHITE8X8'
+
+---@param index number
+---@return Button
+function Hub:GetChapterRow(index)
+	local left = self.window.LeftPanel
+	left.chapterRows = left.chapterRows or {}
+	local row = left.chapterRows[index]
+	if row then
+		return row
+	end
+	row = CreateFrame('Button', nil, left.List)
+	row.highlight = row:CreateTexture(nil, 'HIGHLIGHT')
+	row.highlight:SetAllPoints()
+	row.highlight:SetColorTexture(1, 1, 1, 0.04)
+	row.lineTop = row:CreateTexture(nil, 'ARTWORK', nil, 0)
+	row.lineTop:SetTexture(WHITE)
+	row.lineTop:SetWidth(2)
+	row.lineBottom = row:CreateTexture(nil, 'ARTWORK', nil, 0)
+	row.lineBottom:SetTexture(WHITE)
+	row.lineBottom:SetWidth(2)
+	row.dots = {}
+	for i = 1, #RAIL_DOTS * 2 do
+		local dot = row:CreateTexture(nil, 'ARTWORK', nil, 0)
+		dot:SetTexture(WHITE)
+		dot:SetSize(2, 2)
+		row.dots[i] = dot
+	end
+	row.node = row:CreateTexture(nil, 'ARTWORK', nil, 5)
+	row.text = row:CreateFontString(nil, 'OVERLAY')
+	row.text:SetJustifyH('LEFT')
+	row.text:SetWordWrap(false)
+	row.check = row:CreateTexture(nil, 'OVERLAY')
+	row.check:SetSize(10, 10)
+	row.chevron = row:CreateTexture(nil, 'OVERLAY')
+	row.chevron:SetSize(12, 12)
+	row.status = row:CreateTexture(nil, 'OVERLAY')
+	row.status:SetSize(12, 12)
+	row.divider = row:CreateTexture(nil, 'ARTWORK')
+	row.divider:SetTexture(WHITE)
+	row.divider:SetHeight(1)
+	row:SetScript('OnClick', function(self)
+		if self.onClick then
+			self.onClick()
+		end
+	end)
+	left.chapterRows[index] = row
+	return row
+end
+
+local function ResetRow(row)
+	for _, key in ipairs({ 'lineTop', 'lineBottom', 'node', 'check', 'chevron', 'status', 'divider' }) do
+		row[key]:Hide()
+	end
+	for _, dot in ipairs(row.dots) do
+		dot:Hide()
+	end
+end
+
+---A line from the top edge or the bottom edge of a row to its node.
+local function ShowLine(tex, row, fromTop, color)
+	tex:SetVertexColor(color[1], color[2], color[3], 0.9)
+	tex:ClearAllPoints()
+	if fromTop then
+		tex:SetPoint('TOP', row, 'TOPLEFT', RAIL_AXIS, 0)
+		tex:SetPoint('BOTTOM', row, 'LEFT', RAIL_AXIS, 0)
+	else
+		tex:SetPoint('TOP', row, 'LEFT', RAIL_AXIS, 0)
+		tex:SetPoint('BOTTOM', row, 'BOTTOMLEFT', RAIL_AXIS, 0)
+	end
+	tex:Show()
+end
+
+local function ShowDots(row, fromTop, color)
+	for i, offset in ipairs(RAIL_DOTS) do
+		local dot = row.dots[fromTop and i or (#RAIL_DOTS + i)]
+		dot:SetVertexColor(color[1], color[2], color[3], 0.8)
+		dot:ClearAllPoints()
+		dot:SetPoint('CENTER', row, 'LEFT', RAIL_AXIS, fromTop and offset or -offset)
+		dot:Show()
+	end
+end
+
+---A check mark tinted to the kit's tick color
+local function ShowCheck(tex, kit, color)
+	LibAT.UI.Kit:SetAsset(tex, kit, 'check')
+	tex:SetVertexColor(color[1], color[2], color[3], 1)
+end
+
+---Chapters of one addon in this run: neighbouring steps that share a chapter become one entry.
+---@return {name: string, first: number, last: number}[]
+function Hub:GetChapters(reg)
+	local chapters = {}
+	for i, entry in ipairs(self.run.entries) do
+		if entry.reg == reg then
+			local name = reg:GetChapter(entry.step)
+			local last = chapters[#chapters]
+			if last and last.name == name and last.last == i - 1 then
+				last.last = i
+			else
+				chapters[#chapters + 1] = { name = name, first = i, last = i }
+			end
+		end
+	end
+	return chapters
+end
+
+function Hub:RefreshChapterRail(width)
+	local left = self.window.LeftPanel
+	local kit = self.skin
+	local Kit = LibAT.UI.Kit
+	local colors = kit.colors
+	local r, g, b = LibAT.UI.GetAccentColor()
+	local behind = colors.path or { r, g, b }
+	local ahead = colors.pathAhead or colors.muted
+	local tick = colors.tick or colors.done
+	local used, y = 0, 0
+
+	local function NextRow(height)
+		used = used + 1
+		local row = self:GetChapterRow(used)
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
+		row:SetSize(width, height)
+		ResetRow(row)
+		row.text:ClearAllPoints()
+		row:Show()
+		y = y + height
+		return row
+	end
+
+	local registrations = Setup:GetSortedRegistrations()
+	for regIndex, reg in ipairs(registrations) do
+		local inRun = self:IsInRun(reg)
+		local header = NextRow(RAIL_HEADER_HEIGHT)
+		kit:SetFont(header.text, 15)
+		header.text:SetPoint('LEFT', header, 'LEFT', 6, 0)
+		header.text:SetPoint('RIGHT', header, 'RIGHT', -40, 0)
+		header.text:SetText(reg.name)
+		local color = inRun and colors.text or colors.secondary
+		header.text:SetTextColor(color[1], color[2], color[3])
+		Kit:SetAsset(header.chevron, kit, 'triangle')
+		header.chevron:ClearAllPoints()
+		header.chevron:SetPoint('RIGHT', header, 'RIGHT', -6, 0)
+		header.chevron:SetRotation(inRun and math.rad(-90) or 0)
+		header.chevron:SetVertexColor(colors.secondary[1], colors.secondary[2], colors.secondary[3], 0.9)
+		if Setup:GetStatus(reg.id) == 'done' then
+			ShowCheck(header.status, kit, tick)
+			header.status:ClearAllPoints()
+			header.status:SetPoint('RIGHT', header.chevron, 'LEFT', -6, 0)
+		end
+		header.onClick = function()
+			Hub:GoToAddon(reg)
+		end
+
+		if inRun then
+			local chapters = self:GetChapters(reg)
+			for c, chapter in ipairs(chapters) do
+				local row = NextRow(RAIL_CHAPTER_HEIGHT)
+				local isCurrent = self.page == 'step' and self.index >= chapter.first and self.index <= chapter.last
+				local seen = self.page == 'summary' or (self.page == 'step' and chapter.last < self.index)
+				local previous = chapters[c - 1]
+				local previousCurrent = previous and self.page == 'step' and self.index >= previous.first and self.index <= previous.last
+				local isLast = c == #chapters
+
+				kit:SetFont(row.text, 12)
+				row.text:SetPoint('LEFT', row, 'LEFT', RAIL_TEXT, 0)
+				row.text:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
+				row.text:SetText(chapter.name)
+				local textWidth = LibAT.UI.MeasureText(row.text, 7)
+
+				-- The path behind is solid in the path color; ahead it is solid to the next stop, then dotted
+				if seen then
+					ShowLine(row.lineTop, row, true, behind)
+					if not isLast then
+						ShowLine(row.lineBottom, row, false, behind)
+					end
+				elseif isCurrent then
+					ShowLine(row.lineTop, row, true, behind)
+					if not isLast then
+						ShowLine(row.lineBottom, row, false, ahead)
+					end
+				else
+					if previousCurrent then
+						ShowLine(row.lineTop, row, true, ahead)
+					else
+						ShowDots(row, true, ahead)
+					end
+					if not isLast then
+						ShowDots(row, false, ahead)
+					end
+				end
+
+				row.node:ClearAllPoints()
+				row.node:SetPoint('CENTER', row, 'LEFT', RAIL_AXIS, 0)
+				row.node:SetVertexColor(1, 1, 1, 1)
+				if isCurrent then
+					if Kit:SetAsset(row.node, kit, 'marker') then
+						row.node:SetSize(16, 16)
+					else
+						Kit:SetAsset(row.node, kit, 'activeMarker')
+						row.node:SetSize(9, 9)
+						row.node:SetVertexColor(r, g, b, 1)
+					end
+					row.text:SetTextColor(1, 1, 1)
+				else
+					if Kit:SetAsset(row.node, kit, seen and 'node-done' or 'node-upcoming') then
+						row.node:SetSize(seen and 11 or 12, seen and 11 or 12)
+					else
+						local tone = seen and colors.secondary or colors.muted
+						Kit:SetAsset(row.node, kit, 'activeMarker')
+						row.node:SetSize(7, 7)
+						row.node:SetVertexColor(tone[1], tone[2], tone[3], 1)
+					end
+					local textColor = seen and colors.text or colors.secondary
+					row.text:SetTextColor(textColor[1], textColor[2], textColor[3])
+					if seen then
+						ShowCheck(row.check, kit, tick)
+						row.check:ClearAllPoints()
+						row.check:SetPoint('LEFT', row, 'LEFT', RAIL_TEXT + textWidth + 6, 0)
+					end
+				end
+				row.node:Show()
+				row.onClick = function()
+					Hub:ShowEntry(chapter.first)
+				end
+			end
+			y = y + 6
+		end
+
+		if regIndex < #registrations then
+			local last = left.chapterRows[used]
+			last.divider:ClearAllPoints()
+			last.divider:SetPoint('BOTTOMLEFT', last, 'BOTTOMLEFT', 0, inRun and -6 or 0)
+			last.divider:SetPoint('BOTTOMRIGHT', last, 'BOTTOMRIGHT', 0, inRun and -6 or 0)
+			last.divider:SetVertexColor(colors.trim[1], colors.trim[2], colors.trim[3], 0.4)
+			last.divider:Show()
+		end
+	end
+
+	for i = used + 1, #(left.chapterRows or {}) do
+		left.chapterRows[i]:Hide()
+	end
+	left.List:SetSize(width, math.max(y, 1))
 end
 
 function Hub:RefreshList()
@@ -1842,140 +1989,177 @@ function Hub:RefreshList()
 	local currentEntry = self.page == 'step' and self.run.entries[self.index]
 	local check = owned and '' or LibAT.UI.AtlasMarkup('common-icon-checkmark', 12)
 
-	for _, reg in ipairs(Setup:GetSortedRegistrations()) do
-		used = used + 1
-		local row = self:GetListRow(used)
-		row:ClearAllPoints()
-		row:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
-		row:SetSize(width, owned and 30 or ADDON_ROW_HEIGHT)
-		row.text:ClearAllPoints()
-		row.text:SetPoint('LEFT', row, 'LEFT', owned and 20 or 6, 0)
-		row.text:SetPoint('RIGHT', row.status, 'LEFT', -4, 0)
-		if owned then
-			self.skin:SetFont(row.text, 14)
-		else
-			row.text:SetFontObject('GameFontNormal')
-		end
-		row.text:SetText(IconMarkup(reg) .. reg.name)
-		local inRun = self:IsInRun(reg)
-		if owned then
-			local color = inRun and self.skin.colors.text or self.skin.colors.dim
-			row.text:SetTextColor(color[1], color[2], color[3])
-		else
-			row.text:SetTextColor(1, inRun and 0.82 or 0.7, inRun and 0 or 0.4)
-		end
-		local status = Setup:GetStatus(reg.id)
-		if status == 'done' then
-			row.status:SetText(check ~= '' and check or '|cff55cc55Done|r')
-		elseif status == 'skipped' then
-			row.status:SetText('|cff888888Skipped|r')
-		else
-			row.status:SetText('')
-		end
-		row.current:Hide()
-		if owned then
-			row.check:Hide()
-			row.chevron:SetRotation(inRun and math.rad(90) or 0)
-			row.chevron:SetVertexColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3], 0.8)
-			row.chevron:Show()
-			row.routeLine:Hide()
-			row.banner:Hide()
-			for _, dot in ipairs(row.routeDots) do
-				dot:Hide()
+	if owned then
+		self:RefreshChapterRail(width)
+	else
+		for _, reg in ipairs(Setup:GetSortedRegistrations()) do
+			used = used + 1
+			local row = self:GetListRow(used)
+			row:ClearAllPoints()
+			row:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
+			row:SetSize(width, owned and 30 or ADDON_ROW_HEIGHT)
+			row.text:ClearAllPoints()
+			row.text:SetPoint('LEFT', row, 'LEFT', owned and 20 or 6, 0)
+			row.text:SetPoint('RIGHT', row.status, 'LEFT', -4, 0)
+			if owned then
+				self.skin:SetFont(row.text, 14)
+			else
+				row.text:SetFontObject('GameFontNormal')
 			end
-		end
-		row.fill:SetColorTexture(0, 0, 0, 0)
-		row.onClick = function()
-			Hub:GoToAddon(reg)
-		end
-		row:Show()
-		y = y + (owned and 30 or ADDON_ROW_HEIGHT)
-
-		if inRun then
-			for i, entry in ipairs(self.run.entries) do
-				if entry.reg == reg then
-					used = used + 1
-					local stepRow = self:GetListRow(used)
-					stepRow:ClearAllPoints()
-					stepRow:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
-					stepRow:SetSize(width, owned and 26 or STEP_ROW_HEIGHT)
-					local indent = owned and (entry.step._parentId and 42 or 32) or (entry.step._parentId and 30 or 18)
-					stepRow.text:ClearAllPoints()
-					stepRow.text:SetPoint('LEFT', stepRow, 'LEFT', indent, 0)
-					stepRow.text:SetPoint('RIGHT', stepRow, 'RIGHT', -4, 0)
-					if owned then
-						self.skin:SetFont(stepRow.text, 12)
-					else
-						stepRow.text:SetFontObject('GameFontHighlightSmall')
-					end
-					stepRow.status:SetText('')
-					local isCurrent = entry == currentEntry
-					local seen = self.page == 'summary' or (self.page == 'step' and i < self.index)
-					if isCurrent then
-						stepRow.text:SetText(entry.step.name or entry.step.title)
-						stepRow.text:SetTextColor(owned and r or 1, owned and g or 1, owned and b or 1)
-						if owned then
-							stepRow.current:ClearAllPoints()
-							stepRow.current:SetPoint('LEFT', stepRow, 'LEFT', 12, 0)
-							stepRow.current:SetVertexColor(r, g, b, 1)
-						else
-							stepRow.current:SetColorTexture(r, g, b, 1)
-						end
-						stepRow.current:Show()
-						stepRow.fill:SetColorTexture(r, g, b, owned and 0.08 or 0.12)
-						if owned and self.skin.route then
-							stepRow.banner:SetPoint('LEFT', stepRow, 'LEFT', 2, 0)
-							stepRow.banner:SetVertexColor(r, g, b, 0.72)
-							stepRow.banner:Show()
-						end
-					else
-						stepRow.text:SetText(entry.step.name or entry.step.title)
-						if owned then
-							local color = seen and self.skin.colors.secondary or self.skin.colors.dim
-							stepRow.text:SetTextColor(color[1], color[2], color[3])
-						else
-							local shade = seen and 0.85 or 0.6
-							stepRow.text:SetTextColor(shade, shade, shade)
-						end
-						stepRow.current:Hide()
-						stepRow.fill:SetColorTexture(0, 0, 0, 0)
-					end
-					if owned then
-						stepRow.chevron:Hide()
-						stepRow.check:ClearAllPoints()
-						stepRow.check:SetPoint('LEFT', stepRow, 'LEFT', 12, 0)
-						stepRow.check:SetShown(seen and not isCurrent)
-						stepRow.routeLine:ClearAllPoints()
-						stepRow.routeLine:SetPoint('TOP', stepRow, 'TOPLEFT', 21, 0)
-						stepRow.routeLine:SetPoint('BOTTOM', stepRow, 'BOTTOMLEFT', 21, 0)
-						stepRow.routeLine:SetVertexColor(
-							seen and self.skin.colors.done[1] or self.skin.colors.rim[1],
-							seen and self.skin.colors.done[2] or self.skin.colors.rim[2],
-							seen and self.skin.colors.done[3] or self.skin.colors.rim[3],
-							0.55
-						)
-						stepRow.routeLine:SetShown(self.skin.route and (seen or isCurrent))
-						for dotIndex, dot in ipairs(stepRow.routeDots) do
-							dot:ClearAllPoints()
-							dot:SetPoint('LEFT', stepRow, 'LEFT', 20, 8 - dotIndex * 5)
-							dot:SetVertexColor(self.skin.colors.rim[1], self.skin.colors.rim[2], self.skin.colors.rim[3], 0.45)
-							dot:SetShown(self.skin.route and not seen and not isCurrent)
-						end
-					end
-					stepRow.onClick = function()
-						Hub:ShowEntry(i)
-					end
-					stepRow:Show()
-					y = y + (owned and 26 or STEP_ROW_HEIGHT)
+			row.text:SetText(IconMarkup(reg) .. reg.name)
+			local inRun = self:IsInRun(reg)
+			if owned then
+				local color = inRun and self.skin.colors.text or self.skin.colors.dim
+				row.text:SetTextColor(color[1], color[2], color[3])
+			else
+				row.text:SetTextColor(1, inRun and 0.82 or 0.7, inRun and 0 or 0.4)
+			end
+			local status = Setup:GetStatus(reg.id)
+			if status == 'done' then
+				row.status:SetText(check ~= '' and check or '|cff55cc55Done|r')
+			elseif status == 'skipped' then
+				row.status:SetText('|cff888888Skipped|r')
+			else
+				row.status:SetText('')
+			end
+			row.current:Hide()
+			if owned then
+				row.check:Hide()
+				row.chevron:SetRotation(inRun and math.rad(90) or 0)
+				row.chevron:SetVertexColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3], 0.8)
+				row.chevron:Show()
+				row.routeLine:Hide()
+				row.banner:Hide()
+				row.node:Hide()
+				for _, dot in ipairs(row.routeDots) do
+					dot:Hide()
 				end
 			end
-			y = y + 4
+			row.fill:SetColorTexture(0, 0, 0, 0)
+			row.onClick = function()
+				Hub:GoToAddon(reg)
+			end
+			row:Show()
+			y = y + (owned and 30 or ADDON_ROW_HEIGHT)
+
+			if inRun then
+				for i, entry in ipairs(self.run.entries) do
+					if entry.reg == reg then
+						used = used + 1
+						local stepRow = self:GetListRow(used)
+						stepRow:ClearAllPoints()
+						stepRow:SetPoint('TOPLEFT', left.List, 'TOPLEFT', 0, -y)
+						stepRow:SetSize(width, owned and 26 or STEP_ROW_HEIGHT)
+						local indent = owned and (entry.step._parentId and 42 or 32) or (entry.step._parentId and 30 or 18)
+						stepRow.text:ClearAllPoints()
+						stepRow.text:SetPoint('LEFT', stepRow, 'LEFT', indent, 0)
+						stepRow.text:SetPoint('RIGHT', stepRow, 'RIGHT', -4, 0)
+						if owned then
+							self.skin:SetFont(stepRow.text, 12)
+						else
+							stepRow.text:SetFontObject('GameFontHighlightSmall')
+						end
+						stepRow.status:SetText('')
+						if stepRow.banner then
+							stepRow.banner:Hide()
+						end
+						local isCurrent = entry == currentEntry
+						local seen = self.page == 'summary' or (self.page == 'step' and i < self.index)
+						if isCurrent then
+							stepRow.text:SetText(entry.step.name or entry.step.title)
+							stepRow.text:SetTextColor(owned and r or 1, owned and g or 1, owned and b or 1)
+							if owned and self.skin.route then
+								stepRow.current:ClearAllPoints()
+								stepRow.current:SetPoint('CENTER', stepRow, 'LEFT', 21, 0)
+								stepRow.current:SetVertexColor(1, 1, 1, 1)
+							elseif owned then
+								stepRow.current:ClearAllPoints()
+								stepRow.current:SetPoint('LEFT', stepRow, 'LEFT', 12, 0)
+								stepRow.current:SetVertexColor(r, g, b, 1)
+							else
+								stepRow.current:SetColorTexture(r, g, b, 1)
+							end
+							stepRow.current:Show()
+							if owned and self.skin.route then
+								stepRow.fill:SetColorTexture(0, 0, 0, 0)
+								stepRow.text:SetTextColor(1, 1, 1)
+								stepRow.banner:ClearAllPoints()
+								stepRow.banner:SetPoint('LEFT', stepRow, 'LEFT', 6, 0)
+								stepRow.banner:SetSize(math.min(indent + LibAT.UI.MeasureText(stepRow.text, 6) + 26, width), 26)
+								stepRow.banner:SetVertexColor(r, g, b, 0.9)
+								stepRow.banner:Show()
+							else
+								stepRow.fill:SetColorTexture(r, g, b, owned and 0.08 or 0.12)
+							end
+						else
+							stepRow.text:SetText(entry.step.name or entry.step.title)
+							if owned then
+								local color = seen and self.skin.colors.secondary or self.skin.colors.dim
+								stepRow.text:SetTextColor(color[1], color[2], color[3])
+							else
+								local shade = seen and 0.85 or 0.6
+								stepRow.text:SetTextColor(shade, shade, shade)
+							end
+							stepRow.current:Hide()
+							stepRow.fill:SetColorTexture(0, 0, 0, 0)
+						end
+						if owned and self.skin.route then
+							-- One continuous route: a node on every step, solid up to the current step, dotted after it
+							local nextEntry = self.run.entries[i + 1]
+							local isLast = not nextEntry or nextEntry.reg ~= reg
+							local brass = self.skin.colors.rim
+							stepRow.chevron:Hide()
+							stepRow.node:ClearAllPoints()
+							stepRow.node:SetPoint('CENTER', stepRow, 'LEFT', 21, 0)
+							stepRow.node:SetTexture(self.skin:Texture(seen and 'waypoint' or 'node-ring'))
+							stepRow.node:SetShown(not isCurrent)
+							stepRow.check:ClearAllPoints()
+							stepRow.check:SetSize(13, 13)
+							stepRow.check:SetPoint('LEFT', stepRow, 'LEFT', indent + LibAT.UI.MeasureText(stepRow.text, 6) + 5, 0)
+							stepRow.check:SetShown(seen and not isCurrent)
+							stepRow.routeLine:ClearAllPoints()
+							stepRow.routeLine:SetPoint('TOP', stepRow, 'TOPLEFT', 21, 0)
+							stepRow.routeLine:SetPoint('BOTTOM', stepRow, (seen and not isLast) and 'BOTTOMLEFT' or 'LEFT', 21, 0)
+							stepRow.routeLine:SetVertexColor(brass[1], brass[2], brass[3], 0.75)
+							stepRow.routeLine:SetShown(seen or isCurrent)
+							for dotIndex, dot in ipairs(stepRow.routeDots) do
+								local dotY = ROUTE_DOTS[dotIndex]
+								if dotY then
+									dot:ClearAllPoints()
+									dot:SetPoint('CENTER', stepRow, 'LEFT', 21, dotY)
+									dot:SetVertexColor(brass[1], brass[2], brass[3], 0.55)
+									dot:SetShown(not seen and ((dotY > 0 and not isCurrent) or (dotY < 0 and not isLast)))
+								else
+									dot:Hide()
+								end
+							end
+						elseif owned then
+							stepRow.chevron:Hide()
+							stepRow.node:Hide()
+							stepRow.check:ClearAllPoints()
+							stepRow.check:SetSize(18, 18)
+							stepRow.check:SetPoint('LEFT', stepRow, 'LEFT', 12, 0)
+							stepRow.check:SetShown(seen and not isCurrent)
+							stepRow.routeLine:Hide()
+							for _, dot in ipairs(stepRow.routeDots) do
+								dot:Hide()
+							end
+						end
+						stepRow.onClick = function()
+							Hub:ShowEntry(i)
+						end
+						stepRow:Show()
+						y = y + (owned and 26 or STEP_ROW_HEIGHT)
+					end
+				end
+				y = y + 4
+			end
 		end
+		for i = used + 1, #left.rows do
+			left.rows[i]:Hide()
+		end
+		left.List:SetSize(width, math.max(y, 1))
 	end
-	for i = used + 1, #left.rows do
-		left.rows[i]:Hide()
-	end
-	left.List:SetSize(width, math.max(y, 1))
 
 	local hasWhatsNew = false
 	for _, reg in pairs(Setup.registrations) do
@@ -2108,7 +2292,7 @@ function Hub:UpdateOwnedFooter()
 	w.SkipAheadButton:SetScript('OnClick', function()
 		Hub:ToggleSkipMenu()
 	end)
-	right.ReloadText:SetText('')
+	right.ReloadText:SetText(staged > 0 and (staged .. ' ' .. Plural(staged, 'change needs', 'changes need') .. ' a reload') or '')
 
 	if page == 'start' then
 		w.BackButton:Hide()
@@ -2228,6 +2412,41 @@ function Hub:ApplyAccent()
 	end
 end
 
+---Repaint the live window after the host changes trim kits.
+function Hub:ApplyKit()
+	self.skin = Kit:GetActive()
+	local w = self.window
+	if not w then
+		return
+	end
+	w._setupKitId = self.skin.id
+	if w.ApplyKit then
+		w:ApplyKit()
+	end
+	local colors = self.skin.colors
+	w.RightPanel.AddonLabel:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
+	w.RightPanel.Title:SetTextColor(colors.text[1], colors.text[2], colors.text[3])
+	w.RightPanel.Text:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
+	w.RightPanel.Message:SetTextColor(colors.text[1], colors.text[2], colors.text[3])
+	w.RightPanel.ReloadText:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
+	w.LeftPanel.WhatsNew.line:SetColorTexture(colors.trim[1], colors.trim[2], colors.trim[3], 0.35)
+	if w.SkipMenu then
+		w.SkipMenu.bg:SetVertexColor(colors.panel[1], colors.panel[2], colors.panel[3], 0.98)
+	end
+	self:ApplyAccent()
+	-- Picking a look changes the kit; repaint in place so the page keeps its scroll position
+	if self:IsShown() then
+		self:Render(false)
+	end
+end
+
+---Refresh the host-provided setup backdrop without repainting unrelated controls.
+function Hub:ApplyBackdrop()
+	if self.window and self.window.RefreshBackdrop then
+		self.window:RefreshBackdrop()
+	end
+end
+
 function Hub:OnRegistrationChanged()
 	if self:IsShown() then
 		self:RefreshList()
@@ -2255,7 +2474,7 @@ end
 ----------------------------------------------------------------------------------------------------
 
 function Hub:CreateToast()
-	local skin = self.skin or Setup.Skins:GetActive()
+	local skin = self.skin or Kit:GetActive()
 	local toast = CreateFrame('Frame', nil, UIParent)
 	toast:SetSize(400, 58)
 	toast:SetPoint('TOP', UIParent, 'TOP', 0, -140)

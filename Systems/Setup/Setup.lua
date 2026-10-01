@@ -47,6 +47,7 @@ local LibAT = LibAT
 ---@field kind LibAT.SetupStepKind
 ---@field title string Header text
 ---@field name? string Label in the step list (defaults to title)
+---@field chapter? string Chapter this step belongs to; neighbouring steps with the same chapter share one row in the step list
 ---@field text? string A short line under the header
 ---@field order? number Lower comes first
 ---@field scope? LibAT.SetupScope 'profile' steps are asked again for a brand-new profile
@@ -86,6 +87,7 @@ local LibAT = LibAT
 ---@field optionsCommand? string|fun() Opens the addon's settings, e.g. '/ldb'
 ---@field onComplete? fun() Runs once, the first time the player finishes this addon's setup
 ---@field addonName? string Folder name; when given and the addon is still loading, detection waits for its ADDON_LOADED
+---@field chapters? table<string, string> Step id to chapter name, for steps other files add (a step's own chapter wins)
 
 ---@class LibAT.Setup
 LibAT.Setup = LibAT.Setup or {}
@@ -177,8 +179,15 @@ function Setup:GetStore()
 	if store.autoOpen == nil then
 		store.autoOpen = true
 	end
-	if store.skin == nil then
-		store.skin = 'stage'
+	if store.kit == nil then
+		store.kit = 'auto'
+	end
+	if store.skin ~= nil then
+		store.skin = nil
+	end
+	if not self.kitOverrideLoaded and LibAT.UI.Kit then
+		self.kitOverrideLoaded = true
+		LibAT.UI.Kit:SetOverride(store.kit)
 	end
 	if not self.storeChecked then
 		self.storeChecked = true
@@ -193,31 +202,30 @@ function Setup:GetStore()
 	return store
 end
 
----The account-wide setup window skin.
+---The account-wide setup window kit override.
 ---@return string
-function Setup:GetSkin()
+function Setup:GetKit()
 	local store = self:GetStore()
-	return (store and store.skin) or 'stage'
+	return (store and store.kit) or 'auto'
 end
 
----Save and apply a setup window skin.
----@param skinId string
+---Save and apply a setup window kit override.
+---@param kitId string
 ---@return boolean changed
-function Setup:SetSkin(skinId)
-	if not self.Skins or not self.Skins.registry[skinId] then
+function Setup:SetKit(kitId)
+	local kit = LibAT.UI.Kit
+	if not kit or (kitId ~= 'auto' and not kit.registry[kitId]) then
 		return false
 	end
 	local store = self:GetStore()
 	if not store then
 		return false
 	end
-	if store.skin == skinId then
-		return true
+	if store.kit == kitId then
+		return kit:SetOverride(kitId)
 	end
-	store.skin = skinId
-	if self.Hub then
-		self.Hub:RebuildWindow()
-	end
+	store.kit = kitId
+	kit:SetOverride(kitId)
 	return true
 end
 
@@ -529,6 +537,9 @@ function Setup:ValidateStep(reg, step)
 	if step.hidden ~= nil and type(step.hidden) ~= 'function' then
 		Problem('hidden must be a function')
 	end
+	if step.chapter ~= nil and (type(step.chapter) ~= 'string' or step.chapter == '') then
+		Problem('chapter must be a non-empty string')
+	end
 	if step.onLeave ~= nil and type(step.onLeave) ~= 'function' then
 		Problem('onLeave must be a function')
 	end
@@ -706,6 +717,13 @@ function Registration:RemoveStep(stepId)
 	if Setup.Hub and Setup.Hub.OnRegistrationChanged then
 		Setup.Hub:OnRegistrationChanged(self)
 	end
+end
+
+---Chapter a step is listed under: its own, the registration's map, else the step itself.
+---@param step LibAT.SetupStep
+---@return string
+function Registration:GetChapter(step)
+	return step.chapter or (self.config.chapters and self.config.chapters[step.id]) or step.name or step.title or step.id
 end
 
 ---@param stepId string
@@ -1465,13 +1483,18 @@ end
 ---@param msg? string Anything after the command
 function Setup:HandleSlash(msg)
 	msg = strtrim and strtrim(msg or '') or (msg or '')
-	local skinId = msg:match('^skin%s+(%S+)$')
-	if skinId then
-		skinId = skinId:lower()
-		if self:SetSkin(skinId) then
-			LibAT:Print('Setup skin: ' .. skinId)
+	local kitId = msg:match('^kit%s+(%S+)$')
+	if kitId then
+		kitId = kitId:lower()
+		if self:SetKit(kitId) then
+			LibAT:Print('Setup kit: ' .. kitId)
 		else
-			LibAT:Print('Unknown setup skin. Try: stage, wartable, classic')
+			local ids = { 'auto' }
+			for id in pairs(LibAT.UI.Kit.registry) do
+				ids[#ids + 1] = id
+			end
+			table.sort(ids)
+			LibAT:Print('Unknown setup kit. Try: ' .. table.concat(ids, ', '))
 		end
 		return
 	end

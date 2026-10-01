@@ -56,6 +56,11 @@ Core\UI\NumericBox.lua
 Core\UI\InfoButton.lua
 Core\UI\WidgetBuilder.lua
 Core\UI\Accent.lua
+Core\UI\Kit\Core.lua
+Core\UI\Kit\Components.lua
+Core\UI\Kit\Cards.lua
+Core\UI\Kit\Window.lua
+Core\UI\Kit\Minimal.lua
 Core\UI\Card.lua
 
 # Systems
@@ -75,9 +80,6 @@ Systems\ProfileManager\DesktopImport.lua
 
 # Setup System (the old Setup Wizard API is a thin layer over it)
 Systems\Setup\Setup.lua
-Systems\Setup\Skins.lua
-Systems\Setup\Skins\Stage.lua
-Systems\Setup\Skins\WarTable.lua
 Systems\Setup\SetupHub.lua
 Systems\SetupWizard\SetupWizard.lua
 

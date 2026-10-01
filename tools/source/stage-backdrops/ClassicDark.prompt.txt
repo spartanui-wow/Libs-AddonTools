@@ -1,0 +1,8 @@
+Use case: stylized-concept
+Asset type: panoramic painted backdrop for the SpartanUI ClassicDark setup-window look
+Primary request: create a faction-neutral dark slate fortress at amber twilight, deep navy-black valleys, warm gold window light, restrained orange horizon, and subtle green-gray stone; sober, classic, and high contrast.
+Input images: Image 1 is the ClassicDark look color-and-material reference; Image 2 is the approved Selection Stage reference for overall painted fantasy realism and backdrop role.
+Style/medium: original high-end hand-painted fantasy environment art, realistic materials, polished modern game concept art, atmospheric depth.
+Composition/framing: wide 2:1 panorama, straight horizon, environment only, broad shapes that remain attractive after light blur, no single object centered behind setup text, usable detail across the full width.
+Lighting/mood: match Image 1's dominant palette and value structure; mid-tone scene with luminous accents but no blown highlights.
+Constraints: faction-neutral; no people, creatures, portraits, flags, crests, logos, readable text, letters, numbers, runes, named places, maps, UI frames, icons, or watermark. Do not copy any recognizable game location or asset.

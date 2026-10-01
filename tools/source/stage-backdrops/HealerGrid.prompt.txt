@@ -1,0 +1,8 @@
+Use case: stylized-concept
+Asset type: panoramic painted backdrop for the SpartanUI HealerGrid setup-window look
+Primary request: create a faction-neutral luminous sanctuary and terraced garden in mint, sea-green, soft cyan, and charcoal, calm water channels and pale stone, gentle restorative light; orderly, calm, and welcoming.
+Input images: Image 1 is the HealerGrid look color-and-material reference; Image 2 is the approved Selection Stage reference for overall painted fantasy realism and backdrop role.
+Style/medium: original high-end hand-painted fantasy environment art, realistic materials, polished modern game concept art, atmospheric depth.
+Composition/framing: wide 2:1 panorama, straight horizon, environment only, broad shapes that remain attractive after light blur, no single object centered behind setup text, usable detail across the full width.
+Lighting/mood: match Image 1's dominant palette and value structure; mid-tone scene with luminous accents but no blown highlights.
+Constraints: faction-neutral; no people, creatures, portraits, flags, crests, logos, readable text, letters, numbers, runes, named places, maps, UI frames, icons, or watermark. Do not copy any recognizable game location or asset.

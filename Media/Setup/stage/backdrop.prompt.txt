@@ -1,8 +1,0 @@
-Use case: stylized-concept
-Asset type: in-game setup window backdrop for a World of Warcraft addon
-Primary request: a faction-neutral fantasy mountain citadel at dusk, seen across a wide valley through mist, with restrained architectural silhouettes and distant warm window light
-Style/medium: richly painted fantasy environment art with believable depth, designed to be heavily blurred and dimmed behind translucent interface panels
-Composition/framing: wide 2:1 landscape, central negative space behind the main content panel, detail concentrated softly toward the edges, no foreground characters
-Lighting/mood: dusky blue-gray atmosphere with subtle warm amber in the distance, calm and welcoming rather than ominous
-Color palette: slate blue, graphite, muted mauve, very restrained amber
-Constraints: no symbols, no banners, no faction motifs, no logos, no text, no UI, no characters, no watermark; suitable as a seamless-feeling background behind smoked glass; original artwork

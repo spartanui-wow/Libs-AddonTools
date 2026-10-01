@@ -60,7 +60,7 @@ DevUIState.GetTabIndex = GetTabIndex
 ---@return Frame tab The created tab button frame
 local function CreateSideTab(parent, index, config)
 	local tab = CreateFrame('Frame', 'LibAT_DevUI_Tab' .. index, parent)
-	tab:SetSize(43, 55)
+	tab:SetSize(44, 46)
 	tab:EnableMouse(true)
 
 	-- Store config — supports both atlas-based and file path-based icons
@@ -70,12 +70,9 @@ local function CreateSideTab(parent, index, config)
 	tab.tooltipText = config.tooltipText
 	tab.tabIndex = index
 
-	-- BACKGROUND: Tab shape
-	tab.Background = tab:CreateTexture(nil, 'BACKGROUND')
-	tab.Background:SetAtlas('questlog-tab-side', true)
-	tab.Background:SetPoint('CENTER')
+	-- Drawn by the window's kit: a small panel, the accent when selected, a soft glow on hover
+	LibAT.UI.Kit:SkinPanel(tab, { elevation = 2, shadow = false })
 
-	-- ARTWORK: Icon (scaled down from native atlas size)
 	tab.Icon = tab:CreateTexture(nil, 'ARTWORK')
 	if config.icon then
 		tab.Icon:SetTexture(config.icon)
@@ -85,16 +82,20 @@ local function CreateSideTab(parent, index, config)
 	tab.Icon:SetSize(20, 20)
 	tab.Icon:SetPoint('CENTER', -2, 0)
 
-	-- OVERLAY: Selected glow
-	tab.SelectedTexture = tab:CreateTexture(nil, 'OVERLAY')
-	tab.SelectedTexture:SetAtlas('QuestLog-Tab-side-Glow-select', true)
-	tab.SelectedTexture:SetPoint('CENTER')
+	tab.SelectedTexture = tab:CreateTexture(nil, 'BORDER')
+	tab.SelectedTexture:SetTexture('Interface\\Buttons\\WHITE8X8')
+	tab.SelectedTexture:SetAllPoints()
 	tab.SelectedTexture:Hide()
 
-	-- HIGHLIGHT: Hover glow
 	tab.HighlightTexture = tab:CreateTexture(nil, 'HIGHLIGHT')
-	tab.HighlightTexture:SetAtlas('QuestLog-Tab-side-Glow-hover', true)
-	tab.HighlightTexture:SetPoint('CENTER')
+	tab.HighlightTexture:SetTexture('Interface\\Buttons\\WHITE8X8')
+	tab.HighlightTexture:SetAllPoints()
+	tab.HighlightTexture:SetVertexColor(1, 1, 1, 0.06)
+
+	LibAT.UI.Kit:Track(tab, function(owner)
+		local r, g, b = LibAT.UI.GetAccentColor()
+		owner.SelectedTexture:SetVertexColor(r, g, b, 0.3)
+	end)
 
 	-- Anchoring: first tab at TOPRIGHT of window, subsequent tabs stack vertically
 	-- Tabs sit at a lower frame level so they appear to come out from under the window edge
@@ -218,11 +219,6 @@ local function CreateDevUIWindow()
 		minHeight = 400,
 	})
 
-	-- Hide the ButtonFrameTemplate's built-in Inset NineSlice — tabs provide their own panel styling
-	if DevUIState.Window.Inset then
-		DevUIState.Window.Inset:Hide()
-	end
-
 	-- Closing the window (button, Escape or toggle) deactivates the visible tab
 	DevUIState.Window:HookScript('OnHide', function()
 		DeactivateTab(DevUIState.ActivatedTab)
@@ -232,8 +228,7 @@ local function CreateDevUIWindow()
 	-- Create content frames for each tab
 	for i = 1, #TAB_CONFIG do
 		local content = CreateFrame('Frame', 'LibAT_DevUI_Content' .. i, DevUIState.Window)
-		content:SetPoint('TOPLEFT', DevUIState.Window, 'TOPLEFT', 2, -33)
-		content:SetPoint('BOTTOMRIGHT', DevUIState.Window, 'BOTTOMRIGHT', -2, 2)
+		content:SetAllPoints(DevUIState.Window.Body)
 		content:Hide()
 		DevUIState.ContentFrames[i] = content
 	end
