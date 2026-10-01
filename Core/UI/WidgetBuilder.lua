@@ -166,13 +166,11 @@ function LibAT.UI.CreateSliderWidget(container, def, width)
 	frame:SetSize(width, SLIDER_HEIGHT)
 
 	-- Label
-	local label = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	local label = LibAT.UI.CreateLabel(frame, def.name or 'Slider')
 	label:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, 0)
-	label:SetText(def.name or 'Slider')
-	label:SetTextColor(1, 0.82, 0) -- Gold
 
 	-- Value display
-	local valueText = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+	local valueText = LibAT.UI.CreateLabel(frame, '')
 	valueText:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', 0, 0)
 
 	-- Slider
@@ -308,10 +306,8 @@ function LibAT.UI.CreateDropdownWidget(container, def, width)
 	frame:SetSize(width, DROPDOWN_HEIGHT + 18) -- Extra height for label
 
 	-- Label
-	local label = frame:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+	local label = LibAT.UI.CreateLabel(frame, def.name or 'Dropdown')
 	label:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, 0)
-	label:SetText(def.name or 'Dropdown')
-	label:SetTextColor(1, 0.82, 0) -- Gold
 
 	-- Dropdown button
 	local dropdown = LibAT.UI.CreateDropdown(frame, '', def.width or width, DROPDOWN_HEIGHT)
@@ -403,7 +399,12 @@ end
 function LibAT.UI.CreateDescriptionWidget(container, def, width)
 	local frame = CreateFrame('Frame', nil, container)
 
-	local text = frame:CreateFontString(nil, 'OVERLAY', def.fontSize == 'medium' and 'GameFontHighlight' or 'GameFontHighlightSmall')
+	local text = frame:CreateFontString(nil, 'OVERLAY')
+	LibAT.UI.Kit:SetFont(text, def.fontSize == 'medium' and 13 or 12)
+	LibAT.UI.Kit:Track(text, function(owner, config)
+		local color = config.colors.secondary
+		owner:SetTextColor(color[1], color[2], color[3])
+	end)
 	text:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, 0)
 	text:SetWidth(width)
 	text:SetJustifyH('LEFT')

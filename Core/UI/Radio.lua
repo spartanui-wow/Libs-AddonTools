@@ -43,19 +43,56 @@ function LibAT.UI.CreateRadio(parent, text, groupName, width, height)
 	local container = CreateFrame('Frame', nil, parent)
 	container:SetSize(width, height)
 
-	-- Create the actual radio button inside container
-	local radio = CreateFrame('CheckButton', nil, container, 'UIRadioButtonTemplate')
+	-- The radio is a plain CheckButton drawn with the kit: a ring, and a dot while checked
+	local Kit = LibAT.UI.Kit
+	local radio = CreateFrame('CheckButton', nil, container)
 	radio:SetSize(20, 20)
 	radio:SetPoint('LEFT', container, 'LEFT', 0, 0)
 	container.radio = radio
+	radio.ring = radio:CreateTexture(nil, 'ARTWORK')
+	radio.ring:SetSize(16, 16)
+	radio.ring:SetPoint('CENTER')
+	radio.dot = radio:CreateTexture(nil, 'OVERLAY')
+	radio.dot:SetSize(8, 8)
+	radio.dot:SetPoint('CENTER')
+	radio:SetCheckedTexture(radio.dot)
+	radio.glow = radio:CreateTexture(nil, 'HIGHLIGHT')
+	radio.glow:SetSize(16, 16)
+	radio.glow:SetPoint('CENTER')
+	radio.glow:SetBlendMode('ADD')
 
 	-- Create label
-	local label = container:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+	local label = container:CreateFontString(nil, 'OVERLAY')
+	Kit:SetFont(label, 12)
 	label:SetText(text)
-	label:SetPoint('LEFT', radio, 'RIGHT', 5, 0)
+	label:SetPoint('LEFT', radio, 'RIGHT', 4, 0)
 	label:SetPoint('RIGHT', container, 'RIGHT', 0, 0)
 	label:SetJustifyH('LEFT')
+	label:SetWordWrap(false)
 	container.Text = label
+
+	-- Group helpers check radios directly, so the ring follows every SetChecked
+	local NativeSetChecked = radio.SetChecked
+	function radio:SetChecked(checked)
+		NativeSetChecked(self, checked)
+		container:ApplyKit()
+	end
+	Kit:Track(container, function(owner, config)
+		local c = config.colors
+		local r, g, b = LibAT.UI.GetAccentColor()
+		local checked = owner.radio:GetChecked()
+		Kit:SetAsset(owner.radio.ring, config, 'radioRing')
+		Kit:SetAsset(owner.radio.dot, config, 'switchKnob')
+		Kit:SetAsset(owner.radio.glow, config, 'radioRing')
+		if checked then
+			owner.radio.ring:SetVertexColor(r, g, b, 1)
+		else
+			owner.radio.ring:SetVertexColor(c.trimHi[1], c.trimHi[2], c.trimHi[3], 0.85)
+		end
+		owner.radio.dot:SetVertexColor(r, g, b, 1)
+		owner.radio.glow:SetVertexColor(1, 1, 1, 0.25)
+		owner.Text:SetTextColor(c.text[1], c.text[2], c.text[3])
+	end)
 
 	-- Store group reference and value on container
 	container.groupName = groupName
