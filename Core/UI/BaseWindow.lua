@@ -19,6 +19,7 @@ local LibAT = LibAT
 ---@field minWidth? number Minimum resize width (default 200)
 ---@field minHeight? number Minimum resize height (default 150)
 ---@field footer? boolean Show the footer bar from the start (action buttons turn it on)
+---@field kit? string Keep this window on one kit: a kit id, 'default' (LibAT's own look) or 'auto' (follow the host addon, the default)
 
 -- Where content started in the old template window; offsets given relative to it still line up
 local TEMPLATE_TOP = -33
@@ -50,6 +51,7 @@ function LibAT.UI.CreateWindow(config)
 		resizable = config.resizable,
 		minWidth = config.minWidth,
 		minHeight = config.minHeight,
+		kit = config.kit,
 	})
 	window.config = config
 	return window
@@ -84,7 +86,38 @@ function LibAT.UI.GetFooter(frame)
 	if not shell.Footer:IsShown() then
 		shell:SetFooterShown(true)
 	end
-	return shell.Footer, LibAT.UI.Kit:GetActive().layout.barPadding
+	return shell.Footer, LibAT.UI.Kit:GetKitFor(shell).layout.barPadding
+end
+
+---Move a bar a view built along the bottom of its content (status text, reload buttons) into the
+---kit window's footer. Outside a kit window it stays where it is and this returns false, so the view
+---keeps room for it.
+---@param bar Frame
+---@param frame Frame The view, or any frame inside the window
+---@return boolean placed
+function LibAT.UI.PlaceInFooter(bar, frame)
+	local footer, padding = LibAT.UI.GetFooter(frame)
+	if not footer then
+		return false
+	end
+	bar:ClearAllPoints()
+	bar:SetPoint('TOPLEFT', footer, 'TOPLEFT', padding, 0)
+	bar:SetPoint('BOTTOMRIGHT', footer, 'BOTTOMRIGHT', -padding, 0)
+	return true
+end
+
+---Put a button at the left end of the kit window's footer (Reload UI, for example). Outside a kit
+---window it goes at the bottom left of the frame.
+---@param button Button
+---@param frame Frame
+function LibAT.UI.PlaceAtFooterLeft(button, frame)
+	local footer, padding = LibAT.UI.GetFooter(frame)
+	button:ClearAllPoints()
+	if footer then
+		button:SetPoint('LEFT', footer, 'LEFT', padding, 0)
+	else
+		button:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', 4, 1)
+	end
 end
 
 ----------------------------------------------------------------------------------------------------

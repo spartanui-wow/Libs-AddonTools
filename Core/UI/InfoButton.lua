@@ -22,7 +22,7 @@ function LibAT.UI.CreateInfoButton(parent, tooltipTitle, tooltipText, size)
 	button.Glyph:SetText('i')
 
 	local function Paint(self, config)
-		config = config or Kit:GetActive()
+		config = config or Kit:GetKitFor(self)
 		local c = config.colors
 		Kit:SetAsset(self.Icon, config, 'radioRing')
 		if self.hovered then

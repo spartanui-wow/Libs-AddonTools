@@ -167,6 +167,15 @@ No provider, an invalid provider, an unknown kit, or any missing contract piece 
 - Widgets that paint from their own scripts use `LibAT.UI.KeepScripts(frame, { Event = fn })`, so a caller's `SetScript` adds to the widget instead of silently removing its painting. Labels and progress bars keep a color the caller sets.
 - Text on filled shapes (buttons, badges, inputs) uses `Kit:SetFont(fontString, size, true)`: no outline or shadow, which smeared dark text on light fills.
 
+### Keeping a window on one kit
+
+The host addon (SpartanUI) picks the kit for every LibAT window. A window that should keep a look of its
+own passes `kit` when it is created: `LibAT.UI.CreateWindow{ ..., kit = 'default' }` (LibAT's own look),
+a kit id, or `'auto'` to follow the host (the default). `Kit:CreateShell` and `Kit:DressShell` take the
+same option, and `Kit:SetFrameKit(frame, id)` changes it later. Everything inside the window, including
+the menus its dropdowns open, draws with that kit: paint code asks `Kit:GetKitFor(frame)`, which uses the
+nearest pinned frame above it. Libs-TimePlayed keeps the default look this way.
+
 ### Kits
 
 A kit is data: `colors` (surfaces 0-3, `bar`, text, secondary, muted, trim, `trimHi`, rail `path`/`pathAhead`/`tick`), `button.primary`/`button.secondary` (`top`, `bottom`, `edge`, `text`), `layout` (`barInset`, `titleHeight`, `footerHeight`, `sideInset`, `barPadding`, `dividerHeight`) and `assets` (`windowBorder` 9-slice, `backdrop`, `materialTile`, `divider`, `marker`, `node-done`, `node-upcoming`, `titlePlate`; an asset may be `{ texture, coords }` to use part of a sheet). LibAT ships `minimal`; SpartanUI registers War (Alliance and Horde), Midnight, Classic, Fel and Digital in `Core/Handlers/WindowKits.lua` and picks one per theme with `SetKitProvider`.

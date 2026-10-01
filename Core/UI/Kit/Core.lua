@@ -42,6 +42,7 @@ local SHAPE_FALLBACKS = {
 	switchTrack = true,
 	switchKnob = true,
 	radioRing = true,
+	checkMark = true,
 	check = true,
 	triangle = true,
 	chevron = true,
@@ -186,6 +187,47 @@ function Kit:GetActive()
 	return self:Get('minimal')
 end
 
+-- LibAT's own look, used by windows that ask for 'default'
+Kit.DEFAULT = 'minimal'
+
+---Pin a window (or any frame) to one kit. Everything inside it draws with that kit instead of the
+---one the host addon picked. 'default' is LibAT's own look; nil or 'auto' follows the active kit.
+---@param frame Frame
+---@param id? string Kit id, 'default' or 'auto'
+---@return boolean ok False when no kit has that id
+function Kit:SetFrameKit(frame, id)
+	if id == 'default' then
+		id = self.DEFAULT
+	elseif id == 'auto' then
+		id = nil
+	end
+	if id ~= nil and not self.registry[id] then
+		Log('warning', 'SetFrameKit: no kit named ' .. tostring(id))
+		return false
+	end
+	frame.kitPinned = id
+	self:RefreshAll()
+	return true
+end
+
+---The kit a frame draws with: the nearest pinned frame above it, otherwise the active kit.
+---@param frame? Frame|Region
+---@return table config
+function Kit:GetKitFor(frame)
+	local node = frame
+	for _ = 1, 40 do
+		if type(node) ~= 'table' then
+			break
+		end
+		local pinned = node.kitPinned
+		if pinned then
+			return self:Get(pinned)
+		end
+		node = node.GetParent and node:GetParent()
+	end
+	return self:GetActive()
+end
+
 function Kit:SetKitProvider(fn)
 	if fn ~= nil and type(fn) ~= 'function' then
 		Log('warning', 'SetKitProvider expects a function, got ' .. type(fn))
@@ -224,7 +266,7 @@ function Kit:Track(frame, apply)
 			return
 		end
 		owner.kitApplying = true
-		local active = Kit:GetActive()
+		local active = Kit:GetKitFor(owner)
 		for _, callback in ipairs(Kit.instances[owner] or {}) do
 			-- A painting bug must never stop a window from being built
 			local ok, err = pcall(callback, owner, active)

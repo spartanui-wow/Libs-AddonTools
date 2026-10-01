@@ -183,6 +183,7 @@ end
 ---@field resizable? boolean
 ---@field minWidth? number
 ---@field minHeight? number
+---@field kit? string Keep this window on one kit: a kit id, 'default' (LibAT's own look) or 'auto' (follow the host addon, the default)
 
 ---A window dressed by the active kit: title bar, painted frame, optional footer and a Body for content.
 ---@param options LibAT.UI.KitShellOptions
@@ -221,6 +222,10 @@ end
 function Kit:DressShell(shell, options)
 	options = options or {}
 	shell.kitShell = true
+	-- An addon can keep its window on one kit whatever the host addon picks
+	if options.kit and options.kit ~= 'auto' then
+		shell.kitPinned = options.kit == 'default' and Kit.DEFAULT or (self.registry[options.kit] and options.kit or Kit.DEFAULT)
+	end
 
 	shell.VisualRoot = CreateFrame('Frame', nil, shell)
 	shell.VisualRoot:SetAllPoints()
@@ -323,7 +328,7 @@ function Kit:DressShell(shell, options)
 
 		local backdrop = Kit:Texture(config, 'backdrop') or LibAT.UI.GetBackdrop()
 		owner.Backdrop:SetTexture(backdrop or WHITE)
-		owner.Backdrop:SetVertexColor(1, 1, 1, backdrop and 1 or 0)
+		owner.Backdrop:SetVertexColor(1, 1, 1, backdrop and (config.backdropAlpha or 1) or 0)
 		if backdrop then
 			Kit:CropToFill(owner.Backdrop, config.backdropAspect or 2, owner:GetWidth(), owner:GetHeight(), config.backdropAnchorY)
 		end
