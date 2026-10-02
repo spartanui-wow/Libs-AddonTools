@@ -97,6 +97,9 @@ end
 ---@param reg LibAT.SetupRegistration
 ---@return boolean
 function Hub:IsInRun(reg)
+	if not self.run then
+		return false
+	end
 	for _, r in ipairs(self.run.regs) do
 		if r == reg then
 			return true
@@ -410,6 +413,11 @@ function Hub:CreateFooter(w)
 		w.RightPanel.Progress:ClearAllPoints()
 		w.RightPanel.Progress:SetPoint('CENTER', bar, 'CENTER', 0, 0)
 		w.RightPanel.Progress:SetWidth(210)
+		local reloadText = w.RightPanel.ReloadText
+		reloadText:SetParent(bar)
+		reloadText:ClearAllPoints()
+		reloadText:SetPoint('TOP', w.RightPanel.Progress, 'BOTTOM', 0, -2)
+		reloadText:SetJustifyH('CENTER')
 		return
 	end
 
@@ -640,20 +648,37 @@ function Hub:ShowSummary()
 end
 
 function Hub:OpenWhatsNew()
-	self:EnsureWindow()
-	if self.page ~= 'whatsnew' then
-		self:LeaveCurrent()
-		self.returnPage = self.page
-		self.returnIndex = self.index
+	-- What's new has its own window, so it never looks like setup asking for something
+	if Setup.WhatsNew then
+		Setup.WhatsNew:Open()
 	end
-	self.page = 'whatsnew'
-	self.window:Show()
-	self:Render(true)
+end
+
+---When a step says its pick finishes the addon (step.finishNow returns a button label), Next does it
+---@return string|nil label
+function Hub:GetFinishNowLabel()
+	local entry = self.page == 'step' and self.run and self.run.entries[self.index]
+	if not entry or type(entry.step.finishNow) ~= 'function' then
+		return nil
+	end
+	local ok, label = SafeCall(entry.reg.id .. '.' .. entry.step.id .. ' finishNow', entry.step.finishNow)
+	return ok and type(label) == 'string' and label or nil
 end
 
 ---Next button
 function Hub:GoNext()
 	self:RefreshRun()
+	if self.page == 'step' and self:GetFinishNowLabel() and not Setup.inCombat then
+		-- Only this addon is finished; other addons still due open again after the reload
+		local entry = self.run.entries[self.index]
+		self.finishing = true
+		self:LeaveCurrent()
+		self.page = nil
+		Setup:FinishAndReload({ entry.reg })
+		self:Close()
+		self.finishing = false
+		return
+	end
 	if self.page == 'step' then
 		local entry = self.run.entries[self.index]
 		local last
@@ -841,15 +866,20 @@ function Hub:GetGrid(key)
 	if self.skin.owned then
 		if key == 'look' then
 			opts = { artHeight = 148, minWidth = 210, maxColumns = 3, cardHeight = 238, spacing = 12 }
+		elseif key == 'look-compact' then
+			-- A short band of art and the name under it (step.compact), for cards with no caption
+			opts = { artHeight = 62, minWidth = 210, maxColumns = 3, cardHeight = 102, spacing = 10 }
 		elseif key == 'whatsnew' then
 			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 72 }
 		elseif key == 'start' then
 			opts = { artHeight = 0, minWidth = 260, maxColumns = 2, cardHeight = 70 }
 		else
-			opts = { artHeight = 0, minWidth = 240, maxColumns = 2, cardHeight = 54 }
+			opts = { artHeight = 0, minWidth = 240, maxColumns = 2, cardHeight = 64 }
 		end
 	elseif key == 'look' then
 		opts = { artHeight = 92, minWidth = 165, maxColumns = 4 }
+	elseif key == 'look-compact' then
+		opts = { artHeight = 48, minWidth = 165, maxColumns = 4, cardHeight = 86 }
 	elseif key == 'whatsnew' then
 		opts = { artHeight = 0, minWidth = 220, maxColumns = 2, cardHeight = 104 }
 	elseif key == 'start' then
@@ -879,6 +909,15 @@ function Hub:HideContent()
 	for _, frame in pairs(self.customFrames) do
 		frame:Hide()
 	end
+	for _, frame in pairs(self.choiceExtras or {}) do
+		frame:Hide()
+	end
+	for _, header in pairs(self.followHeaders or {}) do
+		header:Hide()
+	end
+	if self.whatsNewFrame then
+		self.whatsNewFrame:Hide()
+	end
 	if self.summaryFrame then
 		self.summaryFrame:Hide()
 	end
@@ -891,7 +930,9 @@ function Hub:GetContentWidth()
 	if width < 100 then
 		width = 540
 	end
-	return width
+	-- Room on the right for a selected card's glow and the panel's inner edge, so the last column
+	-- of cards (and its corner badges) is never cut off
+	return width - 14
 end
 
 ---@param title string
@@ -934,6 +975,13 @@ function Hub:Render(scrollToTop)
 		end
 	end
 	self.contentHeight = height
+	local current = self.page == 'step' and self.run and self.run.entries[self.index]
+	local currentKey = current and (current.reg.id .. '.' .. current.step.id)
+	for key, frame in pairs(self.choiceExtras or {}) do
+		if key ~= currentKey then
+			frame:Hide()
+		end
+	end
 	right.Content:SetHeight(math.max(height, 1))
 	if scrollToTop then
 		right.Scroll:SetVerticalScroll(0)
@@ -1016,10 +1064,82 @@ function Hub:RenderStep(entry)
 	return 1
 end
 
+---A row of choices drawn above a look or choice step's cards (step.extra)
+---@return number height
+function Hub:RenderChoiceExtra(reg, step, ctx)
+	local extra = step.extra
+	local key = reg.id .. '.' .. step.id
+	self.choiceExtras = self.choiceExtras or {}
+	local frame = self.choiceExtras[key]
+	-- Only the page on screen draws its row
+	local onScreen = self.page == 'step' and self.run and self.run.entries[self.index]
+	if not onScreen or onScreen.step ~= step then
+		if frame then
+			frame:Hide()
+		end
+		return 0
+	end
+	local content = self.window.RightPanel.Content
+	local Kit = LibAT.UI.Kit
+	local width = self:GetContentWidth()
+	if not frame then
+		frame = CreateFrame('Frame', nil, content)
+		frame.title = CreateSkinFontString(frame, 'OVERLAY', self.skin, 'GameFontNormal')
+		frame.title:SetJustifyH('LEFT')
+		frame.title:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, 0)
+		frame.text = CreateSkinFontString(frame, 'OVERLAY', self.skin, 'GameFontHighlightSmall')
+		frame.text:SetJustifyH('LEFT')
+		frame.text:SetWordWrap(true)
+		frame.text:SetPoint('TOPLEFT', frame.title, 'BOTTOMLEFT', 0, -3)
+		-- One joined row of buttons; the picked one is filled
+		frame.segments = {}
+		for i, choice in ipairs(extra.choices) do
+			local button = Kit:CreateButton(frame, choice.title, 'secondary')
+			button:SetScript('OnClick', function()
+				SafeCall(key .. ' extra set', extra.set, choice.value, frame.ctx)
+				Hub:RenderCurrent()
+			end)
+			frame.segments[i] = button
+		end
+		self.choiceExtras[key] = frame
+	end
+	self.skin:SetFont(frame.title, 14)
+	self.skin:SetFont(frame.text, 12)
+	local colors = self.skin.colors
+	frame.title:SetTextColor(colors.text[1], colors.text[2], colors.text[3])
+	frame.text:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
+	frame.title:SetText(extra.title or '')
+	frame.text:SetWidth(width)
+	frame.text:SetText(extra.text or '')
+	frame.ctx = ctx
+	local _, current = SafeCall(key .. ' extra get', extra.get)
+	local textHeight = (extra.text and extra.text ~= '') and (frame.text:GetStringHeight() + 3) or 0
+	local x = 0
+	for i, choice in ipairs(extra.choices) do
+		local button = frame.segments[i]
+		button.style = choice.value == current and 'primary' or 'secondary'
+		if button.ApplyKit then
+			button:ApplyKit()
+		end
+		button:ClearAllPoints()
+		button:SetPoint('TOPLEFT', frame, 'TOPLEFT', x, -(18 + textHeight + 6))
+		-- Neighbours share their edge
+		x = x + (button:GetWidth() or 80) - 1
+	end
+	local height = 18 + textHeight + 6 + 26
+	frame:ClearAllPoints()
+	frame:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, 0)
+	frame:SetSize(width, height)
+	frame:Show()
+	-- Room before the cards, with their own heading when the step names one
+	return height + 16
+end
+
 ---Look and choice steps
 ---@return number height
 function Hub:RenderChoice(reg, step, ctx)
-	local grid = self:GetGrid(step.kind == 'look' and 'look' or 'choice')
+	local gridKey = step.kind == 'look' and (step.compact and 'look-compact' or 'look') or 'choice'
+	local grid = self:GetGrid(gridKey)
 	local list = {}
 	for _, option in ipairs(Setup:GetOptions(step)) do
 		local variant
@@ -1032,6 +1152,7 @@ function Hub:RenderChoice(reg, step, ctx)
 			title = option.title,
 			caption = option.caption,
 			tag = option.tag,
+			tagStyle = option.tagStyle,
 			art = option.art,
 			accent = option.accent,
 			recommended = option.recommended or (step.recommended ~= nil and step.recommended == option.value),
@@ -1064,10 +1185,76 @@ function Hub:RenderChoice(reg, step, ctx)
 		local selected = card.data.value == current
 		card:SetState(selected, true, selected and label or nil)
 	end
+	local top = 0
+	if step.extra and step.extra.choices and #step.extra.choices > 0 then
+		top = self:RenderChoiceExtra(reg, step, ctx)
+	end
 	grid:ClearAllPoints()
-	grid:SetPoint('TOPLEFT', self.window.RightPanel.Content, 'TOPLEFT', 0, 0)
+	grid:SetPoint('TOPLEFT', self.window.RightPanel.Content, 'TOPLEFT', 0, -top)
 	grid:Show()
-	return grid:Layout(self:GetContentWidth())
+	local height = top + grid:Layout(self:GetContentWidth())
+	if step.follow then
+		height = height + self:RenderChoiceFollow(reg, step, ctx, height)
+	end
+	return height
+end
+
+---A second set of cards under a choice, shown when the first pick needs one (step.follow)
+---@return number height
+function Hub:RenderChoiceFollow(reg, step, ctx, top)
+	local follow = step.follow
+	local key = reg.id .. '.' .. step.id
+	local content = self.window.RightPanel.Content
+	local grid = self:GetGrid('follow')
+	self.followHeaders = self.followHeaders or {}
+	local header = self.followHeaders[key]
+	if not header then
+		header = CreateSkinFontString(content, 'OVERLAY', self.skin, 'GameFontNormal')
+		header:SetJustifyH('LEFT')
+		self.followHeaders[key] = header
+	end
+	local shown = true
+	if type(follow.shown) == 'function' then
+		local ok, result = SafeCall(key .. ' follow shown', follow.shown)
+		shown = ok and result and true or false
+	end
+	if not shown then
+		header:Hide()
+		grid:Hide()
+		return 0
+	end
+	local options = follow.choices
+	if type(options) == 'function' then
+		local ok, result = SafeCall(key .. ' follow choices', options)
+		options = ok and type(result) == 'table' and result or {}
+	end
+	self.skin:SetFont(header, 15)
+	local colors = self.skin.colors
+	header:SetTextColor(colors.text[1], colors.text[2], colors.text[3])
+	header:SetText(type(follow.title) == 'function' and select(2, SafeCall(key .. ' follow title', follow.title)) or follow.title or '')
+	header:ClearAllPoints()
+	header:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -(top + 18))
+	header:Show()
+	local list = {}
+	for _, option in ipairs(options) do
+		list[#list + 1] = { value = option.value, title = option.title, caption = option.caption, tag = option.tag, recommended = option.recommended }
+	end
+	grid.opts.onClick = function(_, value)
+		SafeCall(key .. ' follow set', follow.set, value, ctx)
+		Hub:RenderCurrent()
+	end
+	grid.opts.onVariant = nil
+	grid.opts.onCheck = nil
+	grid:SetCards(list)
+	local _, current = SafeCall(key .. ' follow get', follow.get)
+	for _, card in ipairs(grid.cards) do
+		local selected = card.data.value == current
+		card:SetState(selected, true, selected and 'Selected' or nil)
+	end
+	grid:ClearAllPoints()
+	grid:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -(top + 44))
+	grid:Show()
+	return 44 + grid:Layout(self:GetContentWidth())
 end
 
 ---A toggle group: header, Turn all on/off, and a grid of checkable cards
@@ -1107,10 +1294,7 @@ end
 ---Toggles steps
 ---@return number height
 function Hub:RenderToggles(reg, step, ctx)
-	local groups = step.groups
-	if not groups then
-		groups = { { items = step.items or {} } }
-	end
+	local groups = step.groups and Setup:GetToggleGroups(step) or { { items = step.items or {} } }
 	local width = self:GetContentWidth()
 	local content = self.window.RightPanel.Content
 	local y = 0
@@ -1179,6 +1363,9 @@ function Hub:RenderToggles(reg, step, ctx)
 		group.Title:SetText(groupDef.title or '')
 		group.AllOn:ApplyColor()
 		group.AllOff:ApplyColor()
+		-- Steps whose switches each need their own decision leave out "Turn all on"
+		group.AllOn:SetShown(not step.noBulk)
+		group.AllOff:SetShown(not step.noBulk)
 		group:ClearAllPoints()
 		group:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, -y)
 		group:SetWidth(width)
@@ -1517,6 +1704,30 @@ function Hub:RenderSummary(regs, final)
 				end
 			end
 		end
+		-- The addon's own closing words: where its settings are, and pages worth a look later
+		local finish = final and reg.config.finish
+		if type(finish) == 'table' then
+			if finish.note then
+				used = used + 1 -- spacer
+				local noteRow = Row(14)
+				noteRow.label:SetText(finish.note)
+			end
+			if finish.links and #finish.links > 0 then
+				used = used + 1 -- spacer
+				local header = Row(14)
+				header.label:SetText(finish.linksTitle or 'When you want more')
+				for _, link in ipairs(finish.links) do
+					local linkRow = Row(28)
+					linkRow.label:SetText(link.title or '')
+					linkRow.value:SetText(link.caption or '')
+					linkRow.link:SetLabel(link.action or 'Open')
+					linkRow.link:SetScript('OnClick', function()
+						SafeCall(reg.id .. ' finish link', link.onClick)
+					end)
+					linkRow.link:Show()
+				end
+			end
+		end
 		used = used + 1 -- spacer
 	end
 
@@ -1619,56 +1830,26 @@ end
 ---@return number height
 function Hub:RenderWhatsNew()
 	self:SetHeader("What's new", 'The latest changes in your addons.', '', false)
-	local grid = self:GetGrid('whatsnew')
-	local list = {}
-	local unseen = {}
-	local regsById = {}
-	for _, reg in ipairs(Setup:GetSortedRegistrations()) do
-		local newest = Setup:GetNewestWhatsNew(reg)
-		if newest then
-			regsById[reg.id] = reg
-			unseen[reg.id] = Setup:GetUnseenWhatsNew(reg) ~= nil
-			local action = newest.action or {}
-			list[#list + 1] = {
-				value = reg.id,
-				title = newest.title,
-				caption = newest.caption,
-				tag = reg.name .. ' ' .. newest.version,
-				link = {
-					text = action.text or 'Show me',
-					onClick = function()
-						Setup:RunAction(reg, newest.action)
-					end,
-				},
-			}
-		end
+	local content = self.window.RightPanel.Content
+	local frame = self.whatsNewFrame
+	if not frame then
+		frame = CreateFrame('Frame', nil, content)
+		self.whatsNewFrame = frame
 	end
-	if #list == 0 then
-		local message = self.window.RightPanel.Message
-		message:SetText('Nothing new right now.')
-		message:Show()
-		return 20
+	local width = self:GetContentWidth()
+	frame:ClearAllPoints()
+	frame:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, 0)
+	frame:SetWidth(width)
+	frame:Show()
+	local ok, height = pcall(Setup.WhatsNew.Draw, Setup.WhatsNew, frame, width, function()
+		Hub:RenderCurrent()
+	end)
+	if not ok then
+		Log('error', "What's new could not be drawn: " .. tostring(height))
+		height = 20
 	end
-	grid.opts.onClick = function(_, id)
-		local reg = regsById[id]
-		local newest = reg and Setup:GetNewestWhatsNew(reg)
-		if newest then
-			Setup:RunAction(reg, newest.action)
-		end
-	end
-	grid.opts.onCheck = nil
-	grid.opts.onVariant = nil
-	grid:SetCards(list)
-	for _, card in ipairs(grid.cards) do
-		card:SetState(false, true, unseen[card.data.value] and 'New' or nil)
-	end
-	for id in pairs(regsById) do
-		Setup:MarkWhatsNewSeen(regsById[id])
-	end
-	grid:ClearAllPoints()
-	grid:SetPoint('TOPLEFT', self.window.RightPanel.Content, 'TOPLEFT', 0, 0)
-	grid:Show()
-	return grid:Layout(self:GetContentWidth())
+	frame:SetHeight(math.max(height, 1))
+	return height
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -1725,9 +1906,11 @@ end
 
 -- Chapters sit a level below their addon: shorter rows, smaller text
 local RAIL_HEADER_HEIGHT = 30
-local RAIL_CHAPTER_HEIGHT = 24
-local RAIL_AXIS = 18 -- x of the route line within a row
-local RAIL_TEXT = 34 -- x where chapter names start
+local RAIL_CHAPTER_HEIGHT = 30
+local RAIL_PAGE_HEIGHT = 25 -- pages inside an open chapter
+local RAIL_PAGE_INDENT = 12
+local RAIL_AXIS = 20 -- x of the route line within a row
+local RAIL_TEXT = 40 -- x where chapter names start
 -- Dots on the path ahead, measured from the node's center, in each half of a row
 local RAIL_DOTS = { 8, 11 }
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
@@ -1771,6 +1954,23 @@ function Hub:GetChapterRow(index)
 	row.divider = row:CreateTexture(nil, 'ARTWORK')
 	row.divider:SetTexture(WHITE)
 	row.divider:SetHeight(1)
+	-- + / - for a chapter with pages inside it
+	row.toggle = CreateFrame('Button', nil, row)
+	row.toggle:SetSize(18, 18)
+	row.toggle:SetPoint('RIGHT', row, 'RIGHT', -2, 0)
+	row.toggle.across = row.toggle:CreateTexture(nil, 'OVERLAY')
+	row.toggle.across:SetTexture(WHITE)
+	row.toggle.across:SetSize(8, 2)
+	row.toggle.across:SetPoint('CENTER')
+	row.toggle.down = row.toggle:CreateTexture(nil, 'OVERLAY')
+	row.toggle.down:SetTexture(WHITE)
+	row.toggle.down:SetSize(2, 8)
+	row.toggle.down:SetPoint('CENTER')
+	row.toggle:SetScript('OnClick', function(self)
+		if self.onClick then
+			self.onClick()
+		end
+	end)
 	row:SetScript('OnClick', function(self)
 		if self.onClick then
 			self.onClick()
@@ -1781,7 +1981,7 @@ function Hub:GetChapterRow(index)
 end
 
 local function ResetRow(row)
-	for _, key in ipairs({ 'lineTop', 'lineBottom', 'node', 'check', 'chevron', 'status', 'divider' }) do
+	for _, key in ipairs({ 'lineTop', 'lineBottom', 'node', 'check', 'chevron', 'status', 'divider', 'toggle' }) do
 		row[key]:Hide()
 	end
 	for _, dot in ipairs(row.dots) do
@@ -1837,6 +2037,51 @@ function Hub:GetChapters(reg)
 	return chapters
 end
 
+---A chapter is open while one of its pages is showing, unless the player opened or closed it
+---@param key string
+---@param showing boolean
+---@return boolean
+function Hub:IsChapterOpen(key, showing)
+	local choice = self.chapterOpen and self.chapterOpen[key]
+	if choice == nil then
+		return showing
+	end
+	return choice
+end
+
+---The rail's stops: each chapter, and the pages of every open chapter below it
+---@return {name: string, first: number, last: number, page?: boolean, key?: string, open?: boolean}[]
+function Hub:GetRailItems(reg)
+	local items = {}
+	for _, chapter in ipairs(self:GetChapters(reg)) do
+		local hasPages = chapter.last > chapter.first
+		local key = reg.id .. ':' .. chapter.name
+		local showing = self.page == 'step' and self.index >= chapter.first and self.index <= chapter.last
+		local open = hasPages and self:IsChapterOpen(key, showing)
+		items[#items + 1] = { name = chapter.name, first = chapter.first, last = open and chapter.first or chapter.last, key = hasPages and key or nil, open = open }
+		if open then
+			for i = chapter.first + 1, chapter.last do
+				local step = self.run.entries[i].step
+				items[#items + 1] = { name = step.name or step.title or step.id, first = i, last = i, page = true }
+			end
+		end
+	end
+	return items
+end
+
+---Addons the left list shows: an addon with no page for this character (no Enchanting, no totems,
+---nothing to import) is left out unless it is part of the current run
+---@return LibAT.SetupRegistration[]
+function Hub:GetRailRegistrations()
+	local list = {}
+	for _, reg in ipairs(Setup:GetSortedRegistrations()) do
+		if self:IsInRun(reg) or #Setup:GetVisibleSteps(reg) > 0 then
+			list[#list + 1] = reg
+		end
+	end
+	return list
+end
+
 function Hub:RefreshChapterRail(width)
 	local left = self.window.LeftPanel
 	local kit = self.skin
@@ -1861,7 +2106,7 @@ function Hub:RefreshChapterRail(width)
 		return row
 	end
 
-	local registrations = Setup:GetSortedRegistrations()
+	local registrations = self:GetRailRegistrations()
 	for regIndex, reg in ipairs(registrations) do
 		local inRun = self:IsInRun(reg)
 		local header = NextRow(RAIL_HEADER_HEIGHT)
@@ -1886,20 +2131,38 @@ function Hub:RefreshChapterRail(width)
 		end
 
 		if inRun then
-			local chapters = self:GetChapters(reg)
+			local chapters = self:GetRailItems(reg)
 			for c, chapter in ipairs(chapters) do
-				local row = NextRow(RAIL_CHAPTER_HEIGHT)
+				local page = chapter.page
+				local row = NextRow(page and RAIL_PAGE_HEIGHT or RAIL_CHAPTER_HEIGHT)
 				local isCurrent = self.page == 'step' and self.index >= chapter.first and self.index <= chapter.last
 				local seen = self.page == 'summary' or (self.page == 'step' and chapter.last < self.index)
 				local previous = chapters[c - 1]
 				local previousCurrent = previous and self.page == 'step' and self.index >= previous.first and self.index <= previous.last
 				local isLast = c == #chapters
+				-- Pages draw a size smaller than their chapter
+				local nodeScale = page and 0.8 or 1.4
 
-				kit:SetFont(row.text, 12)
-				row.text:SetPoint('LEFT', row, 'LEFT', RAIL_TEXT, 0)
-				row.text:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
+				kit:SetFont(row.text, page and 12 or 14)
+				local textX = page and (RAIL_TEXT + RAIL_PAGE_INDENT) or RAIL_TEXT
+				row.text:SetPoint('LEFT', row, 'LEFT', textX, 0)
+				row.text:SetPoint('RIGHT', row, 'RIGHT', chapter.key and -22 or -4, 0)
 				row.text:SetText(chapter.name)
 				local textWidth = LibAT.UI.MeasureText(row.text, 7)
+				if chapter.key then
+					local toggle = row.toggle
+					local tone = colors.secondary
+					toggle.across:SetVertexColor(tone[1], tone[2], tone[3], 1)
+					toggle.down:SetVertexColor(tone[1], tone[2], tone[3], 1)
+					toggle.down:SetShown(not chapter.open)
+					local key, open = chapter.key, chapter.open
+					toggle.onClick = function()
+						Hub.chapterOpen = Hub.chapterOpen or {}
+						Hub.chapterOpen[key] = not open
+						Hub:RefreshList()
+					end
+					toggle:Show()
+				end
 
 				-- The path behind is solid in the path color; ahead it is solid to the next stop, then dotted
 				if seen then
@@ -1928,20 +2191,21 @@ function Hub:RefreshChapterRail(width)
 				row.node:SetVertexColor(1, 1, 1, 1)
 				if isCurrent then
 					if Kit:SetAsset(row.node, kit, 'marker') then
-						row.node:SetSize(16, 16)
+						row.node:SetSize(16 * nodeScale, 16 * nodeScale)
 					else
 						Kit:SetAsset(row.node, kit, 'activeMarker')
-						row.node:SetSize(9, 9)
+						row.node:SetSize(9 * nodeScale, 9 * nodeScale)
 						row.node:SetVertexColor(r, g, b, 1)
 					end
 					row.text:SetTextColor(1, 1, 1)
 				else
 					if Kit:SetAsset(row.node, kit, seen and 'node-done' or 'node-upcoming') then
-						row.node:SetSize(seen and 11 or 12, seen and 11 or 12)
+						local size = (seen and 11 or 12) * nodeScale
+						row.node:SetSize(size, size)
 					else
 						local tone = seen and colors.secondary or colors.muted
 						Kit:SetAsset(row.node, kit, 'activeMarker')
-						row.node:SetSize(7, 7)
+						row.node:SetSize(7 * nodeScale, 7 * nodeScale)
 						row.node:SetVertexColor(tone[1], tone[2], tone[3], 1)
 					end
 					local textColor = seen and colors.text or colors.secondary
@@ -1949,7 +2213,7 @@ function Hub:RefreshChapterRail(width)
 					if seen then
 						ShowCheck(row.check, kit, tick)
 						row.check:ClearAllPoints()
-						row.check:SetPoint('LEFT', row, 'LEFT', RAIL_TEXT + textWidth + 6, 0)
+						row.check:SetPoint('LEFT', row, 'LEFT', textX + textWidth + 6, 0)
 					end
 				end
 				row.node:Show()
@@ -1992,7 +2256,7 @@ function Hub:RefreshList()
 	if owned then
 		self:RefreshChapterRail(width)
 	else
-		for _, reg in ipairs(Setup:GetSortedRegistrations()) do
+		for _, reg in ipairs(self:GetRailRegistrations()) do
 			used = used + 1
 			local row = self:GetListRow(used)
 			row:ClearAllPoints()
@@ -2231,7 +2495,7 @@ function Hub:UpdateFooter()
 	elseif page == 'step' then
 		w.SkipButton:SetText('Skip this addon')
 		w.RecButton:SetText('Use recommended for the rest')
-		w.NextButton:SetText(self.index >= total and 'Finish' or 'Next')
+		w.NextButton:SetText(self:GetFinishNowLabel() or (self.index >= total and 'Finish' or 'Next'))
 		w.BackButton:SetEnabled(self.index > 1 or self.startShown)
 		right.Progress:SetMinMaxValues(0, math.max(total, 1))
 		right.Progress:SetValue(self.index)
@@ -2310,7 +2574,7 @@ function Hub:UpdateOwnedFooter()
 			w.SkipMenu.recommended:SetLabel('Use recommended for all - keeps current addon choices')
 		end
 	elseif page == 'step' then
-		w.NextButton:SetText(self.index >= total and 'Finish' or 'Next')
+		w.NextButton:SetText(self:GetFinishNowLabel() or (self.index >= total and 'Finish' or 'Next'))
 		w.BackButton:SetEnabled(self.index > 1 or self.startShown)
 		w.RightPanel.Progress:SetMinMaxValues(0, math.max(total, 1))
 		w.RightPanel.Progress:SetValue(self.index)

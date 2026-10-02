@@ -57,10 +57,14 @@ local LibAT = LibAT
 ---@field set? fun(valueOrKey: any, ctxOrValue: any, ctx?: LibAT.SetupContext) look/choice: set(value, ctx); toggles: set(key, value, ctx)
 ---@field choices? LibAT.SetupOption[] choice steps (look steps may use it too)
 ---@field cards? LibAT.SetupOption[] look steps
+---@field compact? boolean look steps: short picture cards with the name under them (crop each card's art with texCoord)
+---@field finishNow? fun(): string|nil Return a button label when the pick on this step finishes the addon's setup; Next then applies its changes and reloads at once
+---@field extra? {title: string, text?: string, choices: {value: any, title: string}[], get: fun(): any, set: fun(value: any, ctx: LibAT.SetupContext)} look/choice steps: a row of choices above the cards
 ---@field getVariant? fun(value: any): any look steps with variants
 ---@field setVariant? fun(value: any, variant: any, ctx: LibAT.SetupContext)
 ---@field items? LibAT.SetupToggle[] toggles steps
----@field groups? LibAT.SetupToggleGroup[] toggles steps
+---@field groups? LibAT.SetupToggleGroup[]|fun(step: LibAT.SetupStep): LibAT.SetupToggleGroup[] toggles steps
+---@field noBulk? boolean toggles steps: no "Turn all on / off" links, each switch is its own decision
 ---@field sources? LibAT.SetupImportSource[] import steps
 ---@field widgets? table<string, LibAT.WidgetDef> form steps (BuildWidgets definitions, set(info, value))
 ---@field build? fun(frame: Frame, ctx: LibAT.SetupContext) custom steps
@@ -74,10 +78,15 @@ local LibAT = LibAT
 ---@field caption? string
 ---@field art? LibAT.CardArt
 ---@field action? {text?: string, options?: string|fun(), step?: string}
+---@field date? string When the version came out, shown as written
+---@field lines? {kind: 'new'|'improved', text: string}[] The version's changes, in the player's words
+---@field fixes? number How many problems the version fixed
+---@field hero? {title: string, text?: string, art?: LibAT.CardArt, action?: {text?: string, options?: string|fun(), step?: string}} A release worth showing off. A newer, unseen hero opens What's new by itself.
 
 ---@class LibAT.SetupConfig
 ---@field name string Display name
 ---@field icon? string|number
+---@field brand? string The name with color codes, for titles that have room for it
 ---@field summary? string One line about the addon for the Start page
 ---@field priority? number Lower opens first (a host UI may use 10; default 100)
 ---@field isExistingUser? fun(): boolean True when the player used this addon before Setup knew about it
@@ -88,6 +97,7 @@ local LibAT = LibAT
 ---@field onComplete? fun() Runs once, the first time the player finishes this addon's setup
 ---@field addonName? string Folder name; when given and the addon is still loading, detection waits for its ADDON_LOADED
 ---@field chapters? table<string, string> Step id to chapter name, for steps other files add (a step's own chapter wins)
+---@field finish? {note?: string, linksTitle?: string, links?: {title: string, caption?: string, action?: string, onClick: function}[]} Shown under this addon on the final page
 
 ---@class LibAT.Setup
 LibAT.Setup = LibAT.Setup or {}
@@ -367,12 +377,21 @@ end
 ---Every toggle item of a toggles step, in order
 ---@param step LibAT.SetupStep
 ---@return LibAT.SetupToggle[]
+function Setup:GetToggleGroups(step)
+	local groups = step.groups
+	if type(groups) == 'function' then
+		local ok, result = pcall(groups, step)
+		return (ok and type(result) == 'table') and result or {}
+	end
+	return groups or {}
+end
+
 function Setup:GetToggleItems(step)
 	if step.items then
 		return step.items
 	end
 	local list = {}
-	for _, group in ipairs(step.groups or {}) do
+	for _, group in ipairs(self:GetToggleGroups(step)) do
 		for _, item in ipairs(group.items or {}) do
 			list[#list + 1] = item
 		end
@@ -547,7 +566,9 @@ function Setup:ValidateStep(reg, step)
 	local kind = step.kind
 	if kind == 'look' or kind == 'choice' then
 		local options = self:GetOptions(step)
-		if #options == 0 then
+		-- A list built by a function may be empty now and fill in later (hide the step meanwhile)
+		local built = type(step.choices) == 'function' or type(step.cards) == 'function'
+		if #options == 0 and not built then
 			Problem(kind .. ' steps need a choices (or cards) list')
 		end
 		local hasVariants = false
@@ -573,7 +594,8 @@ function Setup:ValidateStep(reg, step)
 		end
 	elseif kind == 'toggles' then
 		local items = self:GetToggleItems(step)
-		if #items == 0 then
+		-- Groups built by a function may fill in after registration
+		if #items == 0 and type(step.groups) ~= 'function' then
 			Problem('toggles steps need an items or groups list')
 		end
 		for i, item in ipairs(items) do
@@ -752,6 +774,10 @@ function Registration:AddWhatsNew(version, spec)
 		caption = spec.caption,
 		art = spec.art,
 		action = spec.action,
+		date = spec.date,
+		lines = spec.lines,
+		fixes = spec.fixes,
+		hero = spec.hero,
 	}
 	for i, existing in ipairs(self.whatsNew) do
 		if existing.version == entry.version then
@@ -1356,6 +1382,39 @@ function Setup:GetUnseenWhatsNew(reg)
 	return newest
 end
 
+---Every What's new entry of an addon, newest first
+---@param reg LibAT.SetupRegistration
+---@return LibAT.SetupWhatsNew[]
+function Setup:GetWhatsNewHistory(reg)
+	local list = {}
+	for _, entry in ipairs(reg.whatsNew) do
+		list[#list + 1] = entry
+	end
+	table.sort(list, function(a, b)
+		return Setup.CompareVersions(a.version, b.version) > 0
+	end)
+	return list
+end
+
+---Newest unseen entry that carries a hero, if any
+---@param reg LibAT.SetupRegistration
+---@return LibAT.SetupWhatsNew|nil
+function Setup:GetUnseenHero(reg)
+	local rec = self:GetRecord(reg)
+	if not rec then
+		return nil
+	end
+	for _, entry in ipairs(self:GetWhatsNewHistory(reg)) do
+		if rec.whatsNew and Setup.CompareVersions(entry.version, rec.whatsNew) <= 0 then
+			return nil
+		end
+		if entry.hero then
+			return entry
+		end
+	end
+	return nil
+end
+
 ---Addons with an unseen What's new entry
 ---@return LibAT.SetupRegistration[]
 function Setup:GetUnseenWhatsNewAddons()
@@ -1572,28 +1631,22 @@ function Setup:AutoOpen()
 	self.Hub:Open(nil, nil, true)
 end
 
----Toast for addons that were updated with something new to show
+---After an update, open What's new by itself only when a release worth showing off (a hero) is
+---waiting. Every other update stays quiet: the window's What's new link counts it.
 function Setup:ShowWhatsNewToast()
-	local unseen = self:GetUnseenWhatsNewAddons()
-	if #unseen == 0 or not self.Hub then
+	if not self.Hub then
 		return
 	end
-	local text
-	if #unseen == 1 then
-		local entry = self:GetUnseenWhatsNew(unseen[1])
-		text = unseen[1].name .. ': ' .. (entry and entry.title or 'new features')
-	else
-		text = 'New in ' .. #unseen .. ' of your addons.'
-	end
-	self.Hub:ShowToast(text, "See what's new", function()
-		Setup.Hub:OpenWhatsNew()
-	end, {
-		onDismiss = function()
-			for _, reg in ipairs(unseen) do
-				Setup:MarkWhatsNewSeen(reg)
+	for _, reg in ipairs(self:GetUnseenWhatsNewAddons()) do
+		if self:GetUnseenHero(reg) then
+			if self.inCombat then
+				self.whatsNewAfterCombat = true
+			elseif self.WhatsNew then
+				self.WhatsNew:Open()
 			end
-		end,
-	})
+			return
+		end
+	end
 end
 
 local eventFrame = CreateFrame('Frame')
@@ -1610,6 +1663,10 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 			Setup.Hub:OnCombatChanged(true)
 		end
 	elseif event == 'PLAYER_REGEN_ENABLED' then
+		if Setup.whatsNewAfterCombat then
+			Setup.whatsNewAfterCombat = nil
+			Setup:ShowWhatsNewToast()
+		end
 		Setup.inCombat = false
 		if Setup.Hub then
 			Setup.Hub:OnCombatChanged(false)

@@ -81,6 +81,7 @@ Systems\ProfileManager\DesktopImport.lua
 # Setup System (the old Setup Wizard API is a thin layer over it)
 Systems\Setup\Setup.lua
 Systems\Setup\SetupHub.lua
+Systems\Setup\WhatsNew.lua
 Systems\SetupWizard\SetupWizard.lua
 
 # Developer Tools System

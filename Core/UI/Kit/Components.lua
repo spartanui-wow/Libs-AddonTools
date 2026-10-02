@@ -86,10 +86,17 @@ function Kit:CreateBadge(parent)
 		elseif owner.style == 'skipped' then
 			color = config.colors.skipped
 			alpha = 0.18
+		elseif owner.style == 'new' then
+			-- Text and border only
+			color = { 1, 0.82, 0 }
+			alpha = 0
+		elseif owner.style == 'popular' then
+			color = config.colors.secondary
+			alpha = 0
 		end
 		owner.bg:SetVertexColor(color[1], color[2], color[3], alpha)
-		ColorEdges(owner.edges, color, owner.style == 'recommended' and 0.65 or 0.8)
-		local text = owner.style == 'recommended' and config.colors.secondary or config.colors.text
+		ColorEdges(owner.edges, color, owner.style == 'recommended' and 0.65 or 0.85)
+		local text = (owner.style == 'recommended' or owner.style == 'popular') and config.colors.secondary or (owner.style == 'new' and color) or config.colors.text
 		owner.text:SetTextColor(text[1], text[2], text[3])
 	end)
 end
@@ -473,12 +480,57 @@ function Kit:CreateScrollArea(parent)
 		local barHeight = bar:GetHeight() or view
 		local thumbHeight = math.max(math.min(barHeight, barHeight * view / math.max(content, 1)), 24)
 		local offset = range > 0 and (barHeight - thumbHeight) * scroll:GetVerticalScroll() / range or 0
+		bar.offset, bar.thumbHeight, bar.range = offset, thumbHeight, range
 		bar.thumb:ClearAllPoints()
 		bar.thumb:SetPoint('TOPLEFT', bar, 'TOPLEFT', 0, -offset)
 		bar.thumb:SetPoint('TOPRIGHT', bar, 'TOPRIGHT', 0, -offset)
 		bar.thumb:SetHeight(thumbHeight)
 		bar:SetShown(range > 0)
 	end
+	-- Grab the thumb and drag it, or click the track to jump there. The hit area is wider than the
+	-- thin bar so it is easy to catch.
+	local grip = CreateFrame('Button', nil, bar)
+	grip:SetPoint('TOPLEFT', bar, 'TOPLEFT', -5, 0)
+	grip:SetPoint('BOTTOMRIGHT', bar, 'BOTTOMRIGHT', 5, 0)
+	grip:RegisterForClicks('LeftButtonUp')
+	local function CursorFromTop()
+		local _, y = GetCursorPosition()
+		return (bar:GetTop() or 0) - y / bar:GetEffectiveScale()
+	end
+	local function DragTo(position)
+		local barHeight = bar:GetHeight() or 1
+		local travel = math.max(barHeight - (bar.thumbHeight or 24), 1)
+		local offset = math.min(math.max(position - (grip.grab or 0), 0), travel)
+		scroll:SetVerticalScroll((bar.range or 0) * offset / travel)
+		UpdateThumb()
+	end
+	grip:SetScript('OnMouseDown', function(owner, button)
+		if button ~= 'LeftButton' then
+			return
+		end
+		local position = CursorFromTop()
+		local top = bar.offset or 0
+		local height = bar.thumbHeight or 24
+		-- On the thumb: keep the point that was grabbed under the cursor; on the track: centre it there
+		owner.grab = (position >= top and position <= top + height) and (position - top) or height / 2
+		owner.dragging = true
+		DragTo(position)
+	end)
+	grip:SetScript('OnMouseUp', function(owner)
+		owner.dragging = false
+	end)
+	grip:SetScript('OnHide', function(owner)
+		owner.dragging = false
+	end)
+	grip:SetScript('OnUpdate', function(owner)
+		if owner.dragging then
+			if not IsMouseButtonDown('LeftButton') then
+				owner.dragging = false
+				return
+			end
+			DragTo(CursorFromTop())
+		end
+	end)
 	scroll:SetScript('OnMouseWheel', function(owner, delta)
 		local range = math.max((child:GetHeight() or 0) - (owner:GetHeight() or 0), 0)
 		owner:SetVerticalScroll(math.min(math.max(owner:GetVerticalScroll() - delta * 42, 0), range))
@@ -512,7 +564,7 @@ function Kit:CreateTabs(parent, labels)
 	function tabs:SetSelected(index)
 		self.selected = index
 		for i, button in ipairs(self.buttons) do
-			button.style = i == index and 'primary' or 'ghost'
+			button.style = i == index and 'primary' or (self.idleStyle or 'ghost')
 			button:ApplyKit()
 		end
 	end

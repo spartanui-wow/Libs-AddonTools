@@ -37,6 +37,86 @@ local function ColorEdges(edges, color, alpha)
 	end
 end
 
+local variantMenu
+
+---The list of a card's variants, opened by hovering its variant chip
+---@return Frame
+local function VariantMenu()
+	if variantMenu then
+		return variantMenu
+	end
+	local menu = Kit:CreatePopover(UIParent, 200, 40)
+	menu:SetFrameStrata('FULLSCREEN_DIALOG')
+	menu:SetClampedToScreen(true)
+	menu:EnableMouse(true)
+	menu.rows = {}
+	menu:Hide()
+	-- Close once the mouse has left both the chip and the list for a moment
+	menu:SetScript('OnUpdate', function(self, elapsed)
+		if self:IsMouseOver() or (self.owner and self.owner:IsMouseOver()) then
+			self.away = 0
+			return
+		end
+		self.away = (self.away or 0) + elapsed
+		if self.away > 0.25 then
+			self:Hide()
+		end
+	end)
+	variantMenu = menu
+	return menu
+end
+
+---@param chip Button the card's variant chip
+local function OpenVariantMenu(chip)
+	local card = chip.card
+	local data = card and card.data
+	if not data or not data.variants or #data.variants < 2 then
+		return
+	end
+	local menu = VariantMenu()
+	menu.owner = chip
+	menu.away = 0
+	local width = 160
+	for i, variant in ipairs(data.variants) do
+		local row = menu.rows[i]
+		if not row then
+			row = Kit:CreateButton(menu, '', 'secondary')
+			row:SetHeight(22)
+			menu.rows[i] = row
+		end
+		row.fixedWidth = nil
+		row:SetText(variant.text)
+		width = math.max(width, row:GetWidth())
+		row.style = variant.value == data.variant and 'primary' or 'secondary'
+		if row.ApplyKit then
+			row:ApplyKit()
+		end
+		row:SetScript('OnClick', function()
+			data.variant = variant.value
+			chip:SetText(variant.text)
+			menu:Hide()
+			if card.onVariant then
+				card.onVariant(card, data.value, variant.value)
+			end
+		end)
+		row:Show()
+	end
+	for i = #data.variants + 1, #menu.rows do
+		menu.rows[i]:Hide()
+	end
+	for i, variant in ipairs(data.variants) do
+		local row = menu.rows[i]
+		row.fixedWidth = width
+		row:SetWidth(width)
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', menu, 'TOPLEFT', 6, -6 - (i - 1) * 25)
+	end
+	menu:SetSize(width + 12, #data.variants * 25 + 9)
+	menu:ClearAllPoints()
+	menu:SetPoint('TOPLEFT', chip, 'BOTTOMLEFT', 0, -2)
+	menu:Show()
+end
+
 function Kit:CreateCard(parent, options)
 	options = options or {}
 	local card = CreateFrame('Button', nil, parent)
@@ -80,10 +160,23 @@ function Kit:CreateCard(parent, options)
 	card.tag = card:CreateFontString(nil, 'OVERLAY')
 	self:SetFont(card.tag, 11)
 	card.tag:SetJustifyH('RIGHT')
+	-- A tag with a style (data.tagStyle, for example 'new') is drawn as a badge instead of plain text
+	card.tagBadge = self:CreateBadge(card)
 	card.recBadge = self:CreateBadge(card)
 	card.stateBadge = self:CreateBadge(card)
 	card.link = self:CreateTextButton(card)
-	card.variant = self:CreateTextButton(card)
+	card.variant = self:CreateButton(card, '', 'secondary')
+	card.variant:SetHeight(20)
+	card.variant.card = card
+	card.variant.arrow = card.variant:CreateTexture(nil, 'OVERLAY')
+	card.variant.arrow:SetSize(9, 9)
+	card.variant.arrow:SetPoint('RIGHT', card.variant, 'RIGHT', -7, 0)
+	if Kit.SetAsset then
+		Kit:SetAsset(card.variant.arrow, Kit:GetActive(), 'triangle')
+	end
+	-- The triangle points right; a drop-down points down
+	card.variant.arrow:SetRotation(math.rad(-90))
+	card.variant:HookScript('OnEnter', OpenVariantMenu)
 
 	local function ApplyArt(owner, art)
 		if not art or (options.artHeight or 0) <= 0 then
@@ -116,33 +209,72 @@ function Kit:CreateCard(parent, options)
 
 	function card:LayoutParts()
 		local data = self.data or {}
-		local top = self.art:IsShown() and ((options.artHeight or 0) + 11) or 8
+		local hasArt = self.art:IsShown()
+		local top = hasArt and ((options.artHeight or 0) + 11) or 10
+		-- Cards without a picture carry their badges in the top right corner, beside the title, so a
+		-- badge never lands on the caption. Picture cards put them in the picture's top corners.
+		local topBadges = not hasArt and not data.checkable
+		local stateShown = self.stateBadge:IsShown()
+		self.recBadge:ClearAllPoints()
+		self.stateBadge:ClearAllPoints()
+		local titleRight = -11
+		if topBadges then
+			local anchor
+			if self.recBadge:IsShown() then
+				self.recBadge:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -9, -top + 1)
+				anchor = self.recBadge
+			end
+			if stateShown then
+				if anchor then
+					self.stateBadge:SetPoint('RIGHT', anchor, 'LEFT', -6, 0)
+				else
+					self.stateBadge:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -9, -top + 1)
+				end
+				anchor = self.stateBadge
+			end
+			if anchor then
+				titleRight = nil
+				self.titleAnchor = anchor
+			end
+		else
+			self.recBadge:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -9, -9)
+			if data.checkable then
+				self.stateBadge:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -10, 8)
+			else
+				self.stateBadge:SetPoint('TOPLEFT', self, 'TOPLEFT', 9, -9)
+			end
+		end
 		self.title:ClearAllPoints()
 		self.title:SetPoint('TOPLEFT', self, 'TOPLEFT', data.checkable and 36 or 11, -top)
-		self.title:SetPoint('RIGHT', self, 'RIGHT', -11, 0)
+		if titleRight then
+			self.title:SetPoint('RIGHT', self, 'RIGHT', titleRight, 0)
+		else
+			self.title:SetPoint('RIGHT', self.titleAnchor, 'LEFT', -8, 0)
+		end
+		self.tag:ClearAllPoints()
+		self.tag:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -10, -top)
+		self.tagBadge:ClearAllPoints()
+		self.tagBadge:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -9, -top + 1)
+		if self.tagBadge:IsShown() and titleRight then
+			self.title:SetPoint('RIGHT', self.tagBadge, 'LEFT', -8, 0)
+		elseif data.tag and data.tag ~= '' and titleRight then
+			self.title:SetPoint('RIGHT', self.tag, 'LEFT', -8, 0)
+		end
 		self.caption:ClearAllPoints()
-		self.caption:SetPoint('TOPLEFT', self.title, 'BOTTOMLEFT', 0, -2)
+		self.caption:SetPoint('TOPLEFT', self.title, 'BOTTOMLEFT', 0, -7)
 		self.caption:SetPoint('RIGHT', self, 'RIGHT', -11, 0)
 		if data.checkable then
 			self.caption:SetWordWrap(false)
 		else
 			self.caption:SetWordWrap(true)
-			self.caption:SetPoint('BOTTOM', self, 'BOTTOM', 0, 8)
+			-- Leave the bottom row free when something sits in it
+			local bottomRow = self.link:IsShown() or self.variant:IsShown()
+			self.caption:SetPoint('BOTTOM', self, 'BOTTOM', 0, bottomRow and 30 or 8)
 		end
-		self.tag:ClearAllPoints()
-		self.tag:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -10, -top)
-		if data.tag and data.tag ~= '' then
-			self.title:SetPoint('RIGHT', self.tag, 'LEFT', -8, 0)
-		end
-		self.recBadge:ClearAllPoints()
-		self.recBadge:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -9, -9)
-		self.stateBadge:ClearAllPoints()
 		self.link:ClearAllPoints()
 		if data.checkable then
-			self.stateBadge:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -10, 8)
 			self.link:SetPoint('RIGHT', self.stateBadge, 'LEFT', -10, 0)
 		else
-			self.stateBadge:SetPoint('BOTTOMLEFT', self, 'BOTTOMLEFT', 9, 8)
 			self.link:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -10, 8)
 		end
 		self.variant:ClearAllPoints()
@@ -154,7 +286,13 @@ function Kit:CreateCard(parent, options)
 		ApplyArt(self, data.art)
 		self.title:SetText(data.title or '')
 		self.caption:SetText(data.caption or '')
-		self.tag:SetText(data.tag or '')
+		if data.tagStyle and data.tag and data.tag ~= '' then
+			self.tag:SetText('')
+			self.tagBadge:SetLabel(data.tag, data.tagStyle)
+		else
+			self.tagBadge:Hide()
+			self.tag:SetText(data.tag or '')
+		end
 		self.check:SetShown(data.checkable and true or false)
 		self.checkMark:SetShown(data.checkable and data.checked and true or false)
 		if data.recommended then
@@ -180,7 +318,11 @@ function Kit:CreateCard(parent, options)
 					label = variant.text
 				end
 			end
-			self.variant:SetLabel('Style: ' .. label)
+			-- Room on the right for the arrow
+			self.variant.fixedWidth = nil
+			self.variant:SetText(label)
+			self.variant.fixedWidth = self.variant:GetWidth() + 14
+			self.variant:SetWidth(self.variant.fixedWidth)
 			self.variant:Show()
 		else
 			self.variant:Hide()
@@ -199,6 +341,7 @@ function Kit:CreateCard(parent, options)
 		else
 			self.stateBadge:Hide()
 		end
+		self:LayoutParts()
 		self:ApplyKit()
 	end
 
@@ -224,28 +367,13 @@ function Kit:CreateCard(parent, options)
 		self.onClick, self.onVariant, self.onCheck = nil, nil, nil
 		self.stateBadge:Hide()
 		self.recBadge:Hide()
+		self.tagBadge:Hide()
 		self.link:Hide()
 		self.variant:Hide()
 	end
 
-	card.variant:SetScript('OnClick', function()
-		local data = card.data
-		if not data or not data.variants or #data.variants == 0 then
-			return
-		end
-		local index = 1
-		for i, variant in ipairs(data.variants) do
-			if variant.value == data.variant then
-				index = i
-			end
-		end
-		local nextVariant = data.variants[(index % #data.variants) + 1]
-		data.variant = nextVariant.value
-		card.variant:SetLabel('Style: ' .. nextVariant.text)
-		if card.onVariant then
-			card.onVariant(card, data.value, nextVariant.value)
-		end
-	end)
+	-- Clicking the chip opens the list too, for players who click before the hover shows it
+	card.variant:SetScript('OnClick', OpenVariantMenu)
 	card:SetScript('OnClick', function(owner, button)
 		if not owner.enabled or not owner.data then
 			return
