@@ -951,12 +951,36 @@ function Hub:SetHeader(title, text, addonLabel, recommended)
 	end
 end
 
----Draw the current page
+---Draw the current page. Never draws inside another draw: a draw changes the header, which resizes
+---the scroll area, and the next size read fires its resize handler in the middle of the draw. A
+---second draw started there builds the page's frames again, the first draw then replaces the saved
+---ones, and the extra copies stay on screen on every later page. Such requests wait until the
+---running draw is done, then run once.
 ---@param scrollToTop? boolean
 function Hub:Render(scrollToTop)
 	if not self.window then
 		return
 	end
+	if self.rendering then
+		self.renderQueued = true
+		self.renderQueuedTop = self.renderQueuedTop or scrollToTop
+		return
+	end
+	self.rendering = true
+	-- An error must not leave the window locked out of drawing
+	xpcall(self.RenderNow, geterrorhandler(), self, scrollToTop)
+	if self.renderQueued then
+		local top = self.renderQueuedTop
+		self.renderQueued, self.renderQueuedTop = nil, nil
+		xpcall(self.RenderNow, geterrorhandler(), self, top)
+		-- Requests made during the second pass are dropped, so two draws can never chase each other
+		self.renderQueued, self.renderQueuedTop = nil, nil
+	end
+	self.rendering = false
+end
+
+---@param scrollToTop? boolean
+function Hub:RenderNow(scrollToTop)
 	local right = self.window.RightPanel
 	self:HideContent()
 	right.Content:SetWidth(self:GetContentWidth())
