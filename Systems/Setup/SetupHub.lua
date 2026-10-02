@@ -233,8 +233,9 @@ function Hub:CreateRightSide(w)
 	right.Badge.text:SetPoint('CENTER')
 	right.Badge.text:SetText('Recommended')
 
+	-- Centred in the strip under the cards, shown on picture pages only
 	right.Density = CreateTextButton(right, nil, skin)
-	right.Density:SetPoint('TOPRIGHT', right, 'TOPRIGHT', -14, -12)
+	right.Density:SetPoint('BOTTOM', right, 'BOTTOM', 0, 8)
 	right.Density:SetScript('OnClick', function()
 		Setup:SetDense(not Setup:GetDense())
 		Hub:RenderCurrent()
@@ -974,11 +975,15 @@ function Hub:SetHeader(title, text, addonLabel, recommended)
 		if right.Density.ApplyColor then
 			right.Density:ApplyColor()
 		end
-		right.Badge:ClearAllPoints()
-		right.Badge:SetPoint('RIGHT', right.Density, 'LEFT', -12, 0)
-	else
-		right.Badge:ClearAllPoints()
-		right.Badge:SetPoint('TOPRIGHT', right, 'TOPRIGHT', -14, -12)
+	end
+	-- The cards use the whole panel; picture pages keep a strip at the bottom for the size button.
+	-- Windows whose kit draws its own footer bar need no room for the progress bar here.
+	local bottom = (self.skin.owned and 10 or 34) + (pictures and 22 or 0)
+	if right.scrollBottom ~= bottom then
+		right.scrollBottom = bottom
+		right.Scroll:SetPoint('BOTTOMRIGHT', right, 'BOTTOMRIGHT', -24, bottom)
+		right.Density:ClearAllPoints()
+		right.Density:SetPoint('BOTTOM', right, 'BOTTOM', 0, bottom - 22)
 	end
 	if self.skin.owned then
 		local plain = (addonLabel or ''):gsub('|T.-|t%s*', '')
