@@ -22,6 +22,22 @@ local discoveryAdapters = {}
 -- Track which adapters have been registered to avoid duplicates
 local discoveredAddons = {}
 
+---Is this SavedVariables table already registered under any name? An addon that registers itself, a
+---discovery adapter and the AceDB registry scan can all find the same saved settings.
+---@param sv table|nil
+---@return boolean
+local function IsSavedVariablesRegistered(sv)
+	if type(sv) ~= 'table' then
+		return false
+	end
+	for _, addon in pairs(ProfileManager:GetRegisteredAddons()) do
+		if addon.db and addon.db.sv == sv then
+			return true
+		end
+	end
+	return false
+end
+
 ---Register a discovery adapter for a known addon
 ---@param key string Unique key for this adapter
 ---@param adapter DiscoveryAdapter The adapter configuration
@@ -92,8 +108,8 @@ function ProfileManager.DiscoverViaRegistry()
 				-- Check if this addon should be skipped (already registered)
 				local shouldSkip = false
 
-				-- Skip if already discovered by manual adapters
-				if discoveredAddons[addonName] then
+				-- Skip if already discovered by manual adapters, or the same saved settings are registered
+				if discoveredAddons[addonName] or IsSavedVariablesRegistered(db.sv) then
 					shouldSkip = true
 				end
 
@@ -195,7 +211,9 @@ function ProfileManager.DiscoverAddons()
 			if readyOk and isReady then
 				-- Get the database wrapper
 				local dbOk, db = pcall(adapter.getDatabase)
-				if dbOk and db then
+				if dbOk and db and IsSavedVariablesRegistered(db.sv) then
+					discoveredAddons[key] = 'registered'
+				elseif dbOk and db then
 					-- Get namespaces if available
 					local namespaces
 					if adapter.getNamespaces then

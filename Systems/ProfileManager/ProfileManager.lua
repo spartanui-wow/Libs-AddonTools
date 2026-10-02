@@ -499,7 +499,10 @@ local function BuildAddonCategories()
 		local categoryKey = 'Addons.' .. addonId
 
 		-- Apply visibility filters (skip for manually-registered addons)
-		local shouldHide = false
+		-- A plugin registered with a parent (metadata.parentId) is exported with that parent and
+		-- has no entry of its own
+		local parentId = addon.metadata and addon.metadata.parentId
+		local shouldHide = parentId ~= nil and ProfileManagerState.registeredAddons[parentId] ~= nil
 		local isManuallyRegistered = not addon.autoDiscovered
 
 		-- Filter: Hide addons set to Default profile
