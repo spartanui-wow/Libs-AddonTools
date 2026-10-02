@@ -529,6 +529,10 @@ local function GetClientType()
 		return 'Wrath Classic'
 	elseif WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC then
 		return 'Cataclysm Classic'
+	elseif WOW_PROJECT_ID == (WOW_PROJECT_CAMELOT or 18) then
+		return 'WoW Forever'
+	elseif WOW_PROJECT_ID == (WOW_PROJECT_MISTS_CLASSIC or 19) then
+		return 'Mists Classic'
 	else
 		return 'Unknown'
 	end
