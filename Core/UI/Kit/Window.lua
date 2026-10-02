@@ -173,6 +173,73 @@ local function CreateResizeHandle(shell)
 	return handle
 end
 
+---Three pieces in a row: two fixed caps and a middle that stretches between them
+local function CreateSlices(parent, layer, sublevel)
+	local slices = {}
+	for _, key in ipairs({ 'left', 'center', 'right' }) do
+		slices[key] = parent:CreateTexture(nil, layer, nil, sublevel)
+	end
+	slices.left:SetPoint('TOPLEFT')
+	slices.left:SetPoint('BOTTOMLEFT')
+	slices.right:SetPoint('TOPRIGHT')
+	slices.right:SetPoint('BOTTOMRIGHT')
+	slices.center:SetPoint('TOPLEFT', slices.left, 'TOPRIGHT')
+	slices.center:SetPoint('BOTTOMRIGHT', slices.right, 'BOTTOMLEFT')
+	return slices
+end
+
+---@param slices table
+---@param left string|nil
+---@param center string|nil
+---@param right string|nil
+---@param capWidth number
+---@param color number[]|nil Tint; nil draws the art as it is
+local function PaintSlices(slices, left, center, right, capWidth, color)
+	local shown = left and center and right and true or false
+	for key, file in pairs({ left = left, center = center, right = right }) do
+		local slice = slices[key]
+		slice:SetShown(shown)
+		if shown then
+			slice:SetTexture(file, key == 'center' and 'REPEAT' or nil)
+			slice:SetVertexColor(color and color[1] or 1, color and color[2] or 1, color and color[3] or 1, color and (color[4] or 1) or 1)
+		end
+	end
+	slices.left:SetWidth(capWidth)
+	slices.right:SetWidth(capWidth)
+end
+
+---The title plaque on the window's top edge: the kit's art (or the neutral kit's, tinted), sized to the title
+---@param owner Frame
+---@param config table
+local function LayoutTitleFrame(owner, config)
+	local plate = owner.TitleFrame
+	if not plate then
+		return
+	end
+	local spec = config.assets.titleFrame
+	if type(spec) ~= 'table' and Kit.registry.minimal then
+		spec = Kit.registry.minimal.assets.titleFrame
+	end
+	spec = spec or {}
+	local cap = spec.capWidth or 24
+	-- Painted art keeps its own colors; the neutral pieces take the kit's raised surface and trim
+	local fill = not spec.painted and config.colors.surface[3] or nil
+	local edge = not spec.painted and (config.colors.trimHi or config.colors.trim) or nil
+	PaintSlices(plate.fill, spec.fillLeft, spec.fillCenter, spec.fillRight, cap, fill and { fill[1], fill[2], fill[3], 0.98 } or nil)
+	PaintSlices(plate.edge, spec.edgeLeft, spec.edgeCenter, spec.edgeRight, cap, edge)
+	local text = owner.TitleText
+	local width = text.GetUnboundedStringWidth and text:GetUnboundedStringWidth() or text:GetStringWidth()
+	-- Text can measure 0 before its font is drawn once; estimate from the character count then
+	if not width or width <= 0 then
+		width = #(text:GetText() or '') * 8
+	end
+	plate:SetSize(math.max(140, width + cap * 2 + 12), spec.height or 32)
+	plate:ClearAllPoints()
+	plate:SetPoint('CENTER', owner, 'TOP', 0, -(spec.drop or 2))
+	text:ClearAllPoints()
+	text:SetPoint('CENTER', plate, 'CENTER', 0, 0)
+end
+
 ---@class LibAT.UI.KitShellOptions
 ---@field name string Global frame name (also lets Escape close it)
 ---@field title? string
@@ -184,6 +251,10 @@ end
 ---@field minWidth? number
 ---@field minHeight? number
 ---@field kit? string Keep this window on one kit: a kit id, 'default' (LibAT's own look) or 'auto' (follow the host addon, the default)
+---@field crest? boolean false: never show the kit's crest above the window (small dialogs)
+---@field titleFrame? boolean Show the title in a framed plaque on the window's top edge
+---@field titleBar? boolean false: no title bar strip (the body starts at the top)
+---@field close? boolean false: no close button
 
 ---A window dressed by the active kit: title bar, painted frame, optional footer and a Body for content.
 ---@param options LibAT.UI.KitShellOptions
@@ -249,8 +320,18 @@ function Kit:DressShell(shell, options)
 	shell.TitlePlate = shell.TitleBar:CreateTexture(nil, 'ARTWORK')
 	shell.TitlePlate:SetPoint('TOP', shell.TitleBar, 'TOP', 0, 0)
 	shell.TitlePlate:Hide()
+	if options.titleFrame then
+		-- Above the painted frame, so it sits over the top edge
+		shell.TitleFrame = CreateFrame('Frame', nil, shell.VisualRoot)
+		shell.TitleFrame:SetFrameLevel(shell:GetFrameLevel() + 45)
+		shell.TitleFrame.fill = CreateSlices(shell.TitleFrame, 'BACKGROUND', 1)
+		shell.TitleFrame.edge = CreateSlices(shell.TitleFrame, 'BORDER', 1)
+		shell.TitleText:SetParent(shell.TitleFrame)
+	end
+	shell.TitleBar:SetShown(options.titleBar ~= false)
 	shell.CloseButton = CreateCloseButton(shell)
 	shell.closeBtn = shell.CloseButton
+	shell.CloseButton:SetShown(options.close ~= false)
 
 	shell.Footer = CreateBar(shell.VisualRoot, true)
 	shell.Footer:SetShown(options.footer and true or false)
@@ -260,6 +341,9 @@ function Kit:DressShell(shell, options)
 
 	function shell:SetTitle(value)
 		self.TitleText:SetText(value or '')
+		if self.TitleFrame and self.kitConfig then
+			LayoutTitleFrame(self, self.kitConfig)
+		end
 	end
 
 	---Turn the footer bar on or off; the body grows into its space when it is off.
@@ -292,8 +376,18 @@ function Kit:DressShell(shell, options)
 		shell:EnableResize(true)
 	end
 
+	if shell.TitleFrame then
+		-- The title's width is only right once its font has been drawn
+		shell:HookScript('OnShow', function(owner)
+			if owner.kitConfig then
+				LayoutTitleFrame(owner, owner.kitConfig)
+			end
+		end)
+	end
+
 	return self:Track(shell, function(owner, config)
 		owner._kitId = config.id
+		owner.kitConfig = config
 		local layout = config.layout
 		local hasPaintedFrame = Kit.ApplyNineSlice(owner.FrameArt, config, config.assets.windowBorder)
 		local inset = layout.barInset
@@ -307,7 +401,12 @@ function Kit:DressShell(shell, options)
 		owner.Footer:SetPoint('BOTTOMRIGHT', owner, 'BOTTOMRIGHT', -inset, inset)
 		owner.Footer:SetHeight(layout.footerHeight)
 		owner.Body:ClearAllPoints()
-		owner.Body:SetPoint('TOPLEFT', owner.TitleBar, 'BOTTOMLEFT', layout.sideInset - inset, -BODY_GAP)
+		if owner.TitleBar:IsShown() then
+			owner.Body:SetPoint('TOPLEFT', owner.TitleBar, 'BOTTOMLEFT', layout.sideInset - inset, -BODY_GAP)
+		else
+			-- Without a title bar the body starts at the top, below the title plaque if there is one
+			owner.Body:SetPoint('TOPLEFT', owner, 'TOPLEFT', layout.sideInset, -(inset + BODY_GAP + (owner.TitleFrame and 14 or 0)))
+		end
 		if owner.Footer:IsShown() then
 			owner.Body:SetPoint('BOTTOMRIGHT', owner.Footer, 'TOPRIGHT', -(layout.sideInset - inset), BODY_GAP)
 		else
@@ -345,22 +444,34 @@ function Kit:DressShell(shell, options)
 
 		PaintBar(owner.TitleBar, config)
 		PaintBar(owner.Footer, config)
-		owner.TitleText:ClearAllPoints()
-		owner.TitleText:SetPoint('LEFT', owner.TitleBar, 'LEFT', layout.barPadding, 0)
 		owner.TitleText:SetTextColor(config.colors.text[1], config.colors.text[2], config.colors.text[3])
+		if owner.TitleFrame then
+			LayoutTitleFrame(owner, config)
+		else
+			owner.TitleText:ClearAllPoints()
+			owner.TitleText:SetPoint('LEFT', owner.TitleBar, 'LEFT', layout.barPadding, 0)
+		end
 		local crest = config.assets.crest
-		if Kit:SetAsset(owner.Crest, config, 'crest') then
+		if owner.config.crest == false then
+			owner.Crest:Hide()
+		elseif Kit:SetAsset(owner.Crest, config, 'crest') then
 			owner.Crest:ClearAllPoints()
 			-- overlap: how far the crest's base reaches down over the frame and title bar
 			owner.Crest:SetPoint('BOTTOM', owner, 'TOP', 0, -(crest.overlap or 20))
 			owner.Crest:SetSize(crest.width or 128, crest.height or 64)
 		end
 		local plate = config.assets.titlePlate
-		if Kit:SetAsset(owner.TitlePlate, config, 'titlePlate') then
+		if owner.TitleFrame then
+			owner.TitlePlate:Hide()
+		elseif Kit:SetAsset(owner.TitlePlate, config, 'titlePlate') then
 			owner.TitlePlate:SetSize(type(plate) == 'table' and plate.width or 150, type(plate) == 'table' and plate.height or layout.titleHeight)
 		end
 		owner.CloseButton:ClearAllPoints()
-		owner.CloseButton:SetPoint('RIGHT', owner.TitleBar, 'RIGHT', -6, 0)
+		if owner.TitleBar:IsShown() then
+			owner.CloseButton:SetPoint('RIGHT', owner.TitleBar, 'RIGHT', -6, 0)
+		else
+			owner.CloseButton:SetPoint('TOPRIGHT', owner, 'TOPRIGHT', -inset - 6, -inset - 6)
+		end
 		PaintCloseButton(owner.CloseButton, config)
 	end)
 end

@@ -46,6 +46,17 @@ Kit:Register('minimal', {
 			},
 		},
 		headerPlate = ROOT .. 'header-plate.png',
+		-- A plaque on the window's top edge that holds the title (windows that ask for titleFrame)
+		titleFrame = {
+			fillLeft = ROOT .. 'title-frame-fill-left.png',
+			fillCenter = ROOT .. 'title-frame-fill-center.png',
+			fillRight = ROOT .. 'title-frame-fill-right.png',
+			edgeLeft = ROOT .. 'title-frame-edge-left.png',
+			edgeCenter = ROOT .. 'title-frame-edge-center.png',
+			edgeRight = ROOT .. 'title-frame-edge-right.png',
+			capWidth = 24,
+			height = 32,
+		},
 		divider = ROOT .. 'divider.png',
 		buttonPrimary = {
 			left = ROOT .. 'button-primary-left.png',

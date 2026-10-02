@@ -95,10 +95,57 @@ def check():
     return shrink(image, (64, 64))
 
 
+def title_frame():
+    """A plaque that holds a window's title on its top edge, cut in three (left cap, middle, right cap).
+
+    Two layers so a kit can tint them separately: the fill (the kit's raised surface) and the
+    edges (its trim). The ends come to a point; a second line inside the first makes it read as a
+    frame. Caps are 24px, the middle 16px; everything is 32px tall.
+    """
+    cap, mid, h = 24, 16, 32
+    w = cap * 2 + mid
+    W, H = w * S, h * S
+    top, bottom = 5 * S, 27 * S
+    tip = 2 * S
+    bevel = 11 * S
+    outer = [(tip, H // 2), (tip + bevel, top), (W - tip - bevel, top), (W - tip, H // 2), (W - tip - bevel, bottom), (tip + bevel, bottom)]
+
+    # Fill: light at the top, a little darker below, so the plaque looks raised once tinted
+    shape = Image.new('L', (W, H), 0)
+    ImageDraw.Draw(shape).polygon(outer, fill=255)
+    shade = Image.new('L', (W, H), 0)
+    draw = ImageDraw.Draw(shade)
+    for y in range(H):
+        t = (y - top) / max(bottom - top, 1)
+        draw.line([(0, y), (W, y)], fill=int(255 - 45 * min(max(t, 0), 1)))
+    fill = Image.merge('RGBA', (shade, shade, shade, shape))
+
+    # Edges: the outline, then a thinner line inside it
+    inset = 3 * S
+    inner = [(tip + inset * 1.4, H // 2), (tip + bevel + inset * 0.6, top + inset), (W - tip - bevel - inset * 0.6, top + inset),
+             (W - tip - inset * 1.4, H // 2), (W - tip - bevel - inset * 0.6, bottom - inset), (tip + bevel + inset * 0.6, bottom - inset)]
+    lines = Image.new('L', (W, H), 0)
+    draw = ImageDraw.Draw(lines)
+    draw.line(outer + [outer[0]], fill=255, width=int(1.6 * S), joint='curve')
+    draw.line(inner + [inner[0]], fill=150, width=int(0.9 * S), joint='curve')
+    edge = Image.merge('RGBA', (Image.new('L', (W, H), 255),) * 3 + (lines,))
+
+    pieces = {}
+    for name, image in (('fill', fill), ('edge', edge)):
+        small = shrink(image, (w, h))
+        pieces[name + '-left'] = small.crop((0, 0, cap, h))
+        # The middle repeats sideways; cut it from the plain stretch between the ends
+        pieces[name + '-center'] = small.crop((cap, 0, cap + mid, h))
+        pieces[name + '-right'] = small.crop((cap + mid, 0, w, h))
+    return pieces
+
+
 def main():
     switch_track().save(OUT / 'switch-track.png')
     switch_knob().save(OUT / 'switch-knob.png')
     check().save(OUT / 'check.png')
+    for name, image in title_frame().items():
+        image.save(OUT / ('title-frame-' + name + '.png'))
     print('written to', OUT)
 
 
