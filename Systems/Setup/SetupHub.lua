@@ -232,6 +232,14 @@ function Hub:CreateRightSide(w)
 	end
 	right.Badge.text:SetPoint('CENTER')
 	right.Badge.text:SetText('Recommended')
+
+	right.Density = CreateTextButton(right, nil, skin)
+	right.Density:SetPoint('TOPRIGHT', right, 'TOPRIGHT', -14, -12)
+	right.Density:SetScript('OnClick', function()
+		Setup:SetDense(not Setup:GetDense())
+		Hub:RenderCurrent()
+	end)
+	right.Density:Hide()
 	right.Badge:EnableMouse(true)
 	right.Badge:SetScript('OnEnter', function(self)
 		if GameTooltip then
@@ -866,6 +874,14 @@ function Hub:GetGrid(key)
 	if self.skin.owned then
 		if key == 'look' then
 			opts = { artHeight = 148, minWidth = 210, maxColumns = 3, cardHeight = 238, spacing = 12 }
+		elseif key == 'look-dense' then
+			-- Show more at once: four across, no captions
+			opts = { artHeight = 88, minWidth = 160, maxColumns = 4, cardHeight = 150, spacing = 10 }
+		elseif key == 'look-compact-dense' then
+			opts = { artHeight = 40, minWidth = 150, maxColumns = 4, cardHeight = 74, spacing = 8 }
+		elseif key:find('^tiles') then
+			-- Links on the final page: small text cards, three across
+			opts = { artHeight = 0, minWidth = 160, maxColumns = 3, cardHeight = 58, spacing = 8 }
 		elseif key == 'look-compact' then
 			-- A short band of art and the name under it (step.compact), for cards with no caption
 			opts = { artHeight = 62, minWidth = 210, maxColumns = 3, cardHeight = 102, spacing = 10 }
@@ -880,6 +896,10 @@ function Hub:GetGrid(key)
 		opts = { artHeight = 92, minWidth = 165, maxColumns = 4 }
 	elseif key == 'look-compact' then
 		opts = { artHeight = 48, minWidth = 165, maxColumns = 4, cardHeight = 86 }
+	elseif key == 'look-dense' then
+		opts = { artHeight = 70, minWidth = 140, maxColumns = 5, cardHeight = 120 }
+	elseif key == 'look-compact-dense' then
+		opts = { artHeight = 36, minWidth = 140, maxColumns = 5, cardHeight = 70 }
 	elseif key == 'whatsnew' then
 		opts = { artHeight = 0, minWidth = 220, maxColumns = 2, cardHeight = 104 }
 	elseif key == 'start' then
@@ -945,6 +965,21 @@ function Hub:SetHeader(title, text, addonLabel, recommended)
 	right.Title:SetText(title or '')
 	right.Text:SetText(text or '')
 	right.Badge:SetShown(recommended and true or false)
+	-- Picture pages offer smaller cards, so more fit at once
+	local entry = self.page == 'step' and self.run and self.run.entries[self.index]
+	local pictures = entry and entry.step.kind == 'look'
+	right.Density:SetShown(pictures and true or false)
+	if pictures then
+		right.Density:SetLabel(Setup:GetDense() and 'Bigger pictures' or 'Show more at once')
+		if right.Density.ApplyColor then
+			right.Density:ApplyColor()
+		end
+		right.Badge:ClearAllPoints()
+		right.Badge:SetPoint('RIGHT', right.Density, 'LEFT', -12, 0)
+	else
+		right.Badge:ClearAllPoints()
+		right.Badge:SetPoint('TOPRIGHT', right, 'TOPRIGHT', -14, -12)
+	end
 	if self.skin.owned then
 		local plain = (addonLabel or ''):gsub('|T.-|t%s*', '')
 		self.window:SetTitle(plain ~= '' and (plain .. ' Setup') or 'Setup')
@@ -1162,7 +1197,8 @@ end
 ---Look and choice steps
 ---@return number height
 function Hub:RenderChoice(reg, step, ctx)
-	local gridKey = step.kind == 'look' and (step.compact and 'look-compact' or 'look') or 'choice'
+	local dense = step.kind == 'look' and Setup:GetDense()
+	local gridKey = step.kind == 'look' and ((step.compact and 'look-compact' or 'look') .. (dense and '-dense' or '')) or 'choice'
 	local grid = self:GetGrid(gridKey)
 	local list = {}
 	for _, option in ipairs(Setup:GetOptions(step)) do
@@ -1174,7 +1210,8 @@ function Hub:RenderChoice(reg, step, ctx)
 		list[#list + 1] = {
 			value = option.value,
 			title = option.title,
-			caption = option.caption,
+			-- Small cards show the picture and the name only
+			caption = not dense and option.caption or nil,
 			tag = option.tag,
 			tagStyle = option.tagStyle,
 			art = option.art,
@@ -1646,15 +1683,26 @@ function Hub:RenderSummary(regs, final)
 		frame:SetPoint('TOPLEFT', content, 'TOPLEFT', 0, 0)
 		frame:SetPoint('TOPRIGHT', content, 'TOPRIGHT', 0, 0)
 		frame.rows = {}
+		frame.boxes = {}
+		frame.icons = {}
+		-- Pictures sit on a layer above the framed boxes
+		frame.top = CreateFrame('Frame', nil, frame)
+		frame.top:SetAllPoints(frame)
+		frame.top:SetFrameLevel(frame:GetFrameLevel() + 5)
 		self.summaryFrame = frame
 	end
-	local used = 0
-	local function Row(indent, fontObject)
+	local owned = self.skin.owned
+	local colors = owned and self.skin.colors or { text = { 1, 1, 1 }, secondary = { 0.8, 0.8, 0.8 } }
+	local width = self:GetContentWidth()
+	local used, boxes, icons, tiles = 0, 0, 0, 0
+	local y = 0
+
+	local function Row(indent, size, top)
 		used = used + 1
 		local row = frame.rows[used]
 		if not row then
 			row = CreateFrame('Frame', nil, frame)
-			row:SetHeight(18)
+			row:SetHeight(20)
 			row.label = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlight')
 			row.label:SetJustifyH('LEFT')
 			row.value = CreateSkinFontString(row, 'OVERLAY', self.skin, 'GameFontHighlight')
@@ -1662,128 +1710,205 @@ function Hub:RenderSummary(regs, final)
 			row.link = CreateTextButton(row, nil, self.skin)
 			frame.rows[used] = row
 		end
-		if self.skin.owned then
-			self.skin:SetFont(row.label, fontObject == 'GameFontNormal' and 14 or 12)
-			self.skin:SetFont(row.value, 12)
+		if owned then
+			self.skin:SetFont(row.label, size or 13)
+			self.skin:SetFont(row.value, 13)
 		else
-			row.label:SetFontObject(fontObject or 'GameFontHighlight')
+			row.label:SetFontObject(size and 'GameFontNormal' or 'GameFontHighlight')
 		end
 		row.label:ClearAllPoints()
 		row.label:SetPoint('LEFT', row, 'LEFT', indent or 0, 0)
-		if self.skin.owned then
-			row.label:SetTextColor(self.skin.colors.text[1], self.skin.colors.text[2], self.skin.colors.text[3])
-		else
-			row.label:SetTextColor(1, 1, 1)
-		end
+		row.label:SetWidth(0)
+		row.label:SetWordWrap(false)
+		row.label:SetTextColor(colors.text[1], colors.text[2], colors.text[3])
 		row.value:ClearAllPoints()
-		row.value:SetPoint('LEFT', row, 'LEFT', 220, 0)
-		if self.skin.owned then
-			row.value:SetTextColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3])
-		else
-			row.value:SetTextColor(0.8, 0.8, 0.8)
-		end
+		row.value:SetPoint('LEFT', row, 'LEFT', 180, 0)
+		row.value:SetPoint('RIGHT', row, 'RIGHT', -70, 0)
+		row.value:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
 		row.value:SetText('')
 		row.link:Hide()
 		row.link:ClearAllPoints()
-		row.link:SetPoint('RIGHT', row, 'RIGHT', -4, 0)
+		row.link:SetPoint('RIGHT', row, 'RIGHT', -10, 0)
 		row.link:ApplyColor()
 		row:ClearAllPoints()
-		row:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -(used - 1) * 20)
+		row:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -(top or y))
 		row:SetPoint('RIGHT', frame, 'RIGHT', 0, 0)
 		row:Show()
 		return row
 	end
+	---A framed box behind rows already placed between top and bottom
+	local function Box(top, bottom)
+		boxes = boxes + 1
+		local box = frame.boxes[boxes]
+		if not box then
+			box = owned and Kit:CreatePanel(frame, { elevation = 1, materialAlpha = 0.04, shadow = false }) or CreateFrame('Frame', nil, frame)
+			box:SetFrameLevel(frame:GetFrameLevel())
+			frame.boxes[boxes] = box
+		end
+		box:ClearAllPoints()
+		box:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -top)
+		box:SetPoint('RIGHT', frame, 'RIGHT', 0, 0)
+		box:SetHeight(bottom - top)
+		box:Show()
+		return box
+	end
+	local function Icon(texture, x, top, size)
+		icons = icons + 1
+		local icon = frame.icons[icons]
+		if not icon then
+			icon = frame.top:CreateTexture(nil, 'OVERLAY')
+			frame.icons[icons] = icon
+		end
+		icon:SetTexture(texture)
+		icon:SetSize(size, size)
+		icon:ClearAllPoints()
+		icon:SetPoint('TOPLEFT', frame, 'TOPLEFT', x, -top)
+		icon:Show()
+		return icon
+	end
 
 	for _, reg in ipairs(regs) do
-		local row = Row(0, 'GameFontNormal')
-		row.label:SetText(IconMarkup(reg) .. reg.name)
-		if self.skin.owned then
-			row.label:SetTextColor(self.skin.colors.text[1], self.skin.colors.text[2], self.skin.colors.text[3])
-		else
-			row.label:SetTextColor(1, 0.82, 0)
-		end
+		local header = Row(0, 15)
+		header.label:SetText(IconMarkup(reg) .. reg.name)
 		local rec = Setup:GetRecord(reg)
 		if rec and rec.status == 'skipped' then
-			row.value:SetText('Skipped')
+			header.value:SetText('Skipped')
 		end
 		if reg.config.optionsCommand then
-			row.link:SetLabel('More settings')
-			row.link:SetScript('OnClick', function()
+			header.link:SetLabel('More settings')
+			header.link:SetScript('OnClick', function()
 				Setup:RunAction(reg, nil)
 			end)
-			row.link:Show()
+			header.link:Show()
 		end
+		y = y + 26
+
+		-- Only real choices: a step's own summary() decides its line (nil leaves it out); otherwise
+		-- the picked value, and steps with nothing to show are left out
+		local boxTop = y
+		local any = false
 		for i, entry in ipairs(self.run.entries) do
 			if entry.reg == reg and entry.step.kind ~= 'summary' then
-				local value = self:DescribeValue(reg, entry.step)
-				local stepRow = Row(14)
-				stepRow.label:SetText(entry.step.name or entry.step.title)
-				stepRow.value:SetText(value or '')
-				if final or entry.step.kind ~= 'custom' then
+				local value
+				if type(entry.step.summary) == 'function' then
+					local ok, text = SafeCall(reg.id .. '.' .. entry.step.id .. ' summary', entry.step.summary)
+					value = ok and text or nil
+				else
+					value = self:DescribeValue(reg, entry.step)
+				end
+				if value and value ~= '' and value ~= 'Not set' then
+					if not any then
+						y = y + 6
+					end
+					any = true
+					local stepRow = Row(14)
+					stepRow.label:SetText(entry.step.name or entry.step.title)
+					stepRow.value:SetText(value)
 					stepRow.link:SetLabel('Change')
 					stepRow.link:SetScript('OnClick', function()
 						Hub:ShowEntry(i)
 					end)
 					stepRow.link:Show()
+					y = y + 22
 				end
 			end
 		end
-		-- The addon's own closing words: where its settings are, and pages worth a look later
+		if any then
+			y = y + 6
+			Box(boxTop, y)
+			y = y + 12
+		end
+
 		local finish = final and reg.config.finish
 		if type(finish) == 'table' then
+			-- Where the settings are: a framed note with the addon's picture
 			if finish.note then
-				used = used + 1 -- spacer
-				local noteRow = Row(14)
-				noteRow.label:SetText(finish.note)
-			end
-			if finish.links and #finish.links > 0 then
-				used = used + 1 -- spacer
-				local header = Row(14)
-				header.label:SetText(finish.linksTitle or 'When you want more')
-				for _, link in ipairs(finish.links) do
-					local linkRow = Row(28)
-					linkRow.label:SetText(link.title or '')
-					linkRow.value:SetText(link.caption or '')
-					linkRow.link:SetLabel(link.action or 'Open')
-					linkRow.link:SetScript('OnClick', function()
-						SafeCall(reg.id .. ' finish link', link.onClick)
-					end)
-					linkRow.link:Show()
+				local noteTop = y
+				local size = 40
+				local indent = 14
+				if reg.config.icon then
+					Icon(reg.config.icon, 12, noteTop + 10, size)
+					indent = 12 + size + 12
 				end
+				local noteRow = Row(indent, 13, noteTop + 10)
+				noteRow.label:SetWordWrap(true)
+				noteRow.label:SetWidth(width - indent - 16)
+				noteRow.label:SetText(finish.note)
+				noteRow:SetHeight(math.max(noteRow.label:GetStringHeight() or 20, size))
+				y = noteTop + 10 + math.max(noteRow.label:GetStringHeight() or 20, size) + 10
+				Box(noteTop, y)
+				y = y + 16
+			end
+			-- Pages worth a look later, as tiles
+			if finish.links and #finish.links > 0 then
+				local title = Row(0, 14)
+				title.label:SetText(finish.linksTitle or 'When you want more')
+				y = y + 24
+				tiles = tiles + 1
+				local grid = self:GetGrid('tiles' .. tiles)
+				local list = {}
+				for index, link in ipairs(finish.links) do
+					list[#list + 1] = { value = index, title = link.title, caption = link.caption }
+				end
+				grid.opts.onClick = function(_, index)
+					local link = finish.links[index]
+					if link then
+						SafeCall(reg.id .. ' finish link', link.onClick)
+					end
+				end
+				grid.opts.onVariant = nil
+				grid.opts.onCheck = nil
+				grid:SetCards(list)
+				for _, card in ipairs(grid.cards) do
+					card:SetState(false, true, nil)
+				end
+				grid:ClearAllPoints()
+				grid:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -y)
+				grid:Show()
+				y = y + grid:Layout(width) + 16
 			end
 		end
-		used = used + 1 -- spacer
+		y = y + 8
 	end
 
 	if final or #Setup.staged > 0 then
-		local header = Row(0, 'GameFontNormal')
+		local boxTop = y
+		y = y + 10
+		local header = Row(14, 14)
 		local count = Setup:GetStagedCount()
 		if count > 0 then
 			header.label:SetText(count .. ' ' .. Plural(count, 'change needs', 'changes need') .. ' a reload')
-			if self.skin.owned then
+			if owned then
 				local r, g, b = LibAT.UI.GetAccentColor()
 				header.label:SetTextColor(r, g, b)
 			else
 				header.label:SetTextColor(1, 0.82, 0)
 			end
+			y = y + 22
 			for _, staged in ipairs(Setup.staged) do
-				local row = Row(14)
+				local row = Row(28)
 				row.label:SetText('- ' .. staged.label)
+				y = y + 20
 			end
 		else
-			header.label:SetText('Nothing needs a reload.')
-			if self.skin.owned then
-				header.label:SetTextColor(self.skin.colors.secondary[1], self.skin.colors.secondary[2], self.skin.colors.secondary[3])
-			else
-				header.label:SetTextColor(0.7, 0.7, 0.7)
-			end
+			header.label:SetText('Nothing needs a reload. Your choices are already on screen.')
+			header.label:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
+			y = y + 22
 		end
+		y = y + 8
+		Box(boxTop, y)
 	end
 
 	for i = used + 1, #frame.rows do
 		frame.rows[i]:Hide()
 	end
-	local height = math.max(used * 20, 1)
+	for i = boxes + 1, #frame.boxes do
+		frame.boxes[i]:Hide()
+	end
+	for i = icons + 1, #frame.icons do
+		frame.icons[i]:Hide()
+	end
+	local height = math.max(y, 1)
 	frame:SetHeight(height)
 	frame:Show()
 	return height
@@ -1936,7 +2061,9 @@ local RAIL_PAGE_INDENT = 12
 local RAIL_AXIS = 20 -- x of the route line within a row
 local RAIL_TEXT = 40 -- x where chapter names start
 -- Dots on the path ahead, measured from the node's center, in each half of a row
-local RAIL_DOTS = { 8, 11 }
+-- Dots on the path ahead: up to this many, every RAIL_DOT_STEP px from the node to the row's edge
+local RAIL_DOTS = { 1, 2, 3 }
+local RAIL_DOT_STEP = 4
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 
 ---@param index number
@@ -2028,12 +2155,20 @@ local function ShowLine(tex, row, fromTop, color)
 end
 
 local function ShowDots(row, fromTop, color)
-	for i, offset in ipairs(RAIL_DOTS) do
+	-- Spaced evenly out to the row's edge, so the dotted path runs on into the next row
+	local half = (row:GetHeight() or 24) / 2
+	for i in ipairs(RAIL_DOTS) do
 		local dot = row.dots[fromTop and i or (#RAIL_DOTS + i)]
-		dot:SetVertexColor(color[1], color[2], color[3], 0.8)
-		dot:ClearAllPoints()
-		dot:SetPoint('CENTER', row, 'LEFT', RAIL_AXIS, fromTop and offset or -offset)
-		dot:Show()
+		-- The upper half starts 2px further in, so the gap across two rows matches the step
+		local offset = half - (i - 1) * RAIL_DOT_STEP - (fromTop and 3 or 1)
+		if offset > 6 then
+			dot:SetVertexColor(color[1], color[2], color[3], 0.8)
+			dot:ClearAllPoints()
+			dot:SetPoint('CENTER', row, 'LEFT', RAIL_AXIS, fromTop and offset or -offset)
+			dot:Show()
+		else
+			dot:Hide()
+		end
 	end
 end
 
@@ -2165,7 +2300,7 @@ function Hub:RefreshChapterRail(width)
 				local previousCurrent = previous and self.page == 'step' and self.index >= previous.first and self.index <= previous.last
 				local isLast = c == #chapters
 				-- Pages draw a size smaller than their chapter
-				local nodeScale = page and 0.8 or 1.4
+				local nodeScale = page and 0.75 or 1
 
 				kit:SetFont(row.text, page and 12 or 14)
 				local textX = page and (RAIL_TEXT + RAIL_PAGE_INDENT) or RAIL_TEXT

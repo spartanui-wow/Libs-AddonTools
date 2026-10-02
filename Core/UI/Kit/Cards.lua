@@ -46,7 +46,8 @@ local function VariantMenu()
 		return variantMenu
 	end
 	local menu = Kit:CreatePopover(UIParent, 200, 40)
-	menu:SetFrameStrata('FULLSCREEN_DIALOG')
+	-- Above every window, including ones on the top dialog layer
+	menu:SetFrameStrata('TOOLTIP')
 	menu:SetClampedToScreen(true)
 	menu:EnableMouse(true)
 	menu.rows = {}

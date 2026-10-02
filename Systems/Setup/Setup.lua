@@ -57,6 +57,7 @@ local LibAT = LibAT
 ---@field set? fun(valueOrKey: any, ctxOrValue: any, ctx?: LibAT.SetupContext) look/choice: set(value, ctx); toggles: set(key, value, ctx)
 ---@field choices? LibAT.SetupOption[] choice steps (look steps may use it too)
 ---@field cards? LibAT.SetupOption[] look steps
+---@field summary? fun(): string|nil The line for this step on the final page; nil leaves the step off it
 ---@field compact? boolean look steps: short picture cards with the name under them (crop each card's art with texCoord)
 ---@field finishNow? fun(): string|nil Return a button label when the pick on this step finishes the addon's setup; Next then applies its changes and reloads at once
 ---@field extra? {title: string, text?: string, choices: {value: any, title: string}[], get: fun(): any, set: fun(value: any, ctx: LibAT.SetupContext)} look/choice steps: a row of choices above the cards
@@ -210,6 +211,21 @@ function Setup:GetStore()
 		end
 	end
 	return store
+end
+
+---Small picture cards in the setup window, so more fit at once (account-wide)
+---@return boolean
+function Setup:GetDense()
+	local store = self:GetStore()
+	return store and store.dense and true or false
+end
+
+---@param dense boolean
+function Setup:SetDense(dense)
+	local store = self:GetStore()
+	if store then
+		store.dense = dense and true or nil
+	end
 end
 
 ---The account-wide setup window kit override.

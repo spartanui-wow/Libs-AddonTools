@@ -406,7 +406,12 @@ function Kit:CreateSwitchRow(parent, title, description)
 		owner.bottom:SetVertexColor(config.colors.trim[1], config.colors.trim[2], config.colors.trim[3], 0.2)
 		owner.track:SetTexture(Kit:Texture(config, 'switchTrack') or WHITE)
 		owner.knob:SetTexture(Kit:Texture(config, 'switchKnob') or WHITE)
-		owner.track:SetVertexColor(owner.checked and r or 1, owner.checked and g or 1, owner.checked and b or 1, 1)
+		-- The track is drawn light: the accent when on, a muted warm grey when off
+		if owner.checked then
+			owner.track:SetVertexColor(r, g, b, 1)
+		else
+			owner.track:SetVertexColor(0.3, 0.28, 0.26, 1)
+		end
 		owner.label:SetTextColor(config.colors.text[1], config.colors.text[2], config.colors.text[3])
 		owner.description:SetTextColor(config.colors.secondary[1], config.colors.secondary[2], config.colors.secondary[3])
 		owner:SetAlpha(owner.enabled and 1 or 0.6)

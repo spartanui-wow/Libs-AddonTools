@@ -55,14 +55,22 @@ function WhatsNew:Draw(frame, width, onChanged)
 	frame.links = frame.links or {}
 	frame.arts = frame.arts or {}
 	frame.buttons = frame.buttons or {}
-	local used = { texts = 0, links = 0, arts = 0, buttons = 0 }
+	frame.boxes = frame.boxes or {}
+	-- Text and pictures sit on a layer above the framed boxes
+	if not frame.top then
+		frame.top = CreateFrame('Frame', nil, frame)
+		frame.top:SetAllPoints(frame)
+	end
+	frame.top:SetFrameLevel(frame:GetFrameLevel() + 5)
+	frame.rows = frame.rows or {}
+	local used = { texts = 0, links = 0, arts = 0, buttons = 0, boxes = 0, rows = 0 }
 	local y = 0
 
 	local function Text(value, size, color, indent, textWidth)
 		used.texts = used.texts + 1
 		local fs = frame.texts[used.texts]
 		if not fs then
-			fs = frame:CreateFontString(nil, 'OVERLAY')
+			fs = frame.top:CreateFontString(nil, 'OVERLAY')
 			-- A font before any text, in case the kit has no font of the asked size
 			fs:SetFontObject(GameFontHighlight)
 			fs:SetJustifyH('LEFT')
@@ -82,7 +90,7 @@ function WhatsNew:Draw(frame, width, onChanged)
 		used.links = used.links + 1
 		local link = frame.links[used.links]
 		if not link then
-			link = Kit:CreateTextButton(frame)
+			link = Kit:CreateTextButton(frame.top)
 			frame.links[used.links] = link
 		end
 		link:SetLabel(label)
@@ -98,12 +106,52 @@ function WhatsNew:Draw(frame, width, onChanged)
 		used.arts = used.arts + 1
 		local texture = frame.arts[used.arts]
 		if not texture then
-			texture = frame:CreateTexture(nil, 'ARTWORK')
+			texture = frame.top:CreateTexture(nil, 'ARTWORK')
 			frame.arts[used.arts] = texture
 		end
 		texture:ClearAllPoints()
 		texture:SetPoint('TOPLEFT', frame, 'TOPLEFT', x, -top)
 		ShowCropped(texture, art, w, h)
+	end
+	-- A framed panel behind a part of the page already laid out from top to bottom
+	local function Box(top, bottom)
+		used.boxes = used.boxes + 1
+		local box = frame.boxes[used.boxes]
+		if not box then
+			box = Kit:CreatePanel(frame, { elevation = 1, materialAlpha = 0.04, shadow = false })
+			box:SetFrameLevel(frame:GetFrameLevel())
+			frame.boxes[used.boxes] = box
+		end
+		box:ClearAllPoints()
+		box:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -top)
+		box:SetPoint('RIGHT', frame, 'RIGHT', 0, 0)
+		box:SetHeight(bottom - top)
+		box:Show()
+	end
+	-- A whole-width button for a version header: click to open or close it
+	local function HeaderRow(top, height, onClick)
+		used.rows = used.rows + 1
+		local row = frame.rows[used.rows]
+		if not row then
+			row = CreateFrame('Button', nil, frame)
+			row.highlight = row:CreateTexture(nil, 'HIGHLIGHT')
+			row.highlight:SetAllPoints()
+			row.highlight:SetColorTexture(1, 1, 1, 0.04)
+			row.arrow = row:CreateTexture(nil, 'OVERLAY')
+			row.arrow:SetSize(10, 10)
+			row.arrow:SetPoint('RIGHT', row, 'RIGHT', -12, 0)
+			frame.rows[used.rows] = row
+		end
+		row:SetFrameLevel(frame:GetFrameLevel() + 3)
+		row:ClearAllPoints()
+		row:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -top)
+		row:SetPoint('RIGHT', frame, 'RIGHT', 0, 0)
+		row:SetHeight(height)
+		row:SetScript('OnClick', onClick)
+		Kit:SetAsset(row.arrow, config, 'triangle')
+		row.arrow:SetVertexColor(colors.secondary[1], colors.secondary[2], colors.secondary[3], 0.9)
+		row:Show()
+		return row
 	end
 	local function ChangeLines(entry, indent)
 		for _, line in ipairs(entry.lines or {}) do
@@ -157,7 +205,7 @@ function WhatsNew:Draw(frame, width, onChanged)
 					used.buttons = used.buttons + 1
 					local button = frame.buttons[used.buttons]
 					if not button then
-						button = Kit:CreateButton(frame, '', 'primary')
+						button = Kit:CreateButton(frame.top, '', 'primary')
 						frame.buttons[used.buttons] = button
 					end
 					button:SetText(hero.action.text or 'Show me')
@@ -188,26 +236,42 @@ function WhatsNew:Draw(frame, width, onChanged)
 			end
 			if newest.lines or newest.fixes then
 				local header = Text('Also in ' .. newest.version, 14, colors.text, 0)
-				y = y + header:GetStringHeight() + 6
-				ChangeLines(newest, 0)
+				y = y + header:GetStringHeight() + 8
+				local boxTop = y
+				y = y + 10
+				ChangeLines(newest, 12)
+				y = y + 4
+				Box(boxTop, y)
+				y = y + 18
 			end
-			-- Earlier versions fold away
+			-- Earlier versions fold away, each in its own framed box
+			if #history > 1 then
+				local header = Text('Earlier versions', 14, colors.text, 0)
+				y = y + header:GetStringHeight() + 8
+			end
 			for i = 2, #history do
 				local entry = history[i]
 				local key = reg.id .. '@' .. entry.version
 				local open = self.open[key] and true or false
 				local count = #(entry.lines or {})
-				local label = entry.version .. '   ' .. count .. ' new and better' .. ((entry.fixes and entry.fixes > 0) and (', ' .. entry.fixes .. ' fixed') or '')
-				local link = Link((open and 'Hide ' or 'Show ') .. label, function()
+				local boxTop = y
+				local row = HeaderRow(boxTop, 30, function()
 					WhatsNew.open[key] = not open
 					onChanged()
 				end)
-				link:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -y)
-				y = y + 22
+				row.arrow:SetRotation(open and math.rad(-90) or 0)
+				y = boxTop + 8
+				Text(entry.version, 14, colors.text, 12, 70)
+				local summary = count .. ' new and better' .. ((entry.fixes and entry.fixes > 0) and (', ' .. entry.fixes .. ' fixed') or '')
+				Text(summary, 13, colors.secondary, 90, width - 130)
+				y = boxTop + 30
 				if open then
+					y = y + 4
 					ChangeLines(entry, 12)
 					y = y + 4
 				end
+				Box(boxTop, y)
+				y = y + 6
 			end
 			y = y + 18
 		end
@@ -224,6 +288,12 @@ function WhatsNew:Draw(frame, width, onChanged)
 	end
 	for i = used.buttons + 1, #frame.buttons do
 		frame.buttons[i]:Hide()
+	end
+	for i = used.boxes + 1, #frame.boxes do
+		frame.boxes[i]:Hide()
+	end
+	for i = used.rows + 1, #frame.rows do
+		frame.rows[i]:Hide()
 	end
 	if not any then
 		Text('Nothing new right now.', 14, colors.text, 0)
