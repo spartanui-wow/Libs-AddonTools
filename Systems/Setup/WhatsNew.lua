@@ -29,6 +29,19 @@ local function HeroPictures(art)
 	return { art }
 end
 
+---A release's heroes: one hero table, or a list of them shown one after another
+---@param hero table|table[]|nil
+---@return table[]
+local function HeroList(hero)
+	if type(hero) ~= 'table' then
+		return {}
+	end
+	if hero[1] ~= nil then
+		return hero
+	end
+	return { hero }
+end
+
 ---@param texture Texture
 ---@param art LibAT.CardArt
 ---@param width number
@@ -173,52 +186,62 @@ function WhatsNew:Draw(frame, width, onChanged)
 		if newest then
 			any = true
 			local unseen = Setup:GetUnseenWhatsNew(reg) ~= nil
-			local hero = newest.hero
-			if hero then
-				if hero.art then
-					-- One large picture, and up to two smaller ones stacked beside it
-					local pictures = HeroPictures(hero.art)
-					local height = math.floor(width * 0.22)
-					if #pictures == 1 then
-						Picture(pictures[1], 0, y, width, height)
-					else
-						local gap = 3
-						local mainWidth = math.floor((width - gap) * 2 / 3)
-						local sideWidth = width - mainWidth - gap
-						local sideHeight = math.floor((height - gap) / 2)
-						Picture(pictures[1], 0, y, mainWidth, height)
-						for i = 2, math.min(#pictures, 3) do
-							Picture(pictures[i], mainWidth + gap, y + (i - 2) * (sideHeight + gap), sideWidth, sideHeight)
+			local heroes = HeroList(newest.hero)
+			if #heroes > 0 then
+				for index, hero in ipairs(heroes) do
+					if index > 1 then
+						-- Later heroes of the same release follow under a thin rule
+						Box(y, y + 1)
+						y = y + 18
+					end
+					if hero.art then
+						-- One large picture, and up to two smaller ones stacked beside it
+						local pictures = HeroPictures(hero.art)
+						local height = math.floor(width * 0.22)
+						if #pictures == 1 then
+							Picture(pictures[1], 0, y, width, height)
+						else
+							local gap = 3
+							local mainWidth = math.floor((width - gap) * 2 / 3)
+							local sideWidth = width - mainWidth - gap
+							local sideHeight = math.floor((height - gap) / 2)
+							Picture(pictures[1], 0, y, mainWidth, height)
+							for i = 2, math.min(#pictures, 3) do
+								Picture(pictures[i], mainWidth + gap, y + (i - 2) * (sideHeight + gap), sideWidth, sideHeight)
+							end
 						end
+						y = y + height + 10
 					end
-					y = y + height + 10
-				end
-				Text((reg.config.brand or reg.name) .. ' ' .. newest.version, 12, accent, 0)
-				y = y + 16
-				local title = Text(hero.title, 22, colors.text, 0)
-				y = y + title:GetStringHeight() + 4
-				if hero.text then
-					local body = Text(hero.text, 13, colors.secondary, 0, math.min(width, 560))
-					y = y + body:GetStringHeight() + 10
-				end
-				if hero.action then
-					used.buttons = used.buttons + 1
-					local button = frame.buttons[used.buttons]
-					if not button then
-						button = Kit:CreateButton(frame.top, '', 'primary')
-						frame.buttons[used.buttons] = button
+					if index == 1 then
+						Text((reg.config.brand or reg.name) .. ' ' .. newest.version, 12, accent, 0)
+						y = y + 16
 					end
-					button:SetText(hero.action.text or 'Show me')
-					button:SetScript('OnClick', function()
-						WhatsNew:Close()
-						Setup:RunAction(reg, hero.action)
-					end)
-					button:ClearAllPoints()
-					button:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -y)
-					button:Show()
-					y = y + 34
+					local title = Text(hero.title, 22, colors.text, 0)
+					y = y + title:GetStringHeight() + 4
+					if hero.text then
+						local body = Text(hero.text, 13, colors.secondary, 0, math.min(width, 560))
+						y = y + body:GetStringHeight() + 10
+					end
+					if hero.action then
+						used.buttons = used.buttons + 1
+						local button = frame.buttons[used.buttons]
+						if not button then
+							button = Kit:CreateButton(frame.top, '', 'primary')
+							frame.buttons[used.buttons] = button
+						end
+						local action = hero.action
+						button:SetText(action.text or 'Show me')
+						button:SetScript('OnClick', function()
+							WhatsNew:Close()
+							Setup:RunAction(reg, action)
+						end)
+						button:ClearAllPoints()
+						button:SetPoint('TOPLEFT', frame, 'TOPLEFT', 0, -y)
+						button:Show()
+						y = y + 34
+					end
+					y = y + 10
 				end
-				y = y + 10
 			else
 				local title = Text(newest.title, 16, colors.text, 0, width - 140)
 				local link = Link((newest.action and newest.action.text) or 'Show me', function()

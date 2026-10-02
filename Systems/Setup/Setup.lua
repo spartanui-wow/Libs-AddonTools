@@ -82,7 +82,7 @@ local LibAT = LibAT
 ---@field date? string When the version came out, shown as written
 ---@field lines? {kind: 'new'|'improved', text: string}[] The version's changes, in the player's words
 ---@field fixes? number How many problems the version fixed
----@field hero? {title: string, text?: string, art?: LibAT.CardArt, action?: {text?: string, options?: string|fun(), step?: string}} A release worth showing off. A newer, unseen hero opens What's new by itself.
+---@field hero? table A release worth showing off: {title, text?, art?, action?}, or a list of them shown one after another. A newer, unseen hero opens What's new by itself.
 
 ---@class LibAT.SetupConfig
 ---@field name string Display name
