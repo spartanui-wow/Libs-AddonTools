@@ -20,7 +20,9 @@ local bugGrabberParentAddon, parentAddonTable = ...
 local STANDALONE_NAME = "!BugGrabber"
 if bugGrabberParentAddon ~= STANDALONE_NAME then
 	local enabled = C_AddOns.GetAddOnEnableState(STANDALONE_NAME, playerName)
-	if enabled == 2 then return end -- Bail out
+	-- LibAT: an enabled standalone copy that is out of date for this client never loads, so only defer to one that can
+	local loadable = not C_AddOns.IsAddOnLoadable or C_AddOns.IsAddOnLoadable(STANDALONE_NAME, playerName)
+	if enabled == 2 and loadable then return end -- Bail out
 end
 if not parentAddonTable.BugGrabber then parentAddonTable.BugGrabber = {} end
 local addon = parentAddonTable.BugGrabber
