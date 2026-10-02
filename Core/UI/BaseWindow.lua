@@ -220,6 +220,10 @@ function LibAT.UI.CreateActionButtons(window, buttons, spacing, bottomOffset, ri
 		if buttonConfig.onClick then
 			button:SetScript('OnClick', buttonConfig.onClick)
 		end
+		-- The footer bar is drawn above the window's own children; keep the buttons on top of it
+		if footer and button:GetFrameLevel() <= footer:GetFrameLevel() then
+			button:SetFrameLevel(footer:GetFrameLevel() + 2)
+		end
 		table.insert(createdButtons, 1, button)
 		previousButton = button
 	end
