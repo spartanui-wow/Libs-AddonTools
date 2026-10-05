@@ -979,6 +979,8 @@ function Setup:MarkDone(reg, byPlayer)
 	end
 	local wasDone = rec.status == 'done'
 	rec.status = 'done'
+	-- Finished: the next profile that needs setup gets its own three reminders
+	rec.remind = 0
 	StampProfile(reg, rec)
 	if not wasDone then
 		Log('info', reg.id .. ' setup finished')
@@ -1633,9 +1635,29 @@ function Setup:OnLoginReady()
 	self:ShowWhatsNewToast()
 end
 
+---Is a cinematic, movie or cinematic scene playing? They close every window when they start.
+---@return boolean
+function Setup:IsCinematicPlaying()
+	if self.inCinematic then
+		return true
+	end
+	if InCinematic and InCinematic() then
+		return true
+	end
+	if IsInCinematicScene and IsInCinematicScene() then
+		return true
+	end
+	return (MovieFrame and MovieFrame:IsShown()) and true or false
+end
+
 ---Open the window by itself, once per session
 function Setup:AutoOpen()
 	if self.autoOpened or not self.Hub then
+		return
+	end
+	-- A new character's intro plays right after login; open once it is over
+	if self:IsCinematicPlaying() then
+		self.openAfterCinematic = true
 		return
 	end
 	if self.Hub:IsShown() then
@@ -1671,6 +1693,11 @@ eventFrame:RegisterEvent('PLAYER_REGEN_DISABLED')
 eventFrame:RegisterEvent('PLAYER_REGEN_ENABLED')
 eventFrame:RegisterEvent('PLAYER_LOGOUT')
 eventFrame:RegisterEvent('ADDON_LOADED')
+for _, cinematicEvent in ipairs({ 'CINEMATIC_START', 'CINEMATIC_STOP', 'PLAY_MOVIE', 'STOP_MOVIE' }) do
+	if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid(cinematicEvent) then
+		eventFrame:RegisterEvent(cinematicEvent)
+	end
+end
 eventFrame:SetScript('OnEvent', function(_, event, arg1)
 	if event == 'PLAYER_REGEN_DISABLED' then
 		-- InCombatLockdown() is still false while this event runs, so the event itself means combat
@@ -1698,6 +1725,30 @@ eventFrame:SetScript('OnEvent', function(_, event, arg1)
 				Setup:Detect(reg)
 			end
 		end
+	elseif event == 'CINEMATIC_START' or event == 'PLAY_MOVIE' then
+		Setup.inCinematic = true
+	elseif event == 'CINEMATIC_STOP' or event == 'STOP_MOVIE' then
+		Setup.inCinematic = false
+		-- The game shows the UI again after this event; open on the next frame
+		C_Timer.After(0.5, function()
+			if Setup:IsCinematicPlaying() then
+				return
+			end
+			if Setup.reopenAfterCinematic then
+				Setup.reopenAfterCinematic = nil
+				if Setup.Hub and Setup.Hub.window and not Setup.Hub.window:IsShown() then
+					Setup.Hub.window:Show()
+				end
+			end
+			if Setup.openAfterCinematic then
+				Setup.openAfterCinematic = nil
+				if Setup.inCombat then
+					Setup.openAfterCombat = true
+				else
+					Setup:AutoOpen()
+				end
+			end
+		end)
 	elseif event == 'PLAYER_LOGOUT' then
 		-- Changes the player finished without reloading are applied now, before saved variables are written
 		if #Setup.staged > 0 then

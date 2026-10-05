@@ -605,13 +605,16 @@ function Hub:Open(addonId, stepId, auto)
 end
 
 ---Leave the current step: run its onLeave
-function Hub:LeaveCurrent()
+---@param closing? boolean the window is closing, the player did not move on (ctx.closing)
+function Hub:LeaveCurrent(closing)
 	if self.page ~= 'step' then
 		return
 	end
 	local entry = self.run.entries[self.index]
 	if entry and entry.step.onLeave then
-		SafeCall(entry.reg.id .. '.' .. entry.step.id .. ' onLeave', entry.step.onLeave, Setup:CreateContext(entry.reg, entry.step))
+		local ctx = Setup:CreateContext(entry.reg, entry.step)
+		ctx.closing = closing and true or nil
+		SafeCall(entry.reg.id .. '.' .. entry.step.id .. ' onLeave', entry.step.onLeave, ctx)
 	end
 end
 
@@ -841,7 +844,16 @@ end
 
 ---The window was hidden (Finish, Close, Escape): count a reminder for addons still due
 function Hub:OnHidden()
-	self:LeaveCurrent()
+	-- A cinematic or movie closes every window when it starts. That is the game, not the player:
+	-- keep the window where it was and bring it back when the cinematic ends.
+	if not self.finishing and Setup:IsCinematicPlaying() then
+		Setup.reopenAfterCinematic = true
+		if GameTooltip then
+			GameTooltip:Hide()
+		end
+		return
+	end
+	self:LeaveCurrent(not self.finishing)
 	if GameTooltip then
 		GameTooltip:Hide()
 	end
@@ -852,7 +864,8 @@ function Hub:OnHidden()
 	local regs = #self.run.regs > 0 and self.run.regs or self.startRegs or {}
 	for _, reg in ipairs(regs) do
 		local rec = Setup:GetRecord(reg)
-		if rec and rec.status == 'pending' then
+		-- Pending addons, and finished ones still waiting on a new profile's steps
+		if rec and (rec.status == 'pending' or #Setup:GetDueSteps(reg) > 0) then
 			rec.remind = (rec.remind or 0) + 1
 		end
 	end
