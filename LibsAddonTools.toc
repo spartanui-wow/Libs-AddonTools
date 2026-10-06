@@ -35,6 +35,7 @@ Systems\ErrorDisplay\Config.lua
 
 #Libraries (rest of Ace3)
 libs\Ace3\Ace3.xml
+libs\AceConfigDialog-3.0-LibAT\AceConfigDialog-3.0-LibAT.lua
 
 # Compression & Encoding Libraries
 libs\LibDeflate\lib.xml
@@ -62,6 +63,8 @@ Core\UI\Kit\Cards.lua
 Core\UI\Kit\Window.lua
 Core\UI\Kit\Minimal.lua
 Core\UI\Card.lua
+Core\UI\Style.lua
+Core\UI\Options\Options.xml
 
 # Systems
 # Logger System (split into 3 files for maintainability)

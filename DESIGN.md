@@ -148,12 +148,13 @@ No provider, an invalid provider, an unknown kit, or any missing contract piece 
 | Layer | What it does |
 |---|---|
 | `Kit:CreateShell(options)` | A themed window: painted frame, title bar and footer inside the frame's beam, close button, drag, Escape, optional resize grip. Content goes in `shell.Body`. |
-| `Kit:DressShell(frame, options)` | The same chrome on a frame someone else created (the SpartanUI options window is an AceGUI container). |
+| `Kit:DressShell(frame, options)` | The same chrome on a frame someone else created (the settings window is an AceGUI container). |
 | `Kit:SkinPanel(frame, options)` | Surface, material and trim on any frame. `Kit:CreatePanel` is CreateFrame plus this. |
 | `Kit:CreateButton(parent, text, style, width)` | Kit art, Blizzard atlases when the kit asks and the client has them, otherwise a gradient with an edge. Native Enable/Disable, `GetFontString` and `.Text` work like a template button. |
 | `Kit:CreateWindow` | The setup window: a shell with the chapter rail and the page. |
 | `LibAT.UI.CreateWindow` and helpers | The classic API, unchanged signatures, now drawn by the kit (see below). |
-| `SUI.UI.Style` (SpartanUI) | Takes its colors and buttons from the active kit, so SpartanUI's widgets and tools match. |
+| `LibAT.UI.Options:Register(app, config)` | The settings window for any AceConfig options table (`Core/UI/Options/`): a dressed shell with a page sidebar and search, and `LibAT-*` AceGUI controls. Addons open it through the returned `AceConfigDialog-3.0-LibAT`. |
+| `LibAT.UI.Style` | Flat drawing helpers (pixel borders, buttons, tweens) for the settings controls and tool windows. Colors come from the active kit, the accent from `GetAccentColor`. `SUI.UI.Style` inherits it and supplies SpartanUI's accent. |
 
 ### The classic `LibAT.UI` API on the kit
 

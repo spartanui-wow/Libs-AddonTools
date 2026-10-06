@@ -241,6 +241,23 @@ Supported widget types: `button`, `slider`, `checkbox`, `dropdown`, `header`, `d
 
 Setters are called AceConfig-style as `set(info, value)`, so write `set = function(_, value)`. A setter written as `set = function(value)` receives the info table instead of the value. Checkbox getters must return `true` for a checked box. `BuildWidgets` returns `widgets, totalHeight`.
 
+#### Settings Window (AceConfig)
+
+Show an AceConfig options table in the shared settings window: a sidebar with every page, a search box, and controls drawn by the active window kit, so the settings match the player's interface (SpartanUI's theme when it is installed).
+
+```lua
+LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable("MyAddon", options)
+local dialog = LibAT.UI.Options:Register("MyAddon", {
+    title = "My Addon",                     -- Optional, may hold color codes
+    logo = "Interface\\AddOns\\MyAddon\\Logo", -- Optional
+    version = function() return "1.2" end,  -- Optional, string or function
+    width = 960, height = 680,              -- Optional default size
+})
+dialog:Open("MyAddon")
+```
+
+`Register` returns `AceConfigDialog-3.0-LibAT`. Use it, not the stock `AceConfigDialog-3.0`, for every `Open`, `Close`, `SelectGroup` and `Navigate(app, groupPath, optionKey)` call on that app. Pass `pages = false` to keep AceConfig's own group tree instead of the sidebar. Options flagged `advanced = true` fold into a "More settings" section; tables that use `advanced` or `primary` must be registered with `skipValidation`.
+
 #### Available UI Components
 
 | Function                                              | Description                    |
