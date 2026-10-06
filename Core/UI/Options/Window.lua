@@ -143,6 +143,7 @@ local methods = {
 		self.navTabs = nil
 		self.page = nil
 		self:ClearSearch()
+		self:ShowAppFooter(nil)
 	end,
 
 	OnWidthSet = function(self, width)
@@ -184,6 +185,62 @@ local methods = {
 			version = ok and text or nil
 		end
 		self.titleversion:SetText(type(version) == 'string' and version or '')
+		self:ShowAppFooter(self:GetUserData('appName'))
+	end,
+
+	---Put another window above the settings window, back on its own layer once it closes
+	---@param other Frame
+	LiftAbove = function(self, other)
+		if not other or other == self.frame then
+			return
+		end
+		if not other.libatLifted then
+			other.libatLifted = true
+			local strata = other:GetFrameStrata()
+			other:HookScript('OnHide', function(shown)
+				shown:SetFrameStrata(strata)
+			end)
+		end
+		other:SetFrameStrata(self.frame:GetFrameStrata())
+		other:Raise()
+	end,
+
+	---Run a footer action that opens another window (logs, import, ...). The settings window sits on a
+	---high layer, so whatever window the action opened is lifted above it instead of opening unseen.
+	---@param action fun()
+	RunAbove = function(self, action)
+		local special = UISpecialFrames or {}
+		local before = {}
+		for _, name in ipairs(special) do
+			local other = _G[name]
+			if type(other) == 'table' and other.IsShown and other:IsShown() then
+				before[other] = true
+			end
+		end
+		action()
+		for _, name in ipairs(special) do
+			local other = _G[name]
+			if type(other) == 'table' and other.IsShown and other:IsShown() and not before[other] then
+				self:LiftAbove(other)
+			end
+		end
+	end,
+
+	---Show the footer buttons of the addon on show, and hide every other addon's. The window is
+	---reused between addons, so each addon's buttons live in their own holder.
+	---@param appName? string
+	ShowAppFooter = function(self, appName)
+		for name, holder in pairs(self.footerSets) do
+			holder:SetShown(name == appName)
+		end
+		local app = LibAT.UI.Options:GetApp(appName)
+		if not app or type(app.footer) ~= 'function' or self.footerSets[appName] then
+			return
+		end
+		local holder = CreateFrame('Frame', nil, self.footer)
+		holder:SetAllPoints()
+		self.footerSets[appName] = holder
+		xpcall(app.footer, geterrorhandler(), holder, self, self.closeButton)
 	end,
 
 	SetStatusText = function(self, text) end,
@@ -586,6 +643,7 @@ local function Constructor()
 		stage = stage,
 		stageWidth = -1,
 		footer = footer,
+		footerSets = {},
 		sizer = sizer,
 		type = Type,
 		baseType = 'Frame',
@@ -594,10 +652,23 @@ local function Constructor()
 		widget[method] = func
 	end
 
+	-- Closes whichever addon's settings are on show; addons add their own buttons beside it
+	local closeButton = Style:CreateButton(footer, CLOSE or L['Close'], 90, function()
+		local appName = widget:GetUserData('appName')
+		if appName then
+			LibAT.UI.Options:GetDialog():Close(appName)
+		else
+			frame:Hide()
+		end
+	end, true)
+	widget.closeButton = closeButton
+
 	-- A kit with a different frame size changes the room the settings get
-	LibAT.UI.Kit:Track(contentPanel, function()
+	LibAT.UI.Kit:Track(contentPanel, function(_, kit)
 		widget:OnWidthSet(frame:GetWidth())
 		widget:OnHeightSet(frame:GetHeight())
+		closeButton:ClearAllPoints()
+		closeButton:SetPoint('RIGHT', footer, 'RIGHT', -kit.layout.barPadding, 0)
 	end)
 
 	-- Search

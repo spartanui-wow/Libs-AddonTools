@@ -256,6 +256,8 @@ local dialog = LibAT.UI.Options:Register("MyAddon", {
 dialog:Open("MyAddon")
 ```
 
+The window has a Close button in its footer. To add buttons of your own, pass `footer = function(holder, window, close) ... end`: create them on `holder` (anchor beside `close` to sit next to it). The window is shared between addons, so they only show for yours. A button that opens another window should run its action through `window:RunAbove(fn)`, which lifts the new window in front of the settings.
+
 `Register` returns `AceConfigDialog-3.0-LibAT`. Use it, not the stock `AceConfigDialog-3.0`, for every `Open`, `Close`, `SelectGroup` and `Navigate(app, groupPath, optionKey)` call on that app. Pass `pages = false` to keep AceConfig's own group tree instead of the sidebar. Options flagged `advanced = true` fold into a "More settings" section; tables that use `advanced` or `primary` must be registered with `skipValidation`.
 
 #### Available UI Components

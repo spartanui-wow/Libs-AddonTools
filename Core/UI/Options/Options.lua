@@ -26,6 +26,7 @@ Options.WINDOW = 'LibAT-OptionsWindow'
 ---@field width? number Default window width
 ---@field height? number Default window height
 ---@field widgets? table<string, string> Extra widget swaps, merged over the kit controls
+---@field footer? fun(holder: Frame, window: table, close: Button) Adds the addon's own footer buttons to `holder`, once. The window has a Close button at the right end (`close`) and is shared between addons, so these buttons only show for this addon. Wrap actions that open another window in `window:RunAbove(fn)` so it opens in front of the settings.
 
 ---@type table<string, LibAT.UI.Options.App>
 Options.apps = Options.apps or {}
