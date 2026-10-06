@@ -955,6 +955,9 @@ function Hub:HideContent()
 	if self.summaryFrame then
 		self.summaryFrame:Hide()
 	end
+	if self.banner then
+		self.banner:Hide()
+	end
 end
 
 ---Width available for content
@@ -1125,20 +1128,113 @@ function Hub:RenderStep(entry)
 	self:SetHeader(step.title or step.name, step.text, IconMarkup(reg) .. reg.name, hasRecommended)
 
 	local kind = step.kind
+	local height = 1
 	if kind == 'look' or kind == 'choice' then
-		return self:RenderChoice(reg, step, ctx)
+		height = self:RenderChoice(reg, step, ctx)
 	elseif kind == 'toggles' then
-		return self:RenderToggles(reg, step, ctx)
+		height = self:RenderToggles(reg, step, ctx)
 	elseif kind == 'import' then
-		return self:RenderImport(reg, step, ctx)
+		height = self:RenderImport(reg, step, ctx)
 	elseif kind == 'form' then
-		return self:RenderForm(reg, step, ctx)
+		height = self:RenderForm(reg, step, ctx)
 	elseif kind == 'custom' then
-		return self:RenderCustom(reg, step, ctx)
+		height = self:RenderCustom(reg, step, ctx)
 	elseif kind == 'summary' then
-		return self:RenderSummary({ reg }, false)
+		height = self:RenderSummary({ reg }, false)
 	end
-	return 1
+	if type(step.banner) == 'function' then
+		height = height + self:RenderBanner(reg, step, ctx, height)
+	end
+	return height
+end
+
+---A clickable notice under a step (step.banner): a colored edge, a title and a line of text.
+---Clicking it goes to another step of the same addon, or runs onClick.
+---@return number height
+function Hub:RenderBanner(reg, step, ctx, top)
+	local ok, info = SafeCall(reg.id .. '.' .. step.id .. ' banner', step.banner)
+	if not ok or type(info) ~= 'table' or not info.title then
+		return 0
+	end
+	local banner = self.banner
+	if not banner then
+		local content = self.window.RightPanel.Content
+		banner = CreateFrame('Button', nil, content)
+		banner.bg = Kit:CreatePanel(banner, { elevation = 2, shadow = false })
+		banner.bg:SetAllPoints()
+		banner.bg:EnableMouse(false)
+		banner.edge = banner:CreateTexture(nil, 'OVERLAY')
+		banner.edge:SetPoint('TOPLEFT')
+		banner.edge:SetPoint('BOTTOMLEFT')
+		banner.edge:SetWidth(3)
+		banner.edge:SetTexture('Interface\\Buttons\\WHITE8X8')
+		banner.hover = banner:CreateTexture(nil, 'HIGHLIGHT')
+		banner.hover:SetAllPoints()
+		banner.hover:SetColorTexture(1, 1, 1, 0.04)
+		banner.title = banner:CreateFontString(nil, 'OVERLAY')
+		banner.title:SetPoint('TOPLEFT', banner, 'TOPLEFT', 16, -10)
+		banner.title:SetPoint('RIGHT', banner, 'RIGHT', -36, 0)
+		banner.title:SetJustifyH('LEFT')
+		banner.text = banner:CreateFontString(nil, 'OVERLAY')
+		banner.text:SetPoint('TOPLEFT', banner.title, 'BOTTOMLEFT', 0, -4)
+		banner.text:SetPoint('RIGHT', banner, 'RIGHT', -36, 0)
+		banner.text:SetJustifyH('LEFT')
+		banner.text:SetWordWrap(true)
+		banner.arrow = banner:CreateTexture(nil, 'OVERLAY')
+		banner.arrow:SetSize(10, 10)
+		banner.arrow:SetPoint('RIGHT', banner, 'RIGHT', -14, 0)
+		banner:SetScript('OnClick', function(owner)
+			local target = owner.target
+			if not target then
+				return
+			end
+			if target.step then
+				Hub:GoToStep(target.reg, target.step)
+			elseif type(target.onClick) == 'function' then
+				SafeCall(target.reg.id .. ' banner onClick', target.onClick, target.ctx)
+			end
+		end)
+		self.banner = banner
+	end
+	local skin = self.skin
+	local colors = skin.colors
+	local tone = colors[info.tone or 'warning'] or colors.warning or { 0.94, 0.68, 0.22 }
+	Kit:SetFont(banner.title, 14)
+	Kit:SetFont(banner.text, 12)
+	banner.title:SetTextColor(colors.text[1], colors.text[2], colors.text[3])
+	banner.text:SetTextColor(colors.secondary[1], colors.secondary[2], colors.secondary[3])
+	banner.edge:SetVertexColor(tone[1], tone[2], tone[3], 1)
+	if Kit:SetAsset(banner.arrow, skin, 'triangle') then
+		banner.arrow:SetVertexColor(tone[1], tone[2], tone[3], 1)
+		-- The triangle points down; turn it to point at what the click opens
+		banner.arrow:SetRotation(math.rad(90))
+	end
+	banner.title:SetText(info.title)
+	banner.text:SetText(info.text or '')
+	banner.target = { reg = reg, step = info.step, onClick = info.onClick, ctx = ctx }
+	local width = self:GetContentWidth()
+	banner:SetWidth(width)
+	local height = 20 + banner.title:GetStringHeight() + (info.text and (4 + banner.text:GetStringHeight()) or 0)
+	banner:SetHeight(math.max(48, height))
+	banner:ClearAllPoints()
+	banner:SetPoint('TOPLEFT', self.window.RightPanel.Content, 'TOPLEFT', 0, -(top + 16))
+	banner:Show()
+	return 16 + banner:GetHeight()
+end
+
+---Go to a step of an addon in the current run (steps hidden right now are skipped)
+---@param reg LibAT.SetupRegistration
+---@param stepId string
+---@return boolean found
+function Hub:GoToStep(reg, stepId)
+	self:RefreshRun()
+	for index, entry in ipairs(self.run and self.run.entries or {}) do
+		if entry.reg == reg and entry.step.id == stepId then
+			self:ShowEntry(index)
+			return true
+		end
+	end
+	return false
 end
 
 ---A row of choices drawn above a look or choice step's cards (step.extra)

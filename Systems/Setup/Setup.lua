@@ -72,6 +72,7 @@ local LibAT = LibAT
 ---@field onShow? fun(frame: Frame, ctx: LibAT.SetupContext) custom steps: called when a built page is shown again
 ---@field onLeave? fun(ctx: LibAT.SetupContext) Called when the player leaves the step
 ---@field cache? boolean custom steps: build once and reuse (default true; legacy pages default false)
+---@field banner? fun(): {title: string, text?: string, step?: string, onClick?: fun(ctx: LibAT.SetupContext), tone?: string}|nil A clickable notice under the step (nil hides it). step: go to that step of this addon
 
 ---@class LibAT.SetupWhatsNew
 ---@field version string
@@ -1290,6 +1291,16 @@ function Context:Next()
 	if Setup.Hub and Setup.Hub.GoNext then
 		Setup.Hub:GoNext()
 	end
+end
+
+---Go to another step of this addon (does nothing when that step is hidden)
+---@param stepId string
+---@return boolean found
+function Context:GoTo(stepId)
+	if Setup.Hub and Setup.Hub.GoToStep then
+		return Setup.Hub:GoToStep(self.registration, stepId)
+	end
+	return false
 end
 
 ---Go back one step
