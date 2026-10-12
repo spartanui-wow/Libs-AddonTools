@@ -18,7 +18,7 @@ local LibAT = LibAT
 ---@field title string
 ---@field caption? string
 ---@field tag? string
----@field art? LibAT.CardArt
+---@field art? LibAT.CardArt|LibAT.CardArtDraw A picture, or art.draw to draw a live preview (check Setup.CAPS.artDraw)
 ---@field accent? number[]
 ---@field recommended? boolean
 ---@field variants? LibAT.CardVariant[] look steps only
@@ -109,6 +109,9 @@ Setup.KINDS = { look = true, choice = true, toggles = true, import = true, form 
 Setup.WIDGET_TYPES = { button = true, slider = true, checkbox = true, dropdown = true, header = true, description = true, divider = true }
 Setup.MAX_REMINDERS = 3
 Setup.DEFAULT_PRIORITY = 100
+-- What this copy of Setup supports, for addons that also run on older copies.
+-- artDraw: look step cards may draw their picture with code (option.art.draw).
+Setup.CAPS = { artDraw = LibAT.Capabilities and LibAT.Capabilities.cardArtDraw ~= nil or false }
 
 Setup.registrations = {} ---@type table<string, LibAT.SetupRegistration>
 Setup.order = {} ---@type string[]
@@ -598,6 +601,12 @@ function Setup:ValidateStep(reg, step)
 			end
 			if option.variants then
 				hasVariants = true
+			end
+			local art = option.art
+			if art ~= nil and type(art) ~= 'table' and type(art) ~= 'function' then
+				Problem('option ' .. i .. ' art must be a table or a draw function')
+			elseif type(art) == 'table' and art.draw ~= nil and type(art.draw) ~= 'function' then
+				Problem('option ' .. i .. ' art.draw must be a function: draw(holder, data, card, width, height, state)')
 			end
 		end
 		if type(step.get) ~= 'function' then

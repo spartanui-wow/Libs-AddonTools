@@ -185,6 +185,23 @@ Setup steps call `set(value, ctx)`. `form` steps use `LibAT.UI.BuildWidgets` def
 
 The old `LibAT.SetupWizard:RegisterAddon` / `AddPage` API still works; each page becomes a `custom` step.
 
+Picture cards (`look` steps and card grids) can draw a live preview instead of an image: give the card `art = { draw = function(holder, data, card, width, height, state) ... end }`. The card reuses one `holder` frame, calls `draw` again when it is shown, resized, picked or restyled, and hides what is in the holder when the card is reused. See "Drawn pictures" in the [Setup reference](Systems/Setup/Setup-TechDoc.md).
+
+#### Checking for newer features
+
+Dev builds have no version number, so test for a feature instead. `LibAT.Capabilities` lists features added after the first release; each value is a number that goes up when the feature changes.
+
+```lua
+if LibAT.Capabilities and LibAT.Capabilities.cardArtDraw then
+    -- cards can use art.draw
+end
+```
+
+| Key              | Feature                                                                  |
+| ---------------- | ------------------------------------------------------------------------ |
+| `cardArtDraw`    | Cards can draw their picture with code (`art.draw`)                      |
+| `searchSynonyms` | Settings search maps everyday words to setting words; 2 adds `Search:AddSynonyms(appName, map)` |
+
 ### UI Component Library (WIP)
 
 A shared UI toolkit styled after Blizzard's AuctionHouse frames. Used internally by all systems but available for other addons.
@@ -259,6 +276,8 @@ dialog:Open("MyAddon")
 The window has a Close button in its footer. To add buttons of your own, pass `footer = function(holder, window, close) ... end`: create them on `holder` (anchor beside `close` to sit next to it). The window is shared between addons, so they only show for yours. A button that opens another window should run its action through `window:RunAbove(fn)`, which lifts the new window in front of the settings.
 
 `Register` returns `AceConfigDialog-3.0-LibAT`. Use it, not the stock `AceConfigDialog-3.0`, for every `Open`, `Close`, `SelectGroup` and `Navigate(app, groupPath, optionKey)` call on that app. Pass `pages = false` to keep AceConfig's own group tree instead of the sidebar. Options flagged `advanced = true` fold into a "More settings" section; tables that use `advanced` or `primary` must be registered with `skipValidation`.
+
+The search box matches every typed word against each option's name, description and page, and also tries everyday words for the words settings use: "hp" finds Health, "mana" finds Power, "opacity" finds Alpha. The shared list is `SYNONYMS` in `Core/UI/Options/Search.lua`; a word may map to one word or a list. An addon can add words that only apply to its own settings with `LibAT.UI.Options.Search:AddSynonyms(appName, { aggro = 'threat', purge = { 'dispel', 'can remove' } })` (check `LibAT.Capabilities.searchSynonyms >= 2`).
 
 #### Available UI Components
 

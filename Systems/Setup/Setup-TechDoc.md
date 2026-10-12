@@ -151,6 +151,63 @@ so a list that an earlier step changes stays current.
 `desaturate`. The window repaints its accent after every pick, so an accent provider that reads the
 picked theme recolors the window live.
 
+#### Drawn pictures (`art.draw`)
+
+A card can draw a live preview instead of showing an image. Give its `art` a `draw` function (or
+make `art` the function itself):
+
+```lua
+{ value = 'Clean', title = 'Clean', art = {
+	draw = function(holder, data, card, width, height, state)
+		-- Keep your pieces on the holder and Show them every time: LibAT hides
+		-- everything in the holder when the card is reused for something else.
+		local bar = holder.bar
+		if not bar then
+			bar = CreateFrame('StatusBar', nil, holder)
+			bar:SetStatusBarTexture('Interface\\Buttons\\WHITE8X8')
+			holder.bar = bar
+		end
+		bar:ClearAllPoints()
+		bar:SetPoint('CENTER')
+		bar:SetSize(width * 0.7, 12)
+		bar:SetMinMaxValues(0, 100)
+		bar:SetValue(state.selected and 100 or 60)
+		bar:Show()
+	end,
+	release = function(holder, data, card) end, -- optional
+	color = { 0.05, 0.05, 0.06, 1 }, -- optional backdrop under the drawing
+} },
+```
+
+- `holder` is a frame over the picture area. Each card has one and reuses it, so do not create new
+  frames on every draw.
+- `draw(holder, data, card, width, height, state)` runs when the card is shown, resized, picked or
+  disabled, when its variant changes, and when the window's look changes. It does not run again if
+  none of those changed. `width` and `height` are the picture area in pixels. `state` holds
+  `selected`, `enabled`, `label` (the status badge, such as "In use") and, on themed windows, `kit`
+  (the window kit's colors). `state` is reused, so read it during the call.
+- `data` is the card's data; the picked variant is `data.variant`.
+- When the card is reused, `release(holder, data, card)` runs (if given) and every region and child
+  frame of the holder is hidden.
+- A `texture`, `atlas` or `color` in the same table is drawn behind the drawing. With none of them
+  the card shows a plain dark area.
+- Errors in `draw` are reported once and leave the card working.
+- Leave mouse input off on what you create, or clicks will not reach the card. Draw from sample
+  data only; never read live unit data in a preview.
+- Only cards with a picture area draw: `look` steps (and `LibAT.UI.CreateCardGrid` /
+  `Kit:CreateCardGrid` with an `artHeight` above 0). `choice` cards have no pictures.
+
+Older copies of LibAT do not have it. Check before you use it, and fall back to a card with a title
+and caption:
+
+```lua
+local canDraw = LibAT.Capabilities and LibAT.Capabilities.cardArtDraw
+-- or, inside Setup: LibAT.Setup.CAPS and LibAT.Setup.CAPS.artDraw
+```
+
+On a copy without it, a card whose `art` has only `draw` shows no picture (or an empty dark area on
+themed windows), so leave `art` out there.
+
 ### choice
 
 Two to four wide cards with a line saying what happens. Same fields as `look` with `choices`
@@ -247,7 +304,9 @@ so you only need this kind to show a summary in the middle of your own steps.
 | Function | Notes |
 | --- | --- |
 | `LibAT.UI.CreateCardGrid(parent, opts)` | `opts = { minWidth, maxColumns, cardHeight, artHeight, spacing, onClick(card, value), onVariant(card, value, variant), onCheck(card, value, checked) }`. `grid:SetCards(list)` reuses cards, `grid:Layout(width)` returns the height, `grid:GetCard(value)`, `grid:ApplyAccent()`, `grid:Release()`. |
-| `LibAT.UI.CreateCard(parent, opts)` | One card. `card:SetData(data)`, `card:SetState(selected, enabled, label)`, `card:SetChecked(bool)`. Data fields: `value, title, caption, tag, art, accent, recommended, variants, variant, checkable, checked, link = { text, onClick }, tooltip, disabled`. |
+| `LibAT.UI.CreateCard(parent, opts)` | One card. `card:SetData(data)`, `card:SetState(selected, enabled, label)`, `card:SetChecked(bool)`. Data fields: `value, title, caption, tag, art, accent, recommended, variants, variant, checkable, checked, link = { text, onClick }, tooltip, disabled`. `art` may draw a live preview (see Drawn pictures above). |
+| `LibAT.UI.CardArt` | The drawn-picture helper both card systems use: `Bind(card, art, data, opts)` from `SetData`, `Request(card, force?)` to redraw when something changed, `Release(card)` from `Reset`, `GetDraw(art)`, `Fields(art)`. Only needed when you build your own card type. |
+| `LibAT.Capabilities` | Features added after the first release: `cardArtDraw`, `searchSynonyms`. Each is a number that goes up when the feature changes. Dev builds have no version, so test these instead. |
 | `LibAT.UI.SetAccentProvider(fn)` | `fn` returns `r, g, b` (0-1), `{ r, g, b }`, `{ r =, g =, b = }` or `'rrggbb'`. Nil goes back to LibAT red `e21f1f`. |
 | `LibAT.UI.GetAccentColor()` / `GetAccentHex()` | |
 | `LibAT.UI.NotifyAccentChanged(force?)` | Sends `LIBAT_SETUP_ACCENT_CHANGED (r, g, b)` through AceEvent when the color changed. Listen with `AceEvent:RegisterMessage(LibAT.UI.ACCENT_CHANGED, fn)`. |

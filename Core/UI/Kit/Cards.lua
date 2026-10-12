@@ -2,6 +2,7 @@
 local LibAT = LibAT
 
 local Kit = LibAT.UI.Kit
+local CardArt = LibAT.UI.CardArt
 local WHITE = 'Interface\\Buttons\\WHITE8X8'
 
 local function Measure(fontString, fallback)
@@ -99,6 +100,7 @@ local function OpenVariantMenu(chip)
 			if card.onVariant then
 				card.onVariant(card, data.value, variant.value)
 			end
+			CardArt.Request(card)
 		end)
 		row:Show()
 	end
@@ -179,32 +181,46 @@ function Kit:CreateCard(parent, options)
 	card.variant.arrow:SetRotation(math.rad(-90))
 	card.variant:HookScript('OnEnter', OpenVariantMenu)
 
+	-- A drawn picture (art.draw) stays under the badges that share the picture's corners
+	card.artOptions = {
+		anchor = card.art,
+		size = function(owner)
+			return (owner:GetWidth() or 0) - 10, options.artHeight or 0
+		end,
+		top = { card.recBadge, card.stateBadge, card.tagBadge },
+		kit = true,
+	}
+
 	local function ApplyArt(owner, art)
-		if not art or (options.artHeight or 0) <= 0 then
+		local hasArea = (options.artHeight or 0) > 0
+		local drawn = CardArt.Bind(owner, hasArea and art or nil, owner.data, owner.artOptions)
+		if not art or not hasArea then
 			owner.art:Hide()
 			return
 		end
+		local fields = CardArt.Fields(art)
 		owner.art:SetTexCoord(0, 1, 0, 1)
 		owner.art:SetVertexColor(1, 1, 1, 1)
-		if art.texture then
-			owner.art:SetTexture(art.texture)
-		elseif art.atlas then
-			if Kit:HasAtlas(art.atlas) then
-				owner.art:SetAtlas(art.atlas)
-			else
-				owner.art:Hide()
-				return
-			end
-		elseif art.color then
-			owner.art:SetColorTexture(art.color[1] or 0, art.color[2] or 0, art.color[3] or 0, art.color[4] or 1)
+		local plain = false
+		if fields.texture then
+			owner.art:SetTexture(fields.texture)
+		elseif fields.atlas and Kit:HasAtlas(fields.atlas) then
+			owner.art:SetAtlas(fields.atlas)
+		elseif fields.atlas and not drawn then
+			owner.art:Hide()
+			return
+		elseif fields.color then
+			owner.art:SetColorTexture(fields.color[1] or 0, fields.color[2] or 0, fields.color[3] or 0, fields.color[4] or 1)
 		else
+			plain = true
+		end
+		if plain then
 			owner.art:SetTexture(WHITE)
 			owner.art:SetVertexColor(0.12, 0.12, 0.13, 1)
+		elseif fields.texCoord and fields.texCoord[4] then
+			owner.art:SetTexCoord(fields.texCoord[1], fields.texCoord[2], fields.texCoord[3], fields.texCoord[4])
 		end
-		if art.texCoord and art.texCoord[4] then
-			owner.art:SetTexCoord(art.texCoord[1], art.texCoord[2], art.texCoord[3], art.texCoord[4])
-		end
-		owner.art:SetDesaturated(art.desaturate and true or false)
+		owner.art:SetDesaturated(fields.desaturate and true or false)
 		owner.art:Show()
 	end
 
@@ -280,6 +296,7 @@ function Kit:CreateCard(parent, options)
 		end
 		self.variant:ClearAllPoints()
 		self.variant:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -10, 8)
+		CardArt.Request(self)
 	end
 
 	function card:SetData(data)
@@ -364,7 +381,9 @@ function Kit:CreateCard(parent, options)
 	function card:Reset()
 		self:Hide()
 		self:ClearAllPoints()
+		CardArt.Release(self)
 		self.data = nil
+		self.stateLabel = nil
 		self.onClick, self.onVariant, self.onCheck = nil, nil, nil
 		self.stateBadge:Hide()
 		self.recBadge:Hide()
@@ -422,6 +441,8 @@ function Kit:CreateCard(parent, options)
 		owner.check:SetTexture(Kit:Texture(config, 'activeMarker') or WHITE)
 		owner.checkMark:SetTexture(Kit:Texture(config, 'check') or WHITE)
 		owner:SetAlpha(owner.enabled and 1 or 0.48)
+		-- Redraws a drawn picture only when the kit changed
+		CardArt.Request(owner)
 	end)
 end
 

@@ -11,6 +11,8 @@ local LibAT = LibAT
 ---@field texCoord? number[] left, right, top, bottom
 ---@field color? number[] r, g, b[, a] solid color when there is no picture
 ---@field desaturate? boolean
+---@field draw? LibAT.CardArtDraw Draws the picture with code (see CardArt.lua); a texture, atlas or color becomes its backdrop
+---@field release? LibAT.CardArtRelease Called when the card lets go of the drawing
 
 ---@class LibAT.CardVariant
 ---@field value any
@@ -21,7 +23,7 @@ local LibAT = LibAT
 ---@field title string
 ---@field caption? string One or two short lines
 ---@field tag? string Small label in the top-right corner (e.g. 'Core')
----@field art? LibAT.CardArt
+---@field art? LibAT.CardArt|LibAT.CardArtDraw
 ---@field accent? number[] r, g, b for this card's band; the LibAT accent when nil
 ---@field recommended? boolean Shows the Recommended badge
 ---@field variants? LibAT.CardVariant[] Adds a small style picker
@@ -47,6 +49,10 @@ local BACKGROUND = { 0.06, 0.06, 0.07, 0.92 }
 local BACKGROUND_SELECTED = { 0.11, 0.11, 0.12, 0.95 }
 local BAND_HEIGHT = 3
 local PAD = 8
+-- Picture area behind a drawn picture that brings no backdrop of its own
+local DRAWN_BACKDROP = { 0.1, 0.1, 0.11, 1 }
+
+local CardArt = LibAT.UI.CardArt
 
 ---Does this client know the atlas?
 ---@param atlas string
@@ -138,32 +144,43 @@ local function PaintFrame(card)
 	end
 end
 
+---Width and height of a card's picture area
+---@param card LibAT.Card
+---@return number width
+---@return number height
+local function ArtSize(card)
+	return (card:GetWidth() or 0) - 2, card.artHeight or 0
+end
+
 ---Apply picture settings to the art texture
 ---@param card LibAT.Card
----@param art LibAT.CardArt|nil
+---@param art LibAT.CardArt|LibAT.CardArtDraw|nil
 local function ApplyArt(card, art)
 	local tex = card.art
+	local drawn = CardArt.Bind(card, card.artHeight > 0 and art or nil, card.data, card.artOptions)
 	if card.artHeight <= 0 or not art then
 		tex:Hide()
 		return
 	end
+	local fields = CardArt.Fields(art)
 	tex:SetTexCoord(0, 1, 0, 1)
 	tex:SetVertexColor(1, 1, 1, 1)
 	local shown = false
-	if art.atlas and LibAT.UI.HasAtlas(art.atlas) then
-		tex:SetAtlas(art.atlas)
+	if fields.atlas and LibAT.UI.HasAtlas(fields.atlas) then
+		tex:SetAtlas(fields.atlas)
 		shown = true
-	elseif art.texture then
-		tex:SetTexture(art.texture)
+	elseif fields.texture then
+		tex:SetTexture(fields.texture)
 		shown = true
-	elseif art.color then
-		tex:SetColorTexture(art.color[1] or 0, art.color[2] or 0, art.color[3] or 0, art.color[4] or 1)
+	elseif fields.color or drawn then
+		local color = fields.color or DRAWN_BACKDROP
+		tex:SetColorTexture(color[1] or 0, color[2] or 0, color[3] or 0, color[4] or 1)
 		shown = true
 	end
-	if shown and art.texCoord and art.texCoord[4] then
-		tex:SetTexCoord(art.texCoord[1], art.texCoord[2], art.texCoord[3], art.texCoord[4])
+	if shown and fields.texCoord and fields.texCoord[4] then
+		tex:SetTexCoord(fields.texCoord[1], fields.texCoord[2], fields.texCoord[3], fields.texCoord[4])
 	end
-	tex:SetDesaturated(art.desaturate and true or false)
+	tex:SetDesaturated(fields.desaturate and true or false)
 	tex:SetShown(shown)
 end
 
@@ -226,6 +243,7 @@ function LibAT.UI.CreateCard(parent, opts)
 	card.art:SetPoint('TOPLEFT', card.band, 'BOTTOMLEFT', 0, 0)
 	card.art:SetPoint('TOPRIGHT', card.band, 'BOTTOMRIGHT', 0, 0)
 	card.art:SetHeight(math.max(card.artHeight, 1))
+	card.artOptions = { anchor = card.art, size = ArtSize }
 
 	card.check = card:CreateTexture(nil, 'OVERLAY')
 	card.check:SetSize(20, 20)
@@ -321,7 +339,8 @@ function LibAT.UI.CreateCard(parent, opts)
 		self.title:SetPoint('RIGHT', self, 'RIGHT', -PAD, 0)
 
 		self.tag:ClearAllPoints()
-		if self.art:IsShown() then
+		-- A drawn picture would cover the tag, so it sits beside the title instead
+		if self.art:IsShown() and not self.artDrawn then
 			self.tag:SetPoint('TOPRIGHT', self.art, 'TOPRIGHT', -4, -4)
 		else
 			self.tag:SetPoint('TOPRIGHT', self, 'TOPRIGHT', -PAD, topY - PAD)
@@ -348,6 +367,7 @@ function LibAT.UI.CreateCard(parent, opts)
 		self.variant:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -PAD, PAD - 2)
 		self.link:ClearAllPoints()
 		self.link:SetPoint('BOTTOMRIGHT', self, 'BOTTOMRIGHT', -PAD, PAD)
+		CardArt.Request(self)
 	end
 
 	---Fill the card
@@ -395,8 +415,10 @@ function LibAT.UI.CreateCard(parent, opts)
 	function card:SetState(selected, enabled, label)
 		self.selected = selected and true or false
 		self.enabled = enabled ~= false
+		self.stateLabel = label
 		self:SetAlpha(self.enabled and 1 or 0.45)
-		self.art:SetDesaturated((not self.enabled) or (self.data and self.data.art and self.data.art.desaturate) and true or false)
+		local fields = CardArt.Fields(self.data and self.data.art)
+		self.art:SetDesaturated((not self.enabled) or fields.desaturate and true or false)
 		if label and label ~= '' then
 			local r, g, b = 0.12, 0.45, 0.16
 			if self.selected then
@@ -438,6 +460,7 @@ function LibAT.UI.CreateCard(parent, opts)
 			if self.onVariant then
 				self.onVariant(self, data.value, value)
 			end
+			CardArt.Request(self)
 		end
 		if MenuUtil and MenuUtil.CreateContextMenu then
 			MenuUtil.CreateContextMenu(owner, function(_, root)
@@ -500,6 +523,7 @@ function LibAT.UI.CreateCard(parent, opts)
 	function card:Reset()
 		self:Hide()
 		self:ClearAllPoints()
+		CardArt.Release(self)
 		self.data = nil
 		self.onClick = nil
 		self.onVariant = nil
@@ -507,6 +531,7 @@ function LibAT.UI.CreateCard(parent, opts)
 		self.selected = false
 		self.enabled = true
 		self.hovered = false
+		self.stateLabel = nil
 		self:SetAlpha(1)
 		self.stateBadge:Hide()
 		self.recBadge:Hide()

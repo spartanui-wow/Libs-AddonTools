@@ -21,6 +21,15 @@ LibAT.BuildType = 'DEV Build'
 LibAT.Version = ''
 --@end-do-not-package@
 
+-- Features added after the first release, for addons that must also run on an older copy.
+-- Dev builds have no version, so test the feature instead: if LibAT.Capabilities.cardArtDraw then.
+-- Each value is a revision that goes up when the feature changes. The file that builds a feature
+-- sets its entry, so a feature is only listed when that file loaded.
+---@class LibAT.Capabilities
+---@field cardArtDraw? integer Cards can draw their picture with code (art.draw), Core/UI/CardArt.lua
+---@field searchSynonyms? integer Settings search maps everyday words to setting words; 2 adds Search:AddSynonyms(appName, map) for one addon's own words, Core/UI/Options/Search.lua
+LibAT.Capabilities = LibAT.Capabilities or {}
+
 -- Core systems storage
 LibAT.UI = {}
 LibAT.Components = {}

@@ -14,7 +14,8 @@ local DIALOG = 'AceConfigDialog-3.0-LibAT'
 local MAX_RESULTS = 40
 local MAX_DEPTH = 7
 
--- Everyday words mapped to the words the settings use
+-- Everyday words mapped to the words the settings use, for every addon. A word may map to a list
+-- of words. Words that only make sense for one addon go in through Search:AddSynonyms.
 local SYNONYMS = {
 	hp = 'health',
 	life = 'health',
@@ -40,6 +41,27 @@ local SYNONYMS = {
 	transparency = 'alpha',
 	opacity = 'alpha',
 }
+Search.SYNONYMS = SYNONYMS
+
+-- Words one addon added for its own settings: appName -> word -> word or list
+local appSynonyms = {}
+
+---Teach the search everyday words for one addon's settings only, e.g. "aggro" for "threat".
+---Other addons' searches are not affected. Calling it again adds to the words already there.
+---@param appName string Options app name the words apply to
+---@param map table<string, string|string[]> Typed word (lower case) -> setting word or words
+function Search:AddSynonyms(appName, map)
+	if type(appName) ~= 'string' or type(map) ~= 'table' then
+		return
+	end
+	local words = appSynonyms[appName] or {}
+	appSynonyms[appName] = words
+	for word, alt in pairs(map) do
+		if type(word) == 'string' and (type(alt) == 'string' or type(alt) == 'table') then
+			words[word:lower()] = alt
+		end
+	end
+end
 
 ---@class LibAT.UI.Options.SearchEntry
 ---@field name string
@@ -158,28 +180,49 @@ function Search:Invalidate(appName)
 	end
 end
 
+local function AddWords(list, alt)
+	if type(alt) == 'string' then
+		list[#list + 1] = alt
+	elseif type(alt) == 'table' then
+		for _, w in ipairs(alt) do
+			list[#list + 1] = w
+		end
+	end
+end
+
+---A typed word and the words it stands for (shared words, then the addon's own)
+---@param word string
+---@param appName string
+---@return string[]
+local function Expand(word, appName)
+	local list = { word }
+	AddWords(list, SYNONYMS[word])
+	local own = appSynonyms[appName]
+	if own then
+		AddWords(list, own[word])
+	end
+	return list
+end
+
 ---Score an entry against the query words (0 = no match)
 ---@param entry LibAT.UI.Options.SearchEntry
----@param words string[]
+---@param words string[][] Each typed word with the words it stands for
 ---@return number
 local function Score(entry, words)
 	local total = 0
-	for _, word in ipairs(words) do
+	for _, choices in ipairs(words) do
 		local best = 0
-		local alt = SYNONYMS[word]
-		for _, w in ipairs({ word, alt }) do
-			if w then
-				if entry.lowerName == w then
-					best = math.max(best, 100)
-				elseif entry.lowerName:sub(1, #w) == w then
-					best = math.max(best, 60)
-				elseif entry.lowerName:find(w, 1, true) then
-					best = math.max(best, 40)
-				elseif entry.lowerDesc:find(w, 1, true) then
-					best = math.max(best, 12)
-				elseif entry.lowerCrumb:find(w, 1, true) then
-					best = math.max(best, 6)
-				end
+		for _, w in ipairs(choices) do
+			if entry.lowerName == w then
+				best = math.max(best, 100)
+			elseif entry.lowerName:sub(1, #w) == w then
+				best = math.max(best, 60)
+			elseif entry.lowerName:find(w, 1, true) then
+				best = math.max(best, 40)
+			elseif entry.lowerDesc:find(w, 1, true) then
+				best = math.max(best, 12)
+			elseif entry.lowerCrumb:find(w, 1, true) then
+				best = math.max(best, 6)
 			end
 		end
 		if best == 0 then
@@ -202,7 +245,7 @@ function Search:Find(appName, text)
 	local words = {}
 	for word in text:lower():gmatch('%S+') do
 		if #word >= 2 then
-			words[#words + 1] = word
+			words[#words + 1] = Expand(word, appName)
 		end
 	end
 	local results = {}
@@ -267,6 +310,10 @@ function Search:Run(window, text)
 	end
 	window:ShowResults(results)
 end
+
+LibAT.Capabilities = LibAT.Capabilities or {}
+-- 2: per-addon words through Search:AddSynonyms(appName, map)
+LibAT.Capabilities.searchSynonyms = 2
 
 local registry = LibStub('AceConfigRegistry-3.0', true)
 if registry then
