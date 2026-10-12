@@ -11,4 +11,4 @@ ignore:
   - "tools"
 
 move-folders:
-  Plugins/LibsAddonTools-ProfileHub: LibsAddonTools-ProfileHub
+  LibsAddonTools/Plugins/LibsAddonTools-ProfileHub: LibsAddonTools-ProfileHub
