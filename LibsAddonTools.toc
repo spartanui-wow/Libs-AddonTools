@@ -1,7 +1,7 @@
 ## Interface: 120105, 120107, 16001, 50504, 38002, 20506, 11509
 ## Title: Lib's - Addon Tools
 ## IconTexture: Interface/Addons/LibsAddonTools/Logo-Icon
-## Version: 1.0.0
+## Version: @project-version@
 ## X-Curse-Project-ID: 1460024
 ## X-Wago-ID: n6VLM3Gd
 ## Author: wutname1
