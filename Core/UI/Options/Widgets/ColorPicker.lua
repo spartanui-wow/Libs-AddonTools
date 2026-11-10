@@ -13,8 +13,9 @@ if not AceGUI or (AceGUI:GetWidgetVersion(Type) or 0) >= Version then
 	return
 end
 
--- No API tells whether the client's color picker uses inverted alpha. Only mainline does not.
-local INVERTED_ALPHA = (WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE)
+-- No API tells whether the client's color picker uses inverted alpha. Mainline and WoW Forever
+-- (which loads the mainline picker) do not.
+local INVERTED_ALPHA = (WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE and WOW_PROJECT_ID ~= (WOW_PROJECT_CAMELOT or 18))
 
 local SWATCH_W, SWATCH_H = 26, 16
 local ARROW_W = 12
